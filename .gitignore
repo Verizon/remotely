@@ -1,5 +1,7 @@
 *.class
 *.log
+*.un~
+*.swp
 
 # sbt specific
 dist/*
