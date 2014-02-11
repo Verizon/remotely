@@ -109,12 +109,17 @@ object Remote {
 
   val E = Monad[Decoder]
 
+  /**
+   * A `Remote[Any]` decoder. If a `Local` value refers
+   * to a decoder that is not found in `env`, decoding fails
+   * with an error.
+   */
   def remoteDecoder(env: Map[String,Codec[Any]]): Decoder[Remote[Any]] = {
     lazy val go = remoteDecoder(env)
     C.uint8.flatMap {
       case 0 => C.utf8.flatMap { fmt =>
                   env.get(fmt) match {
-                    case None => fail(s"unknown format type: $fmt")
+                    case None => fail(s"[decoding]: unknown format type: $fmt")
                     case Some(codec) => codec.map { a => Local(a,codec,fmt) }
                   }
                 }
@@ -131,15 +136,29 @@ object Remote {
     }
   }
 
-
   implicit def remoteEncoder[A]: Encoder[Remote[A]] =
     new Encoder[Remote[A]] { def encode(a: Remote[A]) = remoteEncode(a) }
-
-  //def remoteDecode(env: Map[String,Decoder[Any]])(
-  //    bits: BitVector): Error \/ Remote[Any] =
 
   def fail(msg: String): Decoder[Nothing] =
     new Decoder[Nothing] { def decode(bits: BitVector) = left(msg) }
 
-  // def serialize[A](r: Remote[A]): Process[Task,Bytes] =
+  /**
+   * Wait for all `Async` tasks to complete, then encode
+   * the remaining concrete expression. The produced
+   * bit vector may be read by `remoteDecoder`. That is,
+   * `encode(r).flatMap(bits => remoteDecoder(env).decode(bits))`
+   * should succeed, given a suitable `env` which knows how
+   * to decode the serialized values.
+   *
+   * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
+   */
+  def encode[A](r: Remote[A]): Task[BitVector] =
+    localize(r).flatMap { a =>
+      remoteEncode(a).fold(
+        err => Task.fail(new EncodingFailure(err)),
+        bits => Task.now(bits)
+      )
+    }
+
+  class EncodingFailure(msg: String) extends Exception(msg)
 }
