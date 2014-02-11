@@ -1,27 +1,47 @@
 package srpc
 
+import scala.collection.concurrent.TrieMap
 import scalaz.concurrent.Task
 import scalaz.Monad
-import scodec.Codec
+import scodec.Encoder
 
-trait Client {
+trait Service {
 
-  def local[A:Codec:ClassManifest](a: A): Remote[A] =
-    Remote.Local(a, Codec[A], implicitly[ClassManifest[A]])
+  protected val registry: TrieMap[String,String] =
+    new TrieMap()
 
-  def async[A:Codec:ClassManifest](a: Task[A]): Remote[A] =
-    Remote.Async(a, Codec[A], implicitly[ClassManifest[A]])
+  protected def ref[A:ClassManifest](s: String): Remote[A] = {
+    if (registry.contains(s))
+      sys.error(s"Service already has value '$s' of type ${registry(s)}")
+    val r = Remote.Ref[A](s)
+    registry += (s -> implicitly[ClassManifest[A]].toString)
+    r
+  }
 
-  val syntax: ClientSyntax = ClientSyntax(this)
+  def local[A:Encoder:ClassManifest](a: A): Remote[A] =
+    Remote.Local(a, Encoder[A], implicitly[ClassManifest[A]].runtimeClass.getName)
+
+  def async[A:Encoder:ClassManifest](a: Task[A]): Remote[A] =
+    Remote.Async(a, Encoder[A], implicitly[ClassManifest[A]].runtimeClass.getName)
+
+  val syntax: ServiceSyntax = ServiceSyntax(this)
 }
 
-trait FactorialClient extends Client {
-  def factorial: Remote[Int => Int] = Remote.Ref("factorial")
+trait FactorialService extends Service {
+  def factorial: Remote[Int => Int] = ref("factorial")
 }
 
 // could write a little tool to generate the client using reflection
+// trait Foo extends Service {
+//   def factorial
+// trait Server {
+//   def lookup(name: String): Option[
+// as part of each request, client should send signature
+// of all functions it knows about
+// server verifies it has a superset of these, otherwise
+// fails fast
 
-object Client {
+object Service {
   def local[A](env: PartialFunction[String, Any])(r: Remote[A]): Task[A] = {
     import Remote._
     val T = Monad[Task]
@@ -42,12 +62,12 @@ object Client {
 
 }
 
-object ClientExample {
+object ServiceExample {
 
   import Remoteable._
   import Codecs._
 
-  val c: Client = ???
+  val c: Service = ???
   import c.syntax._
   val fac: Remote[Int => Int] = ???
   val gcd: Remote[(Int,Int) => Int] = ???
@@ -56,7 +76,7 @@ object ClientExample {
   val ar2: Remote[Int] = ar
 }
 
-case class ClientSyntax(C: Client) {
+case class ServiceSyntax(C: Service) {
 
   implicit class Ap1[A,B:Remoteable](self: Remote[A => B]) {
     def apply(a: Remote[A]): Remote[B] =

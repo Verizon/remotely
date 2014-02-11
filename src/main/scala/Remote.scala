@@ -3,7 +3,7 @@ package srpc
 import scalaz.concurrent.Task
 import scalaz.{\/, Monad}
 import scala.reflect.ClassManifest
-import scodec.{Codec, codecs, Error}
+import scodec.{Encoder, codecs, Error}
 
 /**
  * Represents a remote computation which yields a
@@ -16,15 +16,16 @@ object Remote {
   /** Promote a local value to a remote value. */
   private[srpc] case class Local[A](
     a: A, // the value
-    codec: Codec[A], // serializer for `A`
-    t: ClassManifest[A] // the runtime type tag for `A`
+    format: Encoder[A], // serializer for `A`
+    tag: String // identifies the deserializer to be used by server
   ) extends Remote[A]
 
   /** Promote an asynchronous task to a remote value. */
   private[srpc] case class Async[A](
     a: Task[A],
-    codec: Codec[A],
-    t: ClassManifest[A]) extends Remote[A]
+    format: Encoder[A], // serializer for `A`
+    tag: String // identifies the deserializer to be used by server
+  ) extends Remote[A]
 
   /**
    * Reference to a remote value on the server.
@@ -52,17 +53,6 @@ object Remote {
     c: Remote[C],
     d: Remote[D]) extends Remote[E]
 
-  implicit def manifestCodec[A]: Codec[ClassManifest[A]] = ???
-
-  // yo dawg, I heard you like codecs
-  implicit def codecCodec[A]: Codec[Error \/ Codec[A]] =
-    codecs.utf8.xmap[Error \/ Codec[A]](
-      cname => \/.fromTryCatch(
-        java.lang.Class.forName(cname).newInstance.asInstanceOf[Codec[A]]
-      ).leftMap(_.toString),
-      _.getClass.getName
-    )
-
   val T = Monad[Task]
 
   /**
@@ -71,11 +61,7 @@ object Remote {
    * removes all `Async` constructors.
    */
   def localize[A](r: Remote[A]): Task[Remote[A]] = r match {
-    case Async(a,c,t) => a.map { a =>
-      Local(a,
-            c.asInstanceOf[Codec[A]],
-            t.asInstanceOf[ClassManifest[A]])
-    }
+    case Async(a,c,t) => a.map { a => Local(a,c.asInstanceOf[Encoder[A]],t) }
     case Ap1(f,a) => T.apply2(localize(f), localize(a))(Ap1.apply)
     case Ap2(f,a,b) => T.apply3(localize(f), localize(a), localize(b))(Ap2.apply)
     case Ap3(f,a,b,c) => T.apply4(localize(f), localize(a), localize(b), localize(c))(Ap3.apply)
@@ -84,5 +70,4 @@ object Remote {
   }
 
   // def serialize[A](r: Remote[A]): Process[Task,Bytes] =
-
 }
