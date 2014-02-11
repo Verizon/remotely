@@ -119,7 +119,7 @@ object Remote {
     C.uint8.flatMap {
       case 0 => C.utf8.flatMap { fmt =>
                   env.get(fmt) match {
-                    case None => fail(s"[decoding]: unknown format type: $fmt")
+                    case None => fail(s"[decoding] unknown format type: $fmt")
                     case Some(codec) => codec.map { a => Local(a,codec,fmt) }
                   }
                 }
@@ -132,7 +132,7 @@ object Remote {
                   Ap3(f.asInstanceOf[Remote[(Any,Any,Any) => Any]],a,b,c))
       case 5 => E.apply5(go,go,go,go,go)((f,a,b,c,d) =>
                   Ap4(f.asInstanceOf[Remote[(Any,Any,Any,Any) => Any]],a,b,c,d))
-      case t => fail(s"unknown tag byte: $t")
+      case t => fail(s"[decoding] unknown tag byte: $t")
     }
   }
 
