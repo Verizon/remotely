@@ -3,7 +3,7 @@ package srpc
 import scala.collection.concurrent.TrieMap
 import scalaz.concurrent.Task
 import scalaz.Monad
-import scodec.Encoder
+import scodec.Codec
 
 trait Service {
 
@@ -18,11 +18,11 @@ trait Service {
     r
   }
 
-  def local[A:Encoder:ClassManifest](a: A): Remote[A] =
-    Remote.Local(a, Encoder[A], implicitly[ClassManifest[A]].runtimeClass.getName)
+  def local[A:Codec:ClassManifest](a: A): Remote[A] =
+    Remote.Local(a, Codec[A], implicitly[ClassManifest[A]].runtimeClass.getName)
 
-  def async[A:Encoder:ClassManifest](a: Task[A]): Remote[A] =
-    Remote.Async(a, Encoder[A], implicitly[ClassManifest[A]].runtimeClass.getName)
+  def async[A:Codec:ClassManifest](a: Task[A]): Remote[A] =
+    Remote.Async(a, Codec[A], implicitly[ClassManifest[A]].runtimeClass.getName)
 
   val syntax: ServiceSyntax = ServiceSyntax(this)
 }
