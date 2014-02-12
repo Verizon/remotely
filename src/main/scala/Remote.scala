@@ -3,7 +3,7 @@ package srpc
 import scala.collection.immutable.TreeSet
 import scala.reflect.runtime.universe.TypeTag
 import scalaz.concurrent.Task
-import scalaz.{\/, Monad}
+import scalaz.{\/, Applicative, Monad, Nondeterminism}
 // import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,codecs => C,Decoder,Encoder,Error}
 import scodec.codecs.Discriminator
@@ -69,7 +69,15 @@ object Remote {
     d: Remote[D]) extends Remote[E]
   implicit def ap4Iso = Iso.hlist(Ap4.apply _, Ap4.unapply _)
 
-  val T = Monad[Task]
+  // private val T = Monad[Task] // the sequential Task monad
+
+  /** This `Applicative[Task]` runs the tasks in parallel. */
+  private val T = new Applicative[Task] {
+    def point[A](a: => A) = Task.now(a)
+    def ap[A,B](a: => Task[A])(f: => Task[A => B]): Task[B] = apply2(f,a)(_(_))
+    override def apply2[A,B,C](a: => Task[A], b: => Task[B])(f: (A,B) => C): Task[C] =
+      Nondeterminism[Task].mapBoth(a, b)(f)
+  }
 
   /**
    * Precursor to serializing a remote computation
@@ -109,7 +117,7 @@ object Remote {
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c) <+> remoteEncode(d)
     }
 
-  val E = Monad[Decoder]
+  private val E = Monad[Decoder]
 
   /**
    * A `Remote[Any]` decoder. If a `Local` value refers
