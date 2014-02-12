@@ -8,6 +8,7 @@ scalaVersion := "2.10.3"
 
 scalacOptions ++= Seq(
   "-feature",
+  "-deprecation",
   "-language:implicitConversions",
   "-language:higherKinds",
   "-language:existentials",

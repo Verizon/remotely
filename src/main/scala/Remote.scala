@@ -1,8 +1,10 @@
 package srpc
 
+import scala.collection.immutable.TreeSet
+import scala.reflect.runtime.universe.TypeTag
 import scalaz.concurrent.Task
 import scalaz.{\/, Monad}
-import scala.reflect.ClassManifest
+// import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,codecs => C,Decoder,Encoder,Error}
 import scodec.codecs.Discriminator
 import scodec.bits.BitVector
@@ -159,6 +161,37 @@ object Remote {
         bits => Task.now(bits)
       )
     }
+
+  /** Collect up all the `Ref` names referenced by `r`. */
+  def refs[A](r: Remote[A]): TreeSet[String] = r match {
+    case Local(a,e,t) => TreeSet.empty
+    case Async(a,e,t) => sys.error(
+      "cannot encode Async constructor; call Remote.localize first")
+    case Ref(t) => TreeSet(t)
+    case Ap1(f,a) => refs(f).union(refs(a))
+    case Ap2(f,a,b) => refs(f).union(refs(b)).union(refs(b))
+    case Ap3(f,a,b,c) => refs(f).union(refs(b)).union(refs(b)).union(refs(c))
+    case Ap4(f,a,b,c,d) => refs(f).union(refs(b)).union(refs(b)).union(refs(c)).union(refs(d))
+  }
+
+  /** Collect up all the formats referenced by `r`. */
+  def formats[A](r: Remote[A]): TreeSet[String] = r match {
+    case Local(a,e,t) => TreeSet(t)
+    case Async(a,e,t) => sys.error(
+      "cannot encode Async constructor; call Remote.localize first")
+    case Ref(t) => TreeSet.empty
+    case Ap1(f,a) => formats(f).union(formats(a))
+    case Ap2(f,a,b) => formats(f).union(formats(b)).union(formats(b))
+    case Ap3(f,a,b,c) => formats(f).union(formats(b)).union(formats(b)).union(formats(c))
+    case Ap4(f,a,b,c,d) => formats(f).union(formats(b)).union(formats(b)).union(formats(c)).union(formats(d))
+  }
+
+
+  def toTag[A](implicit A: TypeTag[A]): String =
+    A.tpe.toString
+
+  def nameToTag[A](s: String)(implicit A: TypeTag[A]): String =
+    s"$s: ${toTag[A]}"
 
   class EncodingFailure(msg: String) extends Exception(msg)
 }

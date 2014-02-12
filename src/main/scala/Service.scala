@@ -1,5 +1,6 @@
 package srpc
 
+import scala.reflect.runtime.universe.TypeTag
 import scala.collection.concurrent.TrieMap
 import scalaz.concurrent.Task
 import scalaz.Monad
@@ -7,22 +8,24 @@ import scodec.Codec
 
 trait Service {
 
-  protected val registry: TrieMap[String,String] =
+  protected val registry: TrieMap[String,Unit] =
     new TrieMap()
 
-  protected def ref[A:ClassManifest](s: String): Remote[A] = {
-    if (registry.contains(s))
-      sys.error(s"Service already has value '$s' of type ${registry(s)}")
-    val r = Remote.Ref[A](s)
-    registry += (s -> implicitly[ClassManifest[A]].toString)
+  // polymorphic functions will have to be declared
+  // differently
+
+  protected def ref[A:TypeTag](s: String): Remote[A] = {
+    val tag = Remote.nameToTag[A](s)
+    val r = Remote.Ref[A](tag)
+    registry += (tag -> ())
     r
   }
 
-  def local[A:Codec:ClassManifest](a: A): Remote[A] =
-    Remote.Local(a, Codec[A], implicitly[ClassManifest[A]].runtimeClass.getName)
+  def local[A:Codec:TypeTag](a: A): Remote[A] =
+    Remote.Local(a, Codec[A], Remote.toTag[A])
 
-  def async[A:Codec:ClassManifest](a: Task[A]): Remote[A] =
-    Remote.Async(a, Codec[A], implicitly[ClassManifest[A]].runtimeClass.getName)
+  def async[A:Codec:TypeTag](a: Task[A]): Remote[A] =
+    Remote.Async(a, Codec[A], Remote.toTag[A])
 
   val syntax: ServiceSyntax = ServiceSyntax(this)
 }
