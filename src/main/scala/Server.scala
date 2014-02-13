@@ -5,7 +5,7 @@ import scalaz.{\/,Monad}
 import scalaz.stream.{Bytes,merge,nio,Process}
 import scalaz.concurrent.Task
 import scodec.bits.BitVector
-import scodec.Codec
+import scodec.Encoder
 
 object Server {
 
@@ -13,18 +13,16 @@ object Server {
    * Handle a single RPC request, given a decoding
    * environment and a values environment.
    */
-  def handle(decoders: Map[String,Codec[Any]],
-             values: Map[String,Any])(
-             request: BitVector): Task[(Codec[Any], Any)] = Task.suspend {
-    Codecs.requestDecoder(decoders).flatMap { case (respEncoder,r) =>
+  def handle(env: Environment)(request: BitVector): Task[(Encoder[Any], Any)] = Task.suspend {
+    Codecs.requestDecoder(env).flatMap { case (respEncoder,r) =>
       val expected = Remote.refs(r)
-      val unknown = (expected -- values.keySet).toList
+      val unknown = (expected -- env.values.keySet).toList
       if (unknown.isEmpty) Codecs.succeed((respEncoder -> r))
       else Codecs.fail(s"[validation] server does not have referenced values: $unknown")
     }.decode(request).fold(
       e => Task.fail(new Error(e)),
       { case (trailing, (respEncoder,r)) =>
-         if (trailing.isEmpty) eval(values)(r).flatMap { a =>
+         if (trailing.isEmpty) eval(env.values)(r).flatMap { a =>
            Task.now(respEncoder -> a)
          }
          else Task.fail(new Error("[validation] trailing bytes in request: "+trailing))
@@ -38,12 +36,10 @@ object Server {
    * server. This function has no side effects. You must
    * run the stream in order to process any requests.
    */
-  def start(decoders: Map[String,Codec[Any]],
-            values: Map[String,Any])(
-            addr: InetSocketAddress): Process[Task,String] =
+  def start(env: Environment)(addr: InetSocketAddress): Process[Task,String] =
     merge.mergeN(500) { nio.server(addr).map { _.once.evalMap {
       exch => fullyRead(exch.read)
-              .flatMap (handle(decoders,values))
+              .flatMap (handle(env))
               .flatMap { case (enc,r) => Codecs.liftEncode(enc.encode(r)) }
               .attempt
               .flatMap (_.fold(

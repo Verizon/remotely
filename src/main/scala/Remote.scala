@@ -4,7 +4,7 @@ import scala.collection.immutable.SortedSet
 import scala.reflect.runtime.universe.TypeTag
 import scalaz.concurrent.Task
 import scalaz.{\/, Applicative, Monad, Nondeterminism}
-// import scala.reflect.runtime.universe.TypeTag
+import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,codecs => C,Decoder,Encoder}
 import scodec.codecs.Discriminator
 import scodec.bits.BitVector
@@ -21,7 +21,7 @@ object Remote {
   /** Promote a local value to a remote value. */
   private[srpc] case class Local[A](
     a: A, // the value
-    format: Codec[A], // serializer for `A`
+    format: Option[Encoder[A]], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
   ) extends Remote[A]
   implicit def localIso = Iso.hlist(Local.apply _, Local.unapply _)
@@ -30,7 +30,7 @@ object Remote {
   /** Promote an asynchronous task to a remote value. */
   private[srpc] case class Async[A](
     a: Task[A],
-    format: Codec[A], // serializer for `A`
+    format: Encoder[A], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
   ) extends Remote[A]
   implicit def asyncIso = Iso.hlist(Async.apply _, Async.unapply _)
@@ -85,7 +85,7 @@ object Remote {
    * removes all `Async` constructors.
    */
   def localize[A](r: Remote[A]): Task[Remote[A]] = r match {
-    case Async(a,c,t) => a.map { a => Local(a,c.asInstanceOf[Codec[A]],t) }
+    case Async(a,c,t) => a.map { a => Local(a,c.asInstanceOf[Option[Encoder[A]]],t) }
     case Ap1(f,a) => T.apply2(localize(f), localize(a))(Ap1.apply)
     case Ap2(f,a,b) => T.apply3(localize(f), localize(a), localize(b))(Ap2.apply)
     case Ap3(f,a,b,c) => T.apply4(localize(f), localize(a), localize(b), localize(c))(Ap3.apply)
@@ -123,4 +123,28 @@ object Remote {
   def nameToTag[A](s: String)(implicit A: TypeTag[A]): String =
     s"$s: ${toTag[A]}"
 
+  // syntax
+
+  private[srpc] def ref[A:TypeTag](s: String): Remote[A] = {
+    val tag = Remote.nameToTag[A](s)
+    Remote.Ref[A](tag)
+  }
+  def local[A:Encoder:TypeTag](a: A): Remote[A] =
+    Remote.Local(a, Some(Encoder[A]), Remote.toTag[A])
+
+  def async[A:Encoder:TypeTag](a: Task[A]): Remote[A] =
+    Remote.Async(a, Encoder[A], Remote.toTag[A])
+
+  implicit class RunSyntax[A](self: Remote[A]) {
+    def run(at: Endpoint)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
+      eval(at)(self)
+  }
+  implicit class Ap1Syntax[A,B](self: Remote[A => B]) {
+    def apply(a: Remote[A]): Remote[B] =
+      Remote.Ap1(self, a)
+  }
+  implicit class Ap2Syntax[A,B,C](self: Remote[(A,B) => C]) {
+    def apply(a: Remote[A], b: Remote[B]): Remote[C] =
+      Remote.Ap2(self, a, b)
+  }
 }

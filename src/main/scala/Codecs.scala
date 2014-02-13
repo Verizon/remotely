@@ -116,13 +116,13 @@ object Codecs {
    * to a decoder that is not found in `env`, decoding fails
    * with an error.
    */
-  def remoteDecoder(env: Map[String,Codec[Any]]): Decoder[Remote[Any]] = {
+  def remoteDecoder(env: Map[String,Decoder[Any]]): Decoder[Remote[Any]] = {
     lazy val go = remoteDecoder(env)
     C.uint8.flatMap {
       case 0 => C.utf8.flatMap { fmt =>
                   env.get(fmt) match {
                     case None => fail(s"[decoding] unknown format type: $fmt")
-                    case Some(codec) => codec.map { a => Local(a,codec,fmt) }
+                    case Some(dec) => dec.map { a => Local(a,None,fmt) }
                   }
                 }
       case 1 => C.utf8.map(Ref.apply)
@@ -161,16 +161,19 @@ object Codecs {
       )
     }
 
-  def requestDecoder(env: Map[String,Codec[Any]]): Decoder[(Codec[Any],Remote[Any])] =
+  def requestDecoder(env: Environment): Decoder[(Encoder[Any],Remote[Any])] =
     for {
       responseTag <- utf8
       formatTags <- sortedSet[String]
       r <- {
-        val unknown = ((formatTags + responseTag) -- env.keySet).toList
-        if (unknown.isEmpty) remoteDecoder(env)
+        val unknown = ((formatTags + responseTag) -- env.decoders.keySet).toList
+        if (unknown.isEmpty) remoteDecoder(env.decoders)
         else fail(s"[decoding] server does not have deserializers for: $unknown")
       }
-      responseDec <- succeed(env(responseTag))
+      responseDec <- env.encoders.get(responseTag) match {
+        case None => fail(s"[decoding] server does not have response serializer for:$responseTag")
+        case Some(a) => succeed(a)
+      }
     } yield (responseDec, r)
 
   def responseCodec[A:Codec] = either[String,A]
@@ -195,6 +198,12 @@ object Codecs {
         if (trailing.isEmpty) Task.now(a)
         else Task.fail(new DecodingFailure("trailing bits: " + trailing)) }
     )
+
+  implicit def codecAsEncoder[A:Codec]: Encoder[A] =
+    new Encoder[A] { def encode(a: A) = Codec[A].encode(a) }
+
+  implicit def codecAsDecoder[A:Codec]: Decoder[A] =
+    new Decoder[A] { def decode(bits: BitVector) = Codec[A].decode(bits) }
 
   class EncodingFailure(msg: String) extends Exception(msg)
   class DecodingFailure(msg: String) extends Exception(msg)

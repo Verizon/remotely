@@ -16,14 +16,13 @@ object Remoteable {
    */
   def apply[A](implicit R: Remoteable[A]): Remoteable[A] = R
 
-  implicit def codecIsRemoteable[A:Codec:TypeTag]: Remoteable[A] =
+  implicit def codecIsRemoteable[A:Encoder:TypeTag]: Remoteable[A] =
     new Remoteable[A] {
-      def apply(a: A) =
-        Remote.Local(a, Codec[A], Remote.toTag[A])
+      def apply(a: A) = Remote.Local(a, Some(Encoder[A]), Remote.toTag[A])
     }
 
-  implicit def taskToRemote[A:Codec:TypeTag](t: Task[A]): Remote[A] =
-    Remote.Async(t, Codec[A], Remote.toTag[A])
+  implicit def taskToRemote[A:Encoder:TypeTag](t: Task[A]): Remote[A] =
+    Remote.Async(t, Encoder[A], Remote.toTag[A])
 
   implicit def toRemote[A:Remoteable](a: A): Remote[A] =
     Remoteable[A].apply(a)
