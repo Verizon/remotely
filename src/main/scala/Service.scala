@@ -34,17 +34,6 @@ trait FactorialService extends Service {
   def factorial: Remote[Int => Int] = ref("factorial")
 }
 
-// better idea - generate the server interface
-// could write a little tool to generate the client using reflection
-// trait Foo extends Service {
-//   def factorial
-// trait Server {
-//   def lookup(name: String): Option[
-// as part of each request, client should send signature
-// of all functions it knows about
-// server verifies it has a superset of these, otherwise
-// fails fast
-
 object Service {
 
 

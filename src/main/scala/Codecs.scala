@@ -2,14 +2,18 @@ package srpc
 
 import scala.collection.immutable.{IndexedSeq,Set,SortedMap,SortedSet}
 import scala.math.Ordering
-import scalaz.{\/,Monad}
+import scala.reflect.runtime.universe.TypeTag
+import scalaz.{\/,-\/,\/-,Monad}
+import scalaz.\/._
 import scalaz.concurrent.Task
-import scodec.{Codec,codecs => C,Decoder,Encoder,Error}
+import scodec.{Codec,codecs => C,Decoder,Encoder}
+import C.Discriminator
 import scodec.bits.BitVector
 import Remote._
 
 object Codecs {
 
+  implicit val float = C.float
   implicit val int32 = C.int32
   implicit val int64 = C.int64
   implicit val utf8 = C.utf8
@@ -17,6 +21,32 @@ object Codecs {
 
   implicit def tuple2[A:Codec,B:Codec]: Codec[(A,B)] =
     Codec[A] ~ Codec[B]
+
+  implicit def either[A:Codec,B:Codec]: Codec[A \/ B] =
+    C.discriminated[A \/ B].by(bool).using(
+      Discriminator(
+        { case -\/(a) => false
+          case \/-(b) => true
+        }: PartialFunction[A \/ B, Boolean],
+        {
+          case false => Codec[A].xmap[A \/ B](
+            a => left(a),
+            _.swap.getOrElse(sys.error("unpossible")))
+          case true => Codec[B].xmap[A \/ B](
+            b => right(b),
+            _.getOrElse(sys.error("unpossible")))
+        }: PartialFunction[Boolean, Codec[A \/ B]]
+      )
+    )
+
+/*
+// not published yet
+  implicit def disjunction[A:Codec,B:Codec]: Codec[A \/ B] =
+    new EitherCodec(bool, Codec[A], Codec[B])
+
+  implicit def either[A:Codec,B:Codec]: Codec[Either[A,B]] =
+    disjunction.xmap[Either[A,B]](_.toEither, \/.fromEither)
+*/
 
   implicit def byteArray: Codec[Array[Byte]] = ???
 
@@ -56,12 +86,12 @@ object Codecs {
     )
 
   import scalaz.\/._
-  implicit class PlusSyntax(e: Error \/ BitVector) {
-    def <+>(r: => Error \/ BitVector): Error \/ BitVector =
+  implicit class PlusSyntax(e: String \/ BitVector) {
+    def <+>(r: => String \/ BitVector): String \/ BitVector =
       e.flatMap(bv => r.map(bv ++ _))
   }
 
-  def remoteEncode[A](r: Remote[A]): Error \/ BitVector =
+  def remoteEncode[A](r: Remote[A]): String \/ BitVector =
     r match {
       case Local(a,e,t) => C.uint8.encode(0) <+> // tag byte
         C.utf8.encode(t) <+> e.asInstanceOf[Codec[A]].encode(a)
@@ -121,26 +151,50 @@ object Codecs {
    *
    * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
    */
-  def encodeRequest[A](r: Remote[A]): Task[BitVector] =
+  def encodeRequest[A:TypeTag](r: Remote[A]): Task[BitVector] =
     localize(r).flatMap { a =>
-      (sortedSet[String].encode(formats(a)) <+>
-       remoteEncode(a)).fold(
-         err => Task.fail(new EncodingFailure(err)),
-         bits => Task.now(bits)
-       )
+      Codec[String].encode(Remote.toTag[A]) <+>
+      sortedSet[String].encode(formats(a)) <+>
+      remoteEncode(a) fold (
+        err => Task.fail(new EncodingFailure(err)),
+        bits => Task.now(bits)
+      )
     }
 
-  def requestDecoder(env: Map[String,Codec[Any]]): Decoder[Remote[Any]] =
-    sortedSet[String].flatMap { ks =>
-      val unknown = (ks -- env.keySet).toList
-      if (unknown.isEmpty) remoteDecoder(env)
-      else fail(s"[decoding] server does not have deserializers for: $unknown")
-    }
+  def requestDecoder(env: Map[String,Codec[Any]]): Decoder[(Codec[Any],Remote[Any])] =
+    for {
+      responseTag <- utf8
+      formatTags <- sortedSet[String]
+      r <- {
+        val unknown = ((formatTags + responseTag) -- env.keySet).toList
+        if (unknown.isEmpty) remoteDecoder(env)
+        else fail(s"[decoding] server does not have deserializers for: $unknown")
+      }
+      responseDec <- succeed(env(responseTag))
+    } yield (responseDec, r)
+
+  def responseCodec[A:Codec] = either[String,A]
 
   def fail(msg: String): Decoder[Nothing] =
     new Decoder[Nothing] { def decode(bits: BitVector) = left(msg) }
 
   def succeed[A](a: A): Decoder[A] = C.provide(a)
+
+  def decodeTask[A:Decoder](bits: BitVector): Task[A] =
+    liftDecode(Decoder[A].decode(bits))
+
+  def liftEncode(result: String \/ BitVector): Task[BitVector] =
+    result.fold(
+      e => Task.fail(new EncodingFailure(e)),
+      bits => Task.now(bits)
+    )
+  def liftDecode[A](result: String \/ (BitVector,A)): Task[A] =
+    result.fold(
+      e => Task.fail(new DecodingFailure(e)),
+      { case (trailing,a) =>
+        if (trailing.isEmpty) Task.now(a)
+        else Task.fail(new DecodingFailure("trailing bits: " + trailing)) }
+    )
 
   class EncodingFailure(msg: String) extends Exception(msg)
   class DecodingFailure(msg: String) extends Exception(msg)

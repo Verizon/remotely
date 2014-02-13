@@ -1,7 +1,8 @@
 package srpc
 
+import java.net.InetSocketAddress
 import scalaz.{\/,Monad}
-import scalaz.stream.Process
+import scalaz.stream.{Bytes,merge,nio,Process}
 import scalaz.concurrent.Task
 import scodec.bits.BitVector
 import scodec.Codec
@@ -14,26 +15,43 @@ object Server {
    */
   def handle(decoders: Map[String,Codec[Any]],
              values: Map[String,Any])(
-             request: BitVector): Task[BitVector] = {
-    Codecs.requestDecoder(decoders).flatMap { r =>
+             request: BitVector): Task[(Codec[Any], Any)] = Task.suspend {
+    Codecs.requestDecoder(decoders).flatMap { case (respEncoder,r) =>
       val expected = Remote.refs(r)
       val unknown = (expected -- values.keySet).toList
-      if (unknown.isEmpty) Codecs.succeed(r)
+      if (unknown.isEmpty) Codecs.succeed((respEncoder -> r))
       else Codecs.fail(s"[validation] server does not have referenced values: $unknown")
     }.decode(request).fold(
       e => Task.fail(new Error(e)),
-      { case (trailing, r) =>
+      { case (trailing, (respEncoder,r)) =>
          if (trailing.isEmpty) eval(values)(r).flatMap { a =>
-           ???
-           // well, shit - not enough info in the Remote ADT to
-           // know how to deserialize the result! need a tag for
-           // each function application, it appears
-           // toTask(Codecs.remoteEncode(a))
+           Task.now(respEncoder -> a)
          }
          else Task.fail(new Error("[validation] trailing bytes in request: "+trailing))
       }
     )
   }
+
+  /**
+   * Start a server on the given port, returning the stream
+   * of log messages, which can also be used to halt the
+   * server. This function has no side effects. You must
+   * run the stream in order to process any requests.
+   */
+  def start(decoders: Map[String,Codec[Any]],
+            values: Map[String,Any])(
+            addr: InetSocketAddress): Process[Task,String] =
+    merge.mergeN(500) { nio.server(addr).map { _.once.evalMap {
+      exch => fullyRead(exch.read)
+              .flatMap (handle(decoders,values))
+              .flatMap { case (enc,r) => Codecs.liftEncode(enc.encode(r)) }
+              .attempt
+              .flatMap (_.fold(
+                e => Task.now(e.toString),
+                resp => (Process(Bytes.of(resp.toByteArray)).toSource to exch.write)
+                        .run.attempt.map(_.fold(_.toString, _ => "."))
+              ))
+    }}}
 
   /** Evaluate a remote expression, using the given (untyped) environment. */
   def eval[A](env: Map[String,Any])(r: Remote[A]): Task[A] = {

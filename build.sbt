@@ -19,7 +19,7 @@ resolvers ++= Seq(Resolver.sonatypeRepo("releases"), Resolver.sonatypeRepo("snap
 
 libraryDependencies ++= Seq(
   "org.scalaz.stream" %% "scalaz-stream" % "snapshot-0.4",
-  "com.github.scodec" %% "scodec" % "1.0.0-M1"
+  "org.typelevel" %% "scodec-core" % "1.0.0-SNAPSHOT"
 )
 
 seq(bintraySettings:_*)
