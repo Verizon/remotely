@@ -14,6 +14,7 @@ import Remote._
 object Codecs {
 
   implicit val float = C.float
+  implicit val double = C.double
   implicit val int32 = C.int32
   implicit val int64 = C.int64
   implicit val utf8 = C.utf8

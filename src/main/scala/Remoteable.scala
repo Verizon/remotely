@@ -8,7 +8,12 @@ trait Remoteable[A] {
   def apply(a: A): Remote[A]
 }
 
-object Remoteable {
+trait LowPriority {
+  implicit def codecIsRemoteable[A:Codec:TypeTag]: Remoteable[A] =
+    Remoteable.encoderIsRemoteable[A]
+}
+
+object Remoteable extends LowPriority {
 
   /**
    * Return the `Remoteable` instance for `A`,
@@ -16,7 +21,7 @@ object Remoteable {
    */
   def apply[A](implicit R: Remoteable[A]): Remoteable[A] = R
 
-  implicit def codecIsRemoteable[A:Encoder:TypeTag]: Remoteable[A] =
+  implicit def encoderIsRemoteable[A:Encoder:TypeTag]: Remoteable[A] =
     new Remoteable[A] {
       def apply(a: A) = Remote.Local(a, Some(Encoder[A]), Remote.toTag[A])
     }

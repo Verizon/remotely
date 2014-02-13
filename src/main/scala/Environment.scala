@@ -43,3 +43,7 @@ case class Environment(decoders: Map[String,Decoder[Nothing]],
     else this.copy(values = values + (tag -> a))
   }
 }
+
+object Environment {
+  def empty = Environment(Map(), Map(), Map())
+}
