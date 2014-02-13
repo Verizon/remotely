@@ -34,6 +34,7 @@ trait FactorialService extends Service {
   def factorial: Remote[Int => Int] = ref("factorial")
 }
 
+// better idea - generate the server interface
 // could write a little tool to generate the client using reflection
 // trait Foo extends Service {
 //   def factorial
@@ -45,22 +46,6 @@ trait FactorialService extends Service {
 // fails fast
 
 object Service {
-  def local[A](env: PartialFunction[String, Any])(r: Remote[A]): Task[A] = {
-    import Remote._
-    val T = Monad[Task]
-    r match {
-      case Async(a, _, _) => a
-      case Local(a,_,_) => Task.now(a)
-      case Ref(name) => env.lift(name) match {
-        case None => Task.delay { sys.error("Unknown name on server: " + name) }
-        case Some(a) => Task.now(a.asInstanceOf[A])
-      }
-      case Ap1(f,a) => T.apply2(local(env)(f), local(env)(a))(_(_))
-      case Ap2(f,a,b) => T.apply3(local(env)(f), local(env)(a), local(env)(b))(_(_,_))
-      case Ap3(f,a,b,c) => T.apply4(local(env)(f), local(env)(a), local(env)(b), local(env)(c))(_(_,_,_))
-      case Ap4(f,a,b,c,d) => T.apply5(local(env)(f), local(env)(a), local(env)(b), local(env)(c), local(env)(d))(_(_,_,_,_))
-    }
-  }
 
 
 }

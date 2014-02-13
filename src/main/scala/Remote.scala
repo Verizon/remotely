@@ -1,6 +1,6 @@
 package srpc
 
-import scala.collection.immutable.TreeSet
+import scala.collection.immutable.SortedSet
 import scala.reflect.runtime.universe.TypeTag
 import scalaz.concurrent.Task
 import scalaz.{\/, Applicative, Monad, Nondeterminism}
@@ -93,89 +93,12 @@ object Remote {
     case _ => Task.now(r) // Ref or Local
   }
 
-  import scalaz.\/._
-  implicit class PlusSyntax(e: Error \/ BitVector) {
-    def <+>(r: => Error \/ BitVector): Error \/ BitVector =
-      e.flatMap(bv => r.map(bv ++ _))
-  }
-
-  def remoteEncode[A](r: Remote[A]): Error \/ BitVector =
-    r match {
-      case Local(a,e,t) => C.uint8.encode(0) <+> // tag byte
-        C.utf8.encode(t) <+> e.asInstanceOf[Codec[A]].encode(a)
-      case Async(a,e,t) =>
-        left("cannot encode Async constructor; call Remote.localize first")
-      case Ref(t) => C.uint8.encode(1) <+>
-        C.utf8.encode(t)
-      case Ap1(f,a) => C.uint8.encode(2) <+>
-        remoteEncode(f) <+> remoteEncode(a)
-      case Ap2(f,a,b) => C.uint8.encode(3) <+>
-        remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b)
-      case Ap3(f,a,b,c) => C.uint8.encode(4) <+>
-        remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c)
-      case Ap4(f,a,b,c,d) => C.uint8.encode(5) <+>
-        remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c) <+> remoteEncode(d)
-    }
-
-  private val E = Monad[Decoder]
-
-  /**
-   * A `Remote[Any]` decoder. If a `Local` value refers
-   * to a decoder that is not found in `env`, decoding fails
-   * with an error.
-   */
-  def remoteDecoder(env: Map[String,Codec[Any]]): Decoder[Remote[Any]] = {
-    lazy val go = remoteDecoder(env)
-    C.uint8.flatMap {
-      case 0 => C.utf8.flatMap { fmt =>
-                  env.get(fmt) match {
-                    case None => fail(s"[decoding] unknown format type: $fmt")
-                    case Some(codec) => codec.map { a => Local(a,codec,fmt) }
-                  }
-                }
-      case 1 => C.utf8.map(Ref.apply)
-      case 2 => E.apply2(go,go)((f,a) =>
-                  Ap1(f.asInstanceOf[Remote[Any => Any]],a))
-      case 3 => E.apply3(go,go,go)((f,a,b) =>
-                  Ap2(f.asInstanceOf[Remote[(Any,Any) => Any]],a,b))
-      case 4 => E.apply4(go,go,go,go)((f,a,b,c) =>
-                  Ap3(f.asInstanceOf[Remote[(Any,Any,Any) => Any]],a,b,c))
-      case 5 => E.apply5(go,go,go,go,go)((f,a,b,c,d) =>
-                  Ap4(f.asInstanceOf[Remote[(Any,Any,Any,Any) => Any]],a,b,c,d))
-      case t => fail(s"[decoding] unknown tag byte: $t")
-    }
-  }
-
-  implicit def remoteEncoder[A]: Encoder[Remote[A]] =
-    new Encoder[Remote[A]] { def encode(a: Remote[A]) = remoteEncode(a) }
-
-  def fail(msg: String): Decoder[Nothing] =
-    new Decoder[Nothing] { def decode(bits: BitVector) = left(msg) }
-
-  /**
-   * Wait for all `Async` tasks to complete, then encode
-   * the remaining concrete expression. The produced
-   * bit vector may be read by `remoteDecoder`. That is,
-   * `encode(r).flatMap(bits => remoteDecoder(env).decode(bits))`
-   * should succeed, given a suitable `env` which knows how
-   * to decode the serialized values.
-   *
-   * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
-   */
-  def encode[A](r: Remote[A]): Task[BitVector] =
-    localize(r).flatMap { a =>
-      remoteEncode(a).fold(
-        err => Task.fail(new EncodingFailure(err)),
-        bits => Task.now(bits)
-      )
-    }
-
   /** Collect up all the `Ref` names referenced by `r`. */
-  def refs[A](r: Remote[A]): TreeSet[String] = r match {
-    case Local(a,e,t) => TreeSet.empty
+  def refs[A](r: Remote[A]): SortedSet[String] = r match {
+    case Local(a,e,t) => SortedSet.empty
     case Async(a,e,t) => sys.error(
       "cannot encode Async constructor; call Remote.localize first")
-    case Ref(t) => TreeSet(t)
+    case Ref(t) => SortedSet(t)
     case Ap1(f,a) => refs(f).union(refs(a))
     case Ap2(f,a,b) => refs(f).union(refs(b)).union(refs(b))
     case Ap3(f,a,b,c) => refs(f).union(refs(b)).union(refs(b)).union(refs(c))
@@ -183,17 +106,16 @@ object Remote {
   }
 
   /** Collect up all the formats referenced by `r`. */
-  def formats[A](r: Remote[A]): TreeSet[String] = r match {
-    case Local(a,e,t) => TreeSet(t)
+  def formats[A](r: Remote[A]): SortedSet[String] = r match {
+    case Local(a,e,t) => SortedSet(t)
     case Async(a,e,t) => sys.error(
       "cannot encode Async constructor; call Remote.localize first")
-    case Ref(t) => TreeSet.empty
+    case Ref(t) => SortedSet.empty
     case Ap1(f,a) => formats(f).union(formats(a))
     case Ap2(f,a,b) => formats(f).union(formats(b)).union(formats(b))
     case Ap3(f,a,b,c) => formats(f).union(formats(b)).union(formats(b)).union(formats(c))
     case Ap4(f,a,b,c,d) => formats(f).union(formats(b)).union(formats(b)).union(formats(c)).union(formats(d))
   }
-
 
   def toTag[A](implicit A: TypeTag[A]): String =
     A.tpe.toString
@@ -201,5 +123,4 @@ object Remote {
   def nameToTag[A](s: String)(implicit A: TypeTag[A]): String =
     s"$s: ${toTag[A]}"
 
-  class EncodingFailure(msg: String) extends Exception(msg)
 }
