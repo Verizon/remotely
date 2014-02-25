@@ -17,6 +17,8 @@ scalacOptions ++= Seq(
 
 resolvers ++= Seq(Resolver.sonatypeRepo("releases"), Resolver.sonatypeRepo("snapshots"))
 
+resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
+
 libraryDependencies ++= Seq(
   "org.scalaz.stream" %% "scalaz-stream" % "snapshot-0.4",
   "org.typelevel" %% "scodec-core" % "1.0.0-SNAPSHOT"
