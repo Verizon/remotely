@@ -7,7 +7,6 @@ import scalaz.{\/,-\/,\/-,Monad}
 import scalaz.\/._
 import scalaz.concurrent.Task
 import scodec.{Codec,codecs => C,Decoder,Encoder}
-import C.Discriminator
 import scodec.bits.BitVector
 import Remote._
 
@@ -18,38 +17,21 @@ object Codecs {
   implicit val int32 = C.int32
   implicit val int64 = C.int64
   implicit val utf8 = C.utf8
-  implicit val bool = C.bool
+  implicit val bool = C.bool(8) // use a full byte
 
   implicit def tuple2[A:Codec,B:Codec]: Codec[(A,B)] =
     Codec[A] ~ Codec[B]
 
-  implicit def either[A:Codec,B:Codec]: Codec[A \/ B] =
-    C.discriminated[A \/ B].by(bool).using(
-      Discriminator(
-        { case -\/(a) => false
-          case \/-(b) => true
-        }: PartialFunction[A \/ B, Boolean],
-        {
-          case false => Codec[A].xmap[A \/ B](
-            a => left(a),
-            _.swap.getOrElse(sys.error("unpossible")))
-          case true => Codec[B].xmap[A \/ B](
-            b => right(b),
-            _.getOrElse(sys.error("unpossible")))
-        }: PartialFunction[Boolean, Codec[A \/ B]]
-      )
-    )
+  implicit def either[A:Codec,B:Codec]: Codec[A \/ B] = C.either(bool, Codec[A], Codec[B])
+  implicit def stdEither[A:Codec,B:Codec]: Codec[Either[A,B]] = C.stdEither(bool, Codec[A], Codec[B])
 
-/*
-// not published yet
-  implicit def disjunction[A:Codec,B:Codec]: Codec[A \/ B] =
-    new EitherCodec(bool, Codec[A], Codec[B])
-
-  implicit def either[A:Codec,B:Codec]: Codec[Either[A,B]] =
-    disjunction.xmap[Either[A,B]](_.toEither, \/.fromEither)
-*/
-
-  implicit def byteArray: Codec[Array[Byte]] = ???
+  implicit def byteArray: Codec[Array[Byte]] = {
+    val B = new Codec[Array[Byte]] {
+      def encode(b: Array[Byte]): String \/ BitVector = right(BitVector(b))
+      def decode(b: BitVector): String \/ (BitVector, Array[Byte]) = right(BitVector.empty -> b.toByteArray)
+    }
+    C.variableSizeBytes(int32, B)
+  }
 
   implicit def seq[A:Codec]: Codec[Seq[A]] =
     C.repeated(Codec[A]).xmap[Seq[A]](

@@ -6,7 +6,6 @@ import scalaz.concurrent.Task
 import scalaz.{\/, Applicative, Monad, Nondeterminism}
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,codecs => C,Decoder,Encoder}
-import scodec.codecs.Discriminator
 import scodec.bits.BitVector
 import shapeless._
 
