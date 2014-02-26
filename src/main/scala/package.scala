@@ -3,7 +3,8 @@ package object srpc {
   import scala.reflect.runtime.universe.TypeTag
   import scalaz.stream.{Bytes,Process}
   import scalaz.concurrent.Task
-  import scodec.bits.BitVector
+  import scalaz.Monoid
+  import scodec.bits.{BitVector,ByteVector}
   import scodec.Codec
 
   private val C = Codecs
@@ -19,14 +20,15 @@ package object srpc {
   def eval[A:Codec:TypeTag](e: Endpoint)(r: Remote[A]): Task[A] = for {
     conn <- e.get
     reqBits <- C.encodeRequest(r)
-    respBits <- fullyRead(conn(Process.emit(Bytes.of(reqBits.toByteArray))))
-    resp <- C.liftDecode(C.responseCodec[A].decode(respBits))
+    respBytes <- fullyRead(conn(Process.emit(reqBits.toByteVector)))
+    resp <- C.liftDecode(C.responseCodec[A].decode(respBytes.toBitVector))
     result <- resp.fold(e => Task.fail(new Exception(e)),
                         a => Task.now(a))
   } yield result
 
-  private[srpc] def fullyRead(s: Process[Task,Bytes]): Task[BitVector] =
-    s.foldMonoid
-     .map(b => BitVector.view(b.toArray))
-     .runLastOr(BitVector.empty)
+  implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
+  implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)
+
+  private[srpc] def fullyRead(s: Process[Task,ByteVector]): Task[ByteVector] =
+    s.runFoldMap(identity)
 }
