@@ -57,13 +57,13 @@ object Endpoint {
     @annotation.tailrec
     def fixup(stack: List[(A,Int)]): List[(A,Int)] = stack match {
       // h actually appeared first in `v`, followed by `h2`, preserve this order
-        case (h2,n) :: (h,m) :: t if n > m/2 =>
-          fixup { (f(h, h2), m+n) :: t }
-        case _ => stack
-      }
-      v.foldLeft(List[(A,Int)]())((stack,a) => fixup((a -> size(a)) :: stack))
-       .reverse.map(_._1)
-       .reduceLeft(f)
+      case (h2,n) :: (h,m) :: t if n > m/2 =>
+        fixup { (f(h, h2), m+n) :: t }
+      case _ => stack
+    }
+    v.foldLeft(List[(A,Int)]())((stack,a) => fixup((a -> size(a)) :: stack))
+     .reverse.map(_._1)
+     .reduceLeft(f)
   }
 
   def logical(name: String)(resolve: String => Endpoint): Endpoint =
