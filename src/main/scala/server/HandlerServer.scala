@@ -30,7 +30,7 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress) extends Actor wit
     case connected: Tcp.Connected =>
       log.info("connection established")
       val connection = sender
-      connection ! Tcp.Register(handler.actor(context.system)(connection))
+      connection ! Tcp.Register(handler.actor(context.system)(connection), true)
   }
 }
 

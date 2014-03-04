@@ -103,10 +103,9 @@ object Codecs {
    * with an error.
    */
   def remoteDecoder(env: Map[String,Decoder[Any]]): Decoder[Remote[Any]] = {
-    println("decoding!!!")
     lazy val go = remoteDecoder(env)
     C.uint8.flatMap {
-      case 0 => println("got tag 0")
+      case 0 =>
         utf8.flatMap { fmt =>
                     env.get(fmt) match {
                       case None => fail(s"[decoding] unknown format type: $fmt")
@@ -114,11 +113,10 @@ object Codecs {
                     }
                   }
       case 1 =>
-        println("got tag 1")
         utf8.map(Ref.apply)
-      case 2 => println("2!!!!"); E.apply2(go,go)((f,a) =>
+      case 2 => E.apply2(go,go)((f,a) =>
                   Ap1(f.asInstanceOf[Remote[Any => Any]],a))
-      case 3 => println("3!!!!!!"); E.apply3(go,go,go)((f,a,b) =>
+      case 3 => E.apply3(go,go,go)((f,a,b) =>
                   Ap2(f.asInstanceOf[Remote[(Any,Any) => Any]],a,b))
       case 4 => E.apply4(go,go,go,go)((f,a,b,c) =>
                   Ap3(f.asInstanceOf[Remote[(Any,Any,Any) => Any]],a,b,c))
@@ -153,12 +151,15 @@ object Codecs {
 
   def requestDecoder(env: Environment): Decoder[(Encoder[Any],Remote[Any])] =
     for {
-      responseTag <- C.lazily { ??? : Codec[String] } // utf8.map { s => println("got tag: " + s); s }
+      responseTag <- utf8
       formatTags <- sortedSet[String]
       r <- {
         val unknown = ((formatTags + responseTag) -- env.decoders.keySet).toList
         if (unknown.isEmpty) remoteDecoder(env.decoders)
-        else fail(s"[decoding] server does not have deserializers for: $unknown")
+        else {
+          val unknownMsg = unknown.mkString("\n")
+          fail(s"[decoding] server does not have deserializers for:\n$unknownMsg")
+        }
       }
       responseDec <- env.encoders.get(responseTag) match {
         case None => fail(s"[decoding] server does not have response serializer for: $responseTag")
@@ -167,6 +168,12 @@ object Codecs {
     } yield (responseDec, r)
 
   def responseCodec[A:Codec] = either[String,A]
+
+  def responseEncoder[A:Encoder] = new Encoder[String \/ A] {
+    def encode(a: String \/ A): String \/ BitVector =
+      a.fold(s => bool.encode(false) <+> utf8.encode(s),
+             a => bool.encode(true) <+> Encoder[A].encode(a))
+  }
 
   def fail(msg: String): Decoder[Nothing] =
     new Decoder[Nothing] { def decode(bits: BitVector) = left(msg) }

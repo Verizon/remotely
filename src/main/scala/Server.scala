@@ -2,6 +2,7 @@ package srpc
 
 import java.net.InetSocketAddress
 import scalaz.{\/,Monad}
+import scalaz.\/.{right,left}
 import scalaz.stream.{Bytes,merge,nio,Process}
 import scalaz.concurrent.Task
 import scodec.bits.{BitVector,ByteVector}
@@ -14,24 +15,29 @@ object Server {
    * Handle a single RPC request, given a decoding
    * environment and a values environment.
    */
-  def handle(env: Environment)(request: BitVector): Task[BitVector] = Task.fork {
+  def handle(env: Environment)(request: BitVector): Task[BitVector] = Task.suspend {
     val (trailing, (respEncoder,r)) =
       Codecs.requestDecoder(env).decode(request)
             .fold(e => throw new Error(e), identity)
+    println("server got: " + r.pretty)
     val expected = Remote.refs(r)
     val unknown = (expected -- env.values.keySet).toList
     if (unknown.nonEmpty) fail(s"[validation] server does not have referenced values: $unknown")
     else if (trailing.nonEmpty) fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
-    else eval(env.values)(r).flatMap { a => toTask(respEncoder.encode(a)) }
+    else eval(env.values)(r).flatMap {
+      a =>
+        println("server computed: " + a)
+        toTask(Codecs.responseEncoder(respEncoder).encode(right(a)))
+    }
+  }.attempt.flatMap {
+    _.fold(e => toTask(Codecs.responseEncoder(Codecs.utf8).encode(left(formatThrowable(e)))),
+           bits => Task.now(bits))
   }
 
   val P = Process
 
   /**
-   * Start a server on the given port, returning the stream
-   * of log messages, which can also be used to halt the
-   * server. This function has no side effects. You must
-   * run the stream in order to process any requests.
+   * Start an RPC server on the given port.
    */
   def start(env: Environment)(addr: InetSocketAddress): () => Unit =
     server.start("rpc-server")(
@@ -62,4 +68,7 @@ object Server {
   def fail(msg: String): Task[Nothing] = Task.fail(new Error(msg))
 
   class Error(msg: String) extends Exception(msg)
+
+  def formatThrowable(err: Throwable): String =
+    err.toString + "\n stack trace:\n" + err.getStackTrace.mkString("\n")
 }

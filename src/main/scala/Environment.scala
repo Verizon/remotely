@@ -59,6 +59,20 @@ case class Environment(decoders: Map[String,Decoder[Nothing]],
     |}
     """.stripMargin
   }
+
+  override def toString = {
+    s"""Environment {
+    |
+    |  ${values.keySet.toList.sorted.mkString("\n  ")}
+    |
+    |  decoders:
+    |    ${decoders.keySet.toList.sorted.mkString("\n    ")}
+    |
+    |  encoders:
+    |    ${encoders.keySet.toList.sorted.mkString("\n    ")}
+    |}
+    """.stripMargin
+  }
 }
 
 object Environment {

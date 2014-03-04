@@ -1,7 +1,7 @@
 package srpc
 
 import scala.collection.immutable.SortedSet
-import scala.reflect.runtime.universe.TypeTag
+import scala.reflect.runtime.universe._
 import scalaz.concurrent.Task
 import scalaz.{\/, Applicative, Monad, Nondeterminism}
 import scala.reflect.runtime.universe.TypeTag
@@ -13,7 +13,12 @@ import shapeless._
  * Represents a remote computation which yields a
  * value of type `A`.
  */
-sealed trait Remote[+A]
+sealed trait Remote[+A] {
+
+  def pretty: String = "Remote {\n  " +
+    Remote.refs(this).mkString("\n  ") + "\n  " +
+    toString + "\n}"
+}
 
 object Remote {
 
@@ -22,7 +27,9 @@ object Remote {
     a: A, // the value
     format: Option[Encoder[A]], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
-  ) extends Remote[A]
+  ) extends Remote[A] {
+    override def toString = a.toString
+  }
 
 
   /** Promote an asynchronous task to a remote value. */
@@ -30,36 +37,48 @@ object Remote {
     a: Task[A],
     format: Encoder[A], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
-  ) extends Remote[A]
+  ) extends Remote[A] {
+    override def toString = s"Async[$tag]"
+  }
 
   /**
    * Reference to a remote value on the server.
    */
-  private[srpc] case class Ref[A](name: String) extends Remote[A]
+  private[srpc] case class Ref[A](name: String) extends Remote[A] {
+    override def toString = name.takeWhile(_ != ':')
+  }
 
   // we require a separate constructor for each function
   // arity, since remote invocations must be fully saturated
   private[srpc] case class Ap1[A,B](
     f: Remote[A => B],
-    a: Remote[A]) extends Remote[B]
+    a: Remote[A]) extends Remote[B] {
+    override def toString = s"$f($a)"
+  }
 
   private[srpc] case class Ap2[A,B,C](
     f: Remote[(A,B) => C],
     a: Remote[A],
-    b: Remote[B]) extends Remote[C]
+    b: Remote[B]) extends Remote[C] {
+    override def toString = s"$f($a, $b)"
+  }
 
   private[srpc] case class Ap3[A,B,C,D](
     f: Remote[(A,B,C) => D],
     a: Remote[A],
     b: Remote[B],
-    c: Remote[C]) extends Remote[D]
+    c: Remote[C]) extends Remote[D] {
+    override def toString = s"$f($a, $b, $c)"
+  }
 
   private[srpc] case class Ap4[A,B,C,D,E](
     f: Remote[(A,B,C,D) => E],
     a: Remote[A],
     b: Remote[B],
     c: Remote[C],
-    d: Remote[D]) extends Remote[E]
+    d: Remote[D]) extends Remote[E] {
+    override def toString = s"$f($a, $b, $c, $d)"
+  }
 
   // private val T = Monad[Task] // the sequential Task monad
 
@@ -109,10 +128,14 @@ object Remote {
     case Ap4(f,a,b,c,d) => formats(f).union(formats(b)).union(formats(b)).union(formats(c)).union(formats(d))
   }
 
-  def toTag[A](implicit A: TypeTag[A]): String =
-    A.tpe.toString
+  def toTag[A:TypeTag]: String = {
+    val tt = typeTag[A]
+    val result = tt.tpe.toString
+    if (result.startsWith("scala.")) result.drop(6)
+    else result
+  }
 
-  def nameToTag[A](s: String)(implicit A: TypeTag[A]): String =
+  def nameToTag[A:TypeTag](s: String): String =
     s"$s: ${toTag[A]}"
 
   // syntax

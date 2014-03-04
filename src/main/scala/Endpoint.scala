@@ -55,14 +55,15 @@ object Endpoint {
           out.evalMap { bytes => Task.delay { connection ! Tcp.Write(ByteString(bytes.toArray)) } }
              .run
              .runAsync { e =>
+               e.leftMap(q.fail)
                connection ! Tcp.ConfirmedClose
-               e.fold(q.fail, _ => q.close)
              }
 
           context become {
             case Tcp.Received(data) =>
               q.enqueue(ByteVector(data.toArray))
             case Tcp.ConfirmedClosed =>
+              q.close
               context stop self
             case Tcp.PeerClosed =>
               log.error("server terminated connection early")
