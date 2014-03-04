@@ -25,6 +25,7 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress) extends Actor wit
     case b @ Tcp.Bound(localAddress) ⇒
       log.info("server bound to: " + localAddress)
     case Tcp.CommandFailed(_: Tcp.Bind) =>
+      log.info("server failed to bind to: " + addr + ", shutting down")
       context stop self
     case connected: Tcp.Connected =>
       log.debug("connection established")
@@ -33,23 +34,8 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress) extends Actor wit
   }
 }
 
-object SslServer {
-
-  /**
-   * Start a server at the given address, using the `Handler`
-   * for processing each request. Returns a thunk that can be used
-   * to terminate the server.
-   */
-  def start(h: Handler, addr: InetSocketAddress): () => Unit = {
-    val system = ActorSystem("rpc-server")
-    val actor = system.actorOf(Props(new HandlerServer(h, addr)))
-    () => actor ! PoisonPill.getInstance
-  }
-
-}
-
 object EchoServer extends App {
-  val stop = SslServer.start(Handler.id, new InetSocketAddress("localhost", 8080))
+  val stop = start("echo-server")(Handler.id, new InetSocketAddress("localhost", 8080))
   readLine()
   stop()
 }

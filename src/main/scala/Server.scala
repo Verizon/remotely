@@ -6,7 +6,7 @@ import scalaz.stream.{Bytes,merge,nio,Process}
 import scalaz.concurrent.Task
 import scodec.bits.{BitVector,ByteVector}
 import scodec.Encoder
-import srpc.server.{Handler,SslServer}
+import srpc.server.Handler
 
 object Server {
 
@@ -34,7 +34,8 @@ object Server {
    * run the stream in order to process any requests.
    */
   def start(env: Environment)(addr: InetSocketAddress): () => Unit =
-    SslServer.start(Handler.strict(bytes => handle(env)(bytes.toBitVector).map(_.toByteVector)), addr)
+    server.start("rpc-server")(
+      Handler.strict(bytes => handle(env)(bytes.toBitVector).map(_.toByteVector)), addr)
 
   /** Evaluate a remote expression, using the given (untyped) environment. */
   def eval[A](env: Map[String,Any])(r: Remote[A]): Task[A] = {
