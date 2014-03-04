@@ -1,9 +1,9 @@
 package srpc
 
-import java.net.{InetSocketAddress,URL}
+import java.net.{InetSocketAddress,Socket,URL}
 import javax.net.ssl.SSLParameters
 import scalaz.concurrent.Task
-import scalaz.stream.{async,Bytes,Channel,Exchange,Process,nio}
+import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio}
 import scodec.bits.{BitVector,ByteVector}
 import Endpoint.Connection
 
@@ -27,7 +27,7 @@ object Endpoint {
   def empty: Endpoint = Endpoint(Process.halt)
 
   def single(host: InetSocketAddress): Endpoint =
-    Endpoint(Process.constant(request(host)))
+    Endpoint(connect(host).map(streamExchange).repeat)
 
   /**
    * Send a stream of bytes to a server and get back a
@@ -39,15 +39,36 @@ object Endpoint {
   private def request(host: InetSocketAddress)(
                       bytes: Process[Task,ByteVector]): Process[Task,ByteVector] =
     nio.connect(host).flatMap { exch =>
-      val w = (bytes.map(chunk => Bytes.of(chunk.toArray)) to exch.write).drain
-      val r = exch.read.map(bs => ByteVector(bs.toArray))
-      r.merge(w)
+      streamExchange {
+        exch.mapO(bs => ByteVector.view(bs.toArray))
+            .mapW[ByteVector](bs => Bytes.of(bs.toArray))
+      } (bytes)
     }
+
+  def streamExchange(exch: Exchange[ByteVector,ByteVector]): Process[Task,ByteVector] => Process[Task,ByteVector] =
+    bytes => bytes.to(exch.write).drain ++ exch.read
+
+  def connect(host: InetSocketAddress): Process[Task, Exchange[ByteVector, ByteVector]] =
+    Process.eval(Task.delay(new Socket(host.getAddress, host.getPort))).map { socket =>
+      println(">>>>> " + socket.isConnected + ", " + socket.isInputShutdown)
+      // >>>>> true, false
+      val in = socket.getInputStream
+      val read  = forked(Process.constant(4096))
+                . through (io.chunkR(in))
+                . map (ByteVector.view(_))
+                // . onComplete { Process.eval(Task.delay(socket.shutdownInput)).attempt().drain }
+      val write = forked(io.chunkW(socket.getOutputStream).contramap[ByteVector](_.toArray))
+                  .map { a => println("socket closed: " + socket.isClosed); a }
+                // . onComplete { Process.eval(Task.delay(socket.shutdownOutput)).attempt().drain }
+      Exchange[ByteVector,ByteVector](read, write)
+    }
+
+  def forked[A](p: Process[Task,A]): Process[Task,A] = p.evalMap(a => Task(a))
 
   def singleSSL(ssl: SSLParameters)(c: InetSocketAddress): Endpoint = ???
 
   def roundRobin(p: Endpoint*): Endpoint = {
-    require(p.nonEmpty, "round robin endpoint must have at least one endpoint to choose from")
+    require(p.nonEmpty, "round robin must have at least one endpoint to choose from")
     val pts = p.toIndexedSeq
     reduceBalanced(pts)(_ => 1)((a,b) => Endpoint(a.connections.interleave(b.connections)))
   }

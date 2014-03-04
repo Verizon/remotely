@@ -5,7 +5,7 @@ import scala.reflect.runtime.universe.TypeTag
 import scalaz.concurrent.Task
 import scalaz.{\/, Applicative, Monad, Nondeterminism}
 import scala.reflect.runtime.universe.TypeTag
-import scodec.{Codec,codecs => C,Decoder,Encoder}
+import scodec.{Codec,Decoder,Encoder}
 import scodec.bits.BitVector
 import shapeless._
 
@@ -23,7 +23,6 @@ object Remote {
     format: Option[Encoder[A]], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
   ) extends Remote[A]
-  implicit def localIso = Iso.hlist(Local.apply _, Local.unapply _)
 
 
   /** Promote an asynchronous task to a remote value. */
@@ -32,33 +31,28 @@ object Remote {
     format: Encoder[A], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
   ) extends Remote[A]
-  implicit def asyncIso = Iso.hlist(Async.apply _, Async.unapply _)
 
   /**
    * Reference to a remote value on the server.
    */
   private[srpc] case class Ref[A](name: String) extends Remote[A]
-  implicit def refIso = Iso.hlist(Ref.apply _, Ref.unapply _)
 
   // we require a separate constructor for each function
   // arity, since remote invocations must be fully saturated
   private[srpc] case class Ap1[A,B](
     f: Remote[A => B],
     a: Remote[A]) extends Remote[B]
-  implicit def ap1Iso = Iso.hlist(Ap1.apply _, Ap1.unapply _)
 
   private[srpc] case class Ap2[A,B,C](
     f: Remote[(A,B) => C],
     a: Remote[A],
     b: Remote[B]) extends Remote[C]
-  implicit def ap2Iso = Iso.hlist(Ap2.apply _, Ap2.unapply _)
 
   private[srpc] case class Ap3[A,B,C,D](
     f: Remote[(A,B,C) => D],
     a: Remote[A],
     b: Remote[B],
     c: Remote[C]) extends Remote[D]
-  implicit def ap3Iso = Iso.hlist(Ap3.apply _, Ap3.unapply _)
 
   private[srpc] case class Ap4[A,B,C,D,E](
     f: Remote[(A,B,C,D) => E],
@@ -66,7 +60,6 @@ object Remote {
     b: Remote[B],
     c: Remote[C],
     d: Remote[D]) extends Remote[E]
-  implicit def ap4Iso = Iso.hlist(Ap4.apply _, Ap4.unapply _)
 
   // private val T = Monad[Task] // the sequential Task monad
 

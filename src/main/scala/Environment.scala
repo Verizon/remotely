@@ -42,6 +42,23 @@ case class Environment(decoders: Map[String,Decoder[Nothing]],
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
     else this.copy(values = values + (tag -> a))
   }
+
+  def generateClient(moduleName: String): String = {
+    def emitValue(s: String) = {
+      val parts = s.split(':').toList
+      val name = parts.init.mkString(":").trim
+      s"val $name: Remote[${parts.last}] = Remote.Ref(s)"
+    }
+
+    s"""
+    |import srpc._
+    |import srpc.Codecs._
+    |
+    |object $moduleName {
+    |  ${values.keySet.toList.sorted.map(emitValue).mkString("\n\n    ")}
+    |}
+    """.stripMargin
+  }
 }
 
 object Environment {

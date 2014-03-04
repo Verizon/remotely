@@ -21,7 +21,8 @@ resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
 
 libraryDependencies ++= Seq(
   "org.scalaz.stream" %% "scalaz-stream" % "snapshot-0.4",
-  "org.typelevel" %% "scodec-core" % "1.0.0-SNAPSHOT"
+  "org.typelevel" %% "scodec-core" % "1.0.0-SNAPSHOT",
+  "com.typesafe.akka" %% "akka-kernel" % "2.2.3"
 )
 
 seq(bintraySettings:_*)

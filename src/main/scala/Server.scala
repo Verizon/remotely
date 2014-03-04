@@ -6,6 +6,7 @@ import scalaz.stream.{Bytes,merge,nio,Process}
 import scalaz.concurrent.Task
 import scodec.bits.{BitVector,ByteVector}
 import scodec.Encoder
+import srpc.server.{Handler,SslServer}
 
 object Server {
 
@@ -24,23 +25,16 @@ object Server {
     else eval(env.values)(r).flatMap { a => toTask(respEncoder.encode(a)) }
   }
 
+  val P = Process
+
   /**
    * Start a server on the given port, returning the stream
    * of log messages, which can also be used to halt the
    * server. This function has no side effects. You must
    * run the stream in order to process any requests.
    */
-  def start(env: Environment)(addr: InetSocketAddress): Process[Task,String] =
-    merge.mergeN(500) { nio.server(addr).map { _.once.evalMap {
-      exch => fullyRead(exch.read.map(b => ByteVector(b.toArray))).map(_.toBitVector)
-              .flatMap (handle(env))
-              .attempt
-              .flatMap (_.fold(
-                e => Task.now(e.toString),
-                resp => (Process(Bytes.of(resp.toByteArray)).toSource to exch.write)
-                        .run.attempt.map(_.fold(_.toString, _ => "."))
-              ))
-    }}}
+  def start(env: Environment)(addr: InetSocketAddress): () => Unit =
+    SslServer.start(Handler.strict(bytes => handle(env)(bytes.toBitVector).map(_.toByteVector)), addr)
 
   /** Evaluate a remote expression, using the given (untyped) environment. */
   def eval[A](env: Map[String,Any])(r: Remote[A]): Task[A] = {

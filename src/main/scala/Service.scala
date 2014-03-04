@@ -3,7 +3,7 @@ package srpc
 import java.net.InetSocketAddress
 import scalaz.concurrent.Task
 
-object ServiceExample extends App {
+object ServiceExample2 extends App {
 
   import Codecs._
   import Remoteable._
@@ -25,7 +25,7 @@ object ServiceExample extends App {
   val addr = new InetSocketAddress("localhost", 8080)
 
   // create a server for this environment
-  val server = Server.start(env)(addr).run.runAsync { _ => () }
+  val server = Server.start(env)(addr)
 
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated
@@ -44,6 +44,6 @@ object ServiceExample extends App {
 
   // to actually run a remote expression, we need an endpoint
   val loc: Endpoint = Endpoint.single(addr)
-  val result: Task[Double] = eval(loc)(r)
+  val result: Task[Double] = r.run(loc)
   println { result.run }
 }
