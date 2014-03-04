@@ -28,30 +28,34 @@ trait Handler {
     private val (queue, src) = async.localQueue[ByteVector]
     @volatile var alive = true
 
-    apply(src).evalMap(b => Task.delay { connection ! Tcp.Write(ByteString(b.toArray)) }).onComplete {
-      // always close the connection when the logic of the handler completes
-      // unless it has already been closed by the client
-      Process.suspend {
-        if (alive) {
-          log.debug("server-initiated connection close: " + connection)
-          connection ! Tcp.Close
-        }
-        Process.halt
-      }
-    }.run.runAsync { _.fold(
+    apply(src).evalMap { b =>
+      println("server emitted bytes: " + b.toBitVector)
+      Task.delay { connection ! Tcp.Write(ByteString(b.toArray)) }
+    }.run
+    .runAsync { _.fold(
       err => {
         log.error("uncaught exception in connection-processing logic: " + err)
         log.error(err.getStackTrace.mkString("\n"))
        },
-      _ => ()
+      _ => {
+        log.info("done writing, closing connection")
+        if (alive) {
+          log.info("server initiating connection close: " + connection)
+          connection ! Tcp.ConfirmedClose
+        }
+      }
     )}
 
     def receive = {
-      case Tcp.Received(data) => queue.enqueue(ByteVector(data.toArray))
-      case ev: Tcp.ConnectionClosed =>
-        log.debug("client-initiated connection close: " + connection)
-        alive = false
+      case Tcp.Received(data) =>
+        val bytes = ByteVector(data.toArray)
+        log.info("server got bytes: " + bytes.toBitVector)
+        queue.enqueue(bytes)
+      case Tcp.PeerClosed =>
+        log.info("peer closed writing half of connection")
         queue.close
+      case Tcp.ConfirmedClosed =>
+        log.info("server successfully closed the connection")
         context stop self
     }
   }))

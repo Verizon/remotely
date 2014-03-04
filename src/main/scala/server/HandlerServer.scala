@@ -22,13 +22,13 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress) extends Actor wit
   }
 
   def receive = {
-    case b @ Tcp.Bound(localAddress) ⇒
+    case b @ Tcp.Bound(localAddress) =>
       log.info("server bound to: " + localAddress)
     case Tcp.CommandFailed(_: Tcp.Bind) =>
       log.info("server failed to bind to: " + addr + ", shutting down")
       context stop self
     case connected: Tcp.Connected =>
-      log.debug("connection established")
+      log.info("connection established")
       val connection = sender
       connection ! Tcp.Register(handler.actor(context.system)(connection))
   }

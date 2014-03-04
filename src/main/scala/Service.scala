@@ -43,7 +43,17 @@ object ServiceExample2 extends App {
   val r: Remote[Double] = ar3
 
   // to actually run a remote expression, we need an endpoint
-  val loc: Endpoint = Endpoint.single(addr)
+  implicit val clientPool = akka.actor.ActorSystem("rpc-client")
+
+  val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
   val result: Task[Double] = r.run(loc)
-  println { result.run }
+
+  try println { result.run }
+  catch {
+    case e: Throwable => e.printStackTrace
+  }
+  finally {
+    server()
+    clientPool.shutdown()
+  }
 }

@@ -1,5 +1,8 @@
 package srpc
 
+import akka.actor.{Actor,ActorLogging,ActorSystem,Props}
+import akka.io.{IO,Tcp}
+import akka.util.ByteString
 import java.net.{InetSocketAddress,Socket,URL}
 import javax.net.ssl.SSLParameters
 import scalaz.concurrent.Task
@@ -26,8 +29,49 @@ object Endpoint {
 
   def empty: Endpoint = Endpoint(Process.halt)
 
-  def single(host: InetSocketAddress): Endpoint =
-    Endpoint(connect(host).map(streamExchange).repeat)
+  def single(host: InetSocketAddress)(implicit S: ActorSystem): Endpoint =
+    Endpoint(Process.constant(akkaRequest(S)(host)))
+    // Endpoint(connect(host).map(streamExchange).repeat)
+
+  private def akkaRequest(system: ActorSystem)(host: InetSocketAddress):
+      Process[Task,ByteVector] => Process[Task,ByteVector] = out => {
+    val (q, src) = async.localQueue[ByteVector]
+    val actor = system.actorOf(Props(new Actor with ActorLogging {
+      import context.system
+
+      override def preStart() =
+        IO(Tcp)(context.system) ! Tcp.Connect(host)
+
+      def receive = {
+        case Tcp.CommandFailed(_: Tcp.Connect) ⇒
+          log.error("connection failed to " + host)
+          q.fail(new Exception("connection failed to host " + host))
+          context stop self
+
+        case c @ Tcp.Connected(remote, local) =>
+          log.info("connection established to " + remote)
+          val connection = sender
+          connection ! Tcp.Register(self)
+          out.evalMap { bytes => Task.delay { connection ! Tcp.Write(ByteString(bytes.toArray)) } }
+             .run
+             .runAsync { e =>
+               connection ! Tcp.ConfirmedClose
+               e.fold(q.fail, _ => q.close)
+             }
+
+          context become {
+            case Tcp.Received(data) =>
+              q.enqueue(ByteVector(data.toArray))
+            case Tcp.ConfirmedClosed =>
+              context stop self
+            case Tcp.PeerClosed =>
+              log.error("server terminated connection early")
+              q.fail(new Exception("server terminated connection early"))
+          }
+      }
+    }))
+    src
+  }
 
   /**
    * Send a stream of bytes to a server and get back a
@@ -58,8 +102,8 @@ object Endpoint {
                 . map (ByteVector.view(_))
                 // . onComplete { Process.eval(Task.delay(socket.shutdownInput)).attempt().drain }
       val write = forked(io.chunkW(socket.getOutputStream).contramap[ByteVector](_.toArray))
-                  .map { a => println("socket closed: " + socket.isClosed); a }
-                // . onComplete { Process.eval(Task.delay(socket.shutdownOutput)).attempt().drain }
+                  . map { a => println("socket closed: " + socket.isClosed); a }
+                  // . onComplete { Process.eval(Task.delay(socket.shutdownOutput)).attempt().drain }
       Exchange[ByteVector,ByteVector](read, write)
     }
 

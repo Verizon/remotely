@@ -1,6 +1,6 @@
 package srpc
 
-import akka.actor.{ActorSystem, PoisonPill, Props}
+import akka.actor.{ActorSystem, Props}
 import java.net.InetSocketAddress
 
 package object server {
@@ -13,7 +13,7 @@ package object server {
   def start(name: String)(h: Handler, addr: InetSocketAddress): () => Unit = {
     val system = ActorSystem(name)
     val actor = system.actorOf(Props(new HandlerServer(h, addr)))
-    () => actor ! PoisonPill.getInstance
+    () => { system.shutdown() }
   }
 
 }
