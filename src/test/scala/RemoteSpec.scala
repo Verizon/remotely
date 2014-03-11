@@ -24,16 +24,13 @@ object RemoteSpec extends Properties("Remote") {
     implicit val clientPool = akka.actor.ActorSystem("rpc-client")
     val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
 
-    val prop = forAll { (l: List[Int]) =>
-      println(l)
-      l.sum == sum(l).run(loc).run
-    }
+    val prop = forAll { (l: List[Int]) => l.sum == sum(l).run(loc).run }
 
-    prop
-    //onComplete (prop) {
-    //  server()
-    //  clientPool.shutdown()
-    //}
+    onComplete (prop) {
+      //server()
+      //Thread.sleep(1000)
+      //clientPool.shutdown()
+    }
   }
 
   def onComplete(p: => Prop)(action: => Unit): Prop = {
