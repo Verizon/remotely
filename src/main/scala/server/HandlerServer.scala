@@ -13,7 +13,7 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress) extends Actor wit
   import context.system
 
   override def preStart = {
-    log.info("server attempting to bind to: " + addr)
+    log.debug("server attempting to bind to: " + addr)
     IO(Tcp) ! Tcp.Bind(self, addr)
   }
 
@@ -25,17 +25,12 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress) extends Actor wit
     case b @ Tcp.Bound(localAddress) =>
       log.info("server bound to: " + localAddress)
     case Tcp.CommandFailed(_: Tcp.Bind) =>
-      log.info("server failed to bind to: " + addr + ", shutting down")
+      log.error("server failed to bind to: " + addr + ", shutting down")
       context stop self
     case connected: Tcp.Connected =>
-      log.info("connection established")
+      log.debug("connection established")
       val connection = sender
       connection ! Tcp.Register(handler.actor(context.system)(connection), true)
   }
 }
 
-object EchoServer extends App {
-  val stop = start("echo-server")(Handler.id, new InetSocketAddress("localhost", 8080))
-  readLine()
-  stop()
-}

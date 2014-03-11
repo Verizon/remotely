@@ -95,16 +95,14 @@ object Endpoint {
 
   def connect(host: InetSocketAddress): Process[Task, Exchange[ByteVector, ByteVector]] =
     Process.eval(Task.delay(new Socket(host.getAddress, host.getPort))).map { socket =>
-      println(">>>>> " + socket.isConnected + ", " + socket.isInputShutdown)
-      // >>>>> true, false
       val in = socket.getInputStream
       val read  = forked(Process.constant(4096))
                 . through (io.chunkR(in))
                 . map (ByteVector.view(_))
-                // . onComplete { Process.eval(Task.delay(socket.shutdownInput)).attempt().drain }
+                . onComplete { Process.eval(Task.delay(socket.shutdownInput)).attempt().drain }
       val write = forked(io.chunkW(socket.getOutputStream).contramap[ByteVector](_.toArray))
                   . map { a => println("socket closed: " + socket.isClosed); a }
-                  // . onComplete { Process.eval(Task.delay(socket.shutdownOutput)).attempt().drain }
+                  . onComplete { Process.eval(Task.delay(socket.shutdownOutput)).attempt().drain }
       Exchange[ByteVector,ByteVector](read, write)
     }
 

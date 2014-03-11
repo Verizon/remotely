@@ -19,15 +19,12 @@ object Server {
     val (trailing, (respEncoder,r)) =
       Codecs.requestDecoder(env).decode(request)
             .fold(e => throw new Error(e), identity)
-    println("server got: " + r.pretty)
     val expected = Remote.refs(r)
     val unknown = (expected -- env.values.keySet).toList
     if (unknown.nonEmpty) fail(s"[validation] server does not have referenced values: $unknown")
     else if (trailing.nonEmpty) fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
     else eval(env.values)(r).flatMap {
-      a =>
-        println("server computed: " + a)
-        toTask(Codecs.responseEncoder(respEncoder).encode(right(a)))
+      a => toTask(Codecs.responseEncoder(respEncoder).encode(right(a)))
     }
   }.attempt.flatMap {
     _.fold(e => toTask(Codecs.responseEncoder(Codecs.utf8).encode(left(formatThrowable(e)))),

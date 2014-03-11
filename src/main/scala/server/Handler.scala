@@ -29,7 +29,6 @@ trait Handler {
     @volatile var alive = true
 
     apply(src).evalMap { b =>
-      println("server emitted bytes: " + b.toBitVector)
       Task.delay { connection ! Tcp.Write(ByteString(b.toArray)) }
     }.run
     .runAsync { _.fold(
@@ -38,9 +37,9 @@ trait Handler {
         log.error(err.getStackTrace.mkString("\n"))
        },
       _ => {
-        log.info("done writing, closing connection")
+        log.debug("done writing, closing connection")
         if (alive) {
-          log.info("server initiating connection close: " + connection)
+          log.debug("server initiating connection close: " + connection)
           connection ! Tcp.ConfirmedClose
         }
       }
@@ -49,13 +48,13 @@ trait Handler {
     def receive = {
       case Tcp.Received(data) =>
         val bytes = ByteVector(data.toArray)
-        log.info("server got bytes: " + bytes.toBitVector)
+        log.debug("server got bytes: " + bytes.toBitVector)
         queue.enqueue(bytes)
       case Tcp.PeerClosed =>
-        log.info("peer closed writing half of connection")
+        log.debug("peer closed writing half of connection")
         queue.close
       case Tcp.ConfirmedClosed =>
-        log.info("server successfully closed the connection")
+        log.debug("server successfully closed the connection")
         context stop self
     }
   }))
