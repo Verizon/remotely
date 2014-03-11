@@ -5,7 +5,7 @@ package object srpc {
   import scalaz.concurrent.Task
   import scalaz.Monoid
   import scodec.bits.{BitVector,ByteVector}
-  import scodec.Codec
+  import scodec.Decoder
 
   private val C = Codecs
 
@@ -17,11 +17,11 @@ package object srpc {
    * run, which means that retry and/or circuit-breaking
    * logic can be added with a separate layer.
    */
-  def eval[A:Codec:TypeTag](e: Endpoint)(r: Remote[A]): Task[A] = for {
+  def evaluate[A:Decoder:TypeTag](e: Endpoint)(r: Remote[A]): Task[A] = for {
     conn <- e.get
     reqBits <- C.encodeRequest(r)
     respBytes <- fullyRead(conn(Process.emit(reqBits.toByteVector)))
-    resp <- C.liftDecode(C.responseCodec[A].decode(respBytes.toBitVector))
+    resp <- C.liftDecode(C.responseDecoder[A].decode(respBytes.toBitVector))
     result <- resp.fold(e => Task.fail(new Exception(e)),
                         a => Task.now(a))
   } yield result

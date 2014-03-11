@@ -11,9 +11,12 @@ import shapeless._
 
 /**
  * Represents a remote computation which yields a
- * value of type `A`.
+ * value of type `A`. Remote expressions can be serialized
+ * and sent to a server for evaluation.
  */
 sealed trait Remote[+A] {
+
+  override def toString = pretty
 
   def pretty: String = "Remote {\n  " +
     Remote.refs(this).mkString("\n  ") + "\n  " +
@@ -21,6 +24,46 @@ sealed trait Remote[+A] {
 }
 
 object Remote {
+
+  /** Reference a remote value on the server, assuming it has the given type. */
+  def ref[A:TypeTag](s: String): Remote[A] = {
+    val tag = Remote.nameToTag[A](s)
+    Remote.Ref[A](tag)
+  }
+
+  /** Promote a local value to a remote value. */
+  def local[A:Encoder:TypeTag](a: A): Remote[A] =
+    Remote.Local(a, Some(Encoder[A]), Remote.toTag[A])
+
+  /** Promote an asynchronous `Task` to a remote value. */
+  def async[A:Encoder:TypeTag](a: Task[A]): Remote[A] =
+    Remote.Async(a, Encoder[A], Remote.toTag[A])
+
+  /** Provides the syntax `expr.run(endpoint)`, where `endpoint: Endpoint`. */
+  implicit class RunSyntax[A](self: Remote[A]) {
+
+    /**
+     * Run this `Remote[A]` at the given `Endpoint`. We require a `TypeTag[A]` and
+     * `Codec[A]` in order to deserialize the response and check that it has the . */
+    def run(at: Endpoint)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
+      evaluate(at)(self)
+  }
+  implicit class Ap1Syntax[A,B](self: Remote[A => B]) {
+    def apply(a: Remote[A]): Remote[B] =
+      Remote.Ap1(self, a)
+  }
+  implicit class Ap2Syntax[A,B,C](self: Remote[(A,B) => C]) {
+    def apply(a: Remote[A], b: Remote[B]): Remote[C] =
+      Remote.Ap2(self, a, b)
+  }
+  implicit class Ap3Syntax[A,B,C,D](self: Remote[(A,B,C) => D]) {
+    def apply(a: Remote[A], b: Remote[B], c: Remote[C]): Remote[D] =
+      Remote.Ap3(self, a, b, c)
+  }
+  implicit class Ap4Syntax[A,B,C,D,E](self: Remote[(A,B,C,D) => E]) {
+    def apply(a: Remote[A], b: Remote[B], c: Remote[C], d: Remote[D]): Remote[E] =
+      Remote.Ap4(self, a, b, c, d)
+  }
 
   /** Promote a local value to a remote value. */
   private[srpc] case class Local[A](
@@ -138,28 +181,19 @@ object Remote {
   def nameToTag[A:TypeTag](s: String): String =
     s"$s: ${toTag[A]}"
 
-  // syntax
-
-  private[srpc] def ref[A:TypeTag](s: String): Remote[A] = {
-    val tag = Remote.nameToTag[A](s)
-    Remote.Ref[A](tag)
+  /** Lower priority implicits. */
+  private[srpc] trait lowpriority {
+    implicit def codecIsRemote[A:Codec:TypeTag](a: A): Remote[A] = local(a)
   }
-  def local[A:Encoder:TypeTag](a: A): Remote[A] =
-    Remote.Local(a, Some(Encoder[A]), Remote.toTag[A])
 
-  def async[A:Encoder:TypeTag](a: Task[A]): Remote[A] =
-    Remote.Async(a, Encoder[A], Remote.toTag[A])
+  /** Provides implicits for promoting values to `Remote[A]`. */
+  object implicits extends lowpriority {
 
-  implicit class RunSyntax[A](self: Remote[A]) {
-    def run(at: Endpoint)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
-      eval(at)(self)
-  }
-  implicit class Ap1Syntax[A,B](self: Remote[A => B]) {
-    def apply(a: Remote[A]): Remote[B] =
-      Remote.Ap1(self, a)
-  }
-  implicit class Ap2Syntax[A,B,C](self: Remote[(A,B) => C]) {
-    def apply(a: Remote[A], b: Remote[B]): Remote[C] =
-      Remote.Ap2(self, a, b)
+    /** Implicitly promote a `Task[A]` to a `Remote[A]`. */
+    implicit def taskToRemote[A:Encoder:TypeTag](t: Task[A]): Remote[A] = async(t)
+
+    /** Implicitly promote a `Task[A]` to a `Remote[A]`. */
+    implicit def localToRemote[A:Encoder:TypeTag](a: A): Remote[A] = local(a)
   }
 }
+

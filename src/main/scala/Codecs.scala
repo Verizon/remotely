@@ -10,7 +10,19 @@ import scodec.{Codec,codecs => C,Decoder,Encoder}
 import scodec.bits.BitVector
 import Remote._
 
-object Codecs {
+private[srpc] trait lowerprioritycodecs {
+
+  // Since `Codec[A]` extends `Encoder[A]`, which is contravariant in `A`,
+  // and there are a few places where we ask for an implicit `Encoder[A]`,
+  // we make this implicit lower priority to avoid ambiguous implicits.
+  implicit def seq[A:Codec]: Codec[Seq[A]] = C.variableSizeBytes(C.int32,
+    C.repeated(Codec[A]).xmap[Seq[A]](
+      a => a,
+      _.toIndexedSeq
+    ))
+}
+
+object Codecs extends lowerprioritycodecs {
 
   implicit val float = C.float
   implicit val double = C.double
@@ -33,29 +45,23 @@ object Codecs {
     C.variableSizeBytes(int32, B)
   }
 
-  implicit def seq[A:Codec]: Codec[Seq[A]] = C.variableSizeBytes(int32,
-    C.repeated(Codec[A]).xmap[Seq[A]](
-      a => a,
-      _.toIndexedSeq
-    ))
+  implicit def set[A:Codec]: Codec[Set[A]] =
+    indexedSeq[A].xmap[Set[A]](
+      s => Set(s: _*),
+      _.toIndexedSeq)
 
   implicit def sortedSet[A:Codec:Ordering]: Codec[SortedSet[A]] =
     indexedSeq[A].xmap[SortedSet[A]](
       s => SortedSet(s: _*),
       _.toIndexedSeq)
 
-  implicit def set[A:Codec]: Codec[Set[A]] =
-    indexedSeq[A].xmap[Set[A]](
-      s => Set(s: _*),
-      _.toIndexedSeq)
-
-  implicit def indexedSeq[A:Codec]: Codec[IndexedSeq[A]] =
-    C.variableSizeBytes(int32, C.repeated(Codec[A]))
-
   implicit def list[A:Codec]: Codec[List[A]] =
     indexedSeq[A].xmap[List[A]](
       _.toList,
       _.toIndexedSeq)
+
+  implicit def indexedSeq[A:Codec]: Codec[IndexedSeq[A]] =
+    C.variableSizeBytes(int32, C.repeated(Codec[A]))
 
   implicit def map[K:Codec,V:Codec]: Codec[Map[K,V]] =
     indexedSeq[(K,V)].xmap[Map[K,V]](
@@ -168,6 +174,11 @@ object Codecs {
     } yield (responseDec, r)
 
   def responseCodec[A:Codec] = either[String,A]
+
+  def responseDecoder[A:Decoder] = bool flatMap {
+    case false => utf8.map(left)
+    case true => Decoder[A].map(right)
+  }
 
   def responseEncoder[A:Encoder] = new Encoder[String \/ A] {
     def encode(a: String \/ A): String \/ BitVector =

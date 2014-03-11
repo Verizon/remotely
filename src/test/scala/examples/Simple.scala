@@ -1,14 +1,14 @@
 package srpc
+package examples
 
 import java.net.InetSocketAddress
 import scalaz.concurrent.Task
 
-object ServiceExample2 extends App {
+object Simple extends App {
 
   import Codecs._
-  import Remoteable._
 
-  def foo(i: Int): String = ???
+  def foo(i: Int): String = "BONUS"
 
   // on server, populate environment with codecs and values
   val env = Environment.empty
@@ -32,6 +32,7 @@ object ServiceExample2 extends App {
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated
   // from `env`, since `env` has name/types for all declarations!
+  import Remote.implicits._
 
   val fac = Remote.ref[Int => Int]("fac")
   val gcd = Remote.ref[(Int,Int) => Int]("gcd")
