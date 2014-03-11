@@ -49,7 +49,7 @@ object Endpoint {
           context stop self
 
         case c @ Tcp.Connected(remote, local) =>
-          log.info("connection established to " + remote)
+          log.debug("connection established to " + remote)
           val connection = sender
           connection ! Tcp.Register(self)
           out.evalMap { bytes => Task.delay { connection ! Tcp.Write(ByteString(bytes.toArray)) } }
