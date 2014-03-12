@@ -33,7 +33,7 @@ object RemoteSpec extends Properties("Remote") {
     val wrongsum = Remote.ref[List[Float] => Float]("sum")
     val t: Task[Float] = wrongsum(List(1.0f, 2.0f, 3.0f)).run(loc)
     t.attemptRun.fold(
-      e => { println(e); true },
+      e => { println(prettyError(e.toString)); true },
       a => false
     )
   }
@@ -44,7 +44,7 @@ object RemoteSpec extends Properties("Remote") {
     val wrongsum = Remote.ref[List[Int] => Int]("product")
     val t: Task[Int] = wrongsum(List(1, 2, 3)).run(loc)
     t.attemptRun.fold(
-      e => { println(e); true },
+      e => { println(prettyError(e.toString)); true },
       a => false
     )
   }
@@ -54,6 +54,10 @@ object RemoteSpec extends Properties("Remote") {
     server()
     clientPool.shutdown()
     true
+  }
+
+  def prettyError(msg: String): String = {
+    msg.take(msg.indexOfSlice("stack trace:"))
   }
 
   def lazily(p: => Prop): Prop = {
