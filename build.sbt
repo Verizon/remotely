@@ -23,7 +23,7 @@ libraryDependencies ++= Seq(
   "org.scalaz.stream" %% "scalaz-stream" % "snapshot-0.4",
   "org.typelevel" %% "scodec-core" % "1.0.0-RC2",
   "com.typesafe.akka" %% "akka-kernel" % "2.2.3",
-  "org.scalacheck" %% "scalacheck" % "1.10.1" % "test"
+  "org.scalacheck" %% "scalacheck" % "1.11.3" % "test"
 )
 
 seq(bintraySettings:_*)
