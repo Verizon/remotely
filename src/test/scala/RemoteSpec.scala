@@ -49,11 +49,52 @@ object RemoteSpec extends Properties("Remote") {
     )
   }
 
+  property("encoding speed") = {
+    val N = 2000
+    val M = 1024
+    val ints = List.range(0, M)
+    val c = scodec.Codec[List[Int]]
+    val t = time {
+      (0 until N).foreach { _ => c.encode(ints); () }
+    }
+    println { "took " + t / 1000.0 +"s to encode " + (M*N*4 / 1e6) + " MB" }
+    true
+  }
+
+  property("decoding speed") = {
+    val N = 2000
+    val M = 1024
+    val ints = List.range(0, M)
+    val c = scodec.Codec[List[Int]]
+    val bits = c.encodeValid(ints)
+    val t = time {
+      (0 until N).foreach { _ => c.decode(bits); () }
+    }
+    println { "took " + t / 1000.0 +"s to decode " + (M*N*4 / 1e6) + " MB" }
+    true
+  }
+
+  property("round trip speed") = {
+    val l: List[Int] = List(1)
+    val N = 5000
+    val t = time {
+      (0 until N).foreach { _ => sum(l).run(loc).run; () }
+    }
+    println { "round trip took average of: " + (t/N.toDouble) + " milliseconds" }
+    true
+  }
+
   // NB: this property should always appear last, so it runs after all properties have run
   property("cleanup") = lazily {
     server()
     clientPool.shutdown()
     true
+  }
+
+  def time(a: => Unit): Long = {
+    val start = System.currentTimeMillis
+    a
+    System.currentTimeMillis - start
   }
 
   def prettyError(msg: String): String = {
