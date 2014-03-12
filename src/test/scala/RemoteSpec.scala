@@ -3,6 +3,7 @@ package srpc
 import java.net.InetSocketAddress
 import org.scalacheck._
 import Prop._
+import scalaz.concurrent.Task
 
 object RemoteSpec extends Properties("Remote") {
 
@@ -10,32 +11,54 @@ object RemoteSpec extends Properties("Remote") {
   import Remote.implicits._
 
   val env = Environment.empty
-    .codec[List[Int]]
     .codec[Int]
+    .codec[Double]
+    .codec[List[Int]]
     .declare("sum") { (d: List[Int]) => d.sum }
+    .declare("sum") { (d: List[Double]) => d.sum }
+
+  implicit val clientPool = akka.actor.ActorSystem("rpc-client")
+  val addr = new InetSocketAddress("localhost", 8080)
+  val server = Server.start(env)(addr)
+  val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
 
   val sum = Remote.ref[List[Int] => Int]("sum")
 
-  val addr = new InetSocketAddress("localhost", 8080)
+  property("roundtrip") =
+    forAll { (l: List[Int]) => l.sum == sum(l).run(loc).run }
 
-  property("sum") = secure {
-    val server = Server.start(env)(addr)
-    // to actually run a remote expression, we need an endpoint
-    implicit val clientPool = akka.actor.ActorSystem("rpc-client")
-    val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
-
-    val prop = forAll { (l: List[Int]) => l.sum == sum(l).run(loc).run }
-
-    onComplete (prop) {
-      //server()
-      //Thread.sleep(1000)
-      //clientPool.shutdown()
-    }
+  property("check-serializers") = secure {
+    // verify that server returns a meaningful error when it asks for
+    // decoder(s) the server does not know about
+    val wrongsum = Remote.ref[List[Float] => Float]("sum")
+    val t: Task[Float] = wrongsum(List(1.0f, 2.0f, 3.0f)).run(loc)
+    t.attemptRun.fold(
+      e => { println(e); true },
+      a => false
+    )
   }
 
-  def onComplete(p: => Prop)(action: => Unit): Prop = {
-    var done = false
-    p || secure { done = true; action; false } && secure { if (done) true else { action; true }}
+  property("check-declarations") = secure {
+    // verify that server returns a meaningful error when client asks
+    // for a remote ref that is unknown
+    val wrongsum = Remote.ref[List[Int] => Int]("product")
+    val t: Task[Int] = wrongsum(List(1, 2, 3)).run(loc)
+    t.attemptRun.fold(
+      e => { println(e); true },
+      a => false
+    )
+  }
+
+  // NB: this property should always appear last, so it runs after all properties have run
+  property("cleanup") = lazily {
+    server()
+    clientPool.shutdown()
+    true
+  }
+
+  def lazily(p: => Prop): Prop = {
+    lazy val pe = secure { p }
+    new Prop { def apply(p: Gen.Parameters) = pe(p) }
   }
 
 }

@@ -21,7 +21,7 @@ object Server {
             .fold(e => throw new Error(e), identity)
     val expected = Remote.refs(r)
     val unknown = (expected -- env.values.keySet).toList
-    if (unknown.nonEmpty) fail(s"[validation] server does not have referenced values: $unknown")
+    if (unknown.nonEmpty) fail(s"[validation] server does not have referenced values:\n${unknown.mkString('\n'.toString)}")
     else if (trailing.nonEmpty) fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
     else eval(env.values)(r).flatMap {
       a => toTask(Codecs.responseEncoder(respEncoder).encode(right(a)))
