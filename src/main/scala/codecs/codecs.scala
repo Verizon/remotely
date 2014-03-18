@@ -207,12 +207,6 @@ package object codecs extends lowerprioritycodecs {
         else Task.fail(new DecodingFailure("trailing bits: " + trailing)) }
     )
 
-  implicit def codecAsEncoder[A:Codec]: Encoder[A] =
-    new Encoder[A] { def encode(a: A) = Codec[A].encode(a) }
-
-  implicit def codecAsDecoder[A:Codec]: Decoder[A] =
-    new Decoder[A] { def decode(bits: BitVector) = Codec[A].decode(bits) }
-
   class EncodingFailure(msg: String) extends Exception(msg)
   class DecodingFailure(msg: String) extends Exception(msg)
 }

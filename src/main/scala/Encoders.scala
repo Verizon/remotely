@@ -13,6 +13,11 @@ case class Encoders(encoders: Map[String,Encoder[Any]]) {
   def keySet = encoders.keySet
 
   def get(k: String): Option[Encoder[Any]] = encoders.get(k)
+
+  def pretty =
+    "Encoders.empty\n  " + encoders.keySet.toList.sorted.map(e => s".encoder[$e]").mkString("\n  ")
+
+  override def toString = pretty
 }
 
 object Encoders {

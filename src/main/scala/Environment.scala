@@ -43,7 +43,6 @@ case class Environment(codecs: Codecs, values: Values) {
 
   override def toString = {
     s"""Environment {
-    |
     |  ${values.keySet.toList.sorted.mkString("\n  ")}
     |
     |  decoders:

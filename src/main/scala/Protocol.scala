@@ -35,7 +35,8 @@ case class Protocol(codecs: Codecs, signatures: Signatures) {
   def generateClient(moduleName: String): String =
     signatures.generateClient(moduleName)
 
-  def generateServer(packagename: String): String = ???
+  def generateServer(moduleName: String): String = ???
+    // signatures.generateServer(codecs)(moduleName)
 }
 
 object Protocol {
