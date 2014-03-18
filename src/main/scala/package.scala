@@ -7,8 +7,6 @@ package object srpc {
   import scodec.bits.{BitVector,ByteVector}
   import scodec.Decoder
 
-  private val C = Codecs
-
   /**
    * Evaluate the given remote expression at the
    * specified endpoint, and get back the result.
@@ -19,9 +17,9 @@ package object srpc {
    */
   def evaluate[A:Decoder:TypeTag](e: Endpoint)(r: Remote[A]): Task[A] = for {
     conn <- e.get
-    reqBits <- C.encodeRequest(r)
+    reqBits <- codecs.encodeRequest(r)
     respBytes <- fullyRead(conn(Process.emit(reqBits.toByteVector)))
-    resp <- C.liftDecode(C.responseDecoder[A].decode(respBytes.toBitVector))
+    resp <- codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes.toBitVector))
     result <- resp.fold(e => Task.fail(new Exception(e)),
                         a => Task.now(a))
   } yield result

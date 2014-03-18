@@ -17,17 +17,17 @@ object Server {
    */
   def handle(env: Environment)(request: BitVector): Task[BitVector] = Task.suspend {
     val (trailing, (respEncoder,r)) =
-      Codecs.requestDecoder(env).decode(request)
+      codecs.requestDecoder(env).decode(request)
             .fold(e => throw new Error(e), identity)
     val expected = Remote.refs(r)
     val unknown = (expected -- env.values.keySet).toList
     if (unknown.nonEmpty) fail(s"[validation] server does not have referenced values:\n${unknown.mkString('\n'.toString)}")
     else if (trailing.nonEmpty) fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
     else eval(env.values)(r).flatMap {
-      a => toTask(Codecs.responseEncoder(respEncoder).encode(right(a)))
+      a => toTask(codecs.responseEncoder(respEncoder).encode(right(a)))
     }
   }.attempt.flatMap {
-    _.fold(e => toTask(Codecs.responseEncoder(Codecs.utf8).encode(left(formatThrowable(e)))),
+    _.fold(e => toTask(codecs.responseEncoder(codecs.utf8).encode(left(formatThrowable(e)))),
            bits => Task.now(bits))
   }
 
@@ -41,13 +41,13 @@ object Server {
       Handler.strict(bytes => handle(env)(bytes.toBitVector).map(_.toByteVector)), addr)
 
   /** Evaluate a remote expression, using the given (untyped) environment. */
-  def eval[A](env: Map[String,Any])(r: Remote[A]): Task[A] = {
+  def eval[A](env: Values)(r: Remote[A]): Task[A] = {
     import Remote._
     val T = Monad[Task]
     r match {
       case Async(a, _, _) => a
       case Local(a,_,_) => Task.now(a)
-      case Ref(name) => env.lift(name) match {
+      case Ref(name) => env.values.lift(name) match {
         case None => Task.delay { sys.error("Unknown name on server: " + name) }
         case Some(a) => Task.now(a.asInstanceOf[A])
       }

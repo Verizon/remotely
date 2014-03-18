@@ -6,7 +6,7 @@ import scalaz.concurrent.Task
 
 object Simple extends App {
 
-  import Codecs._
+  import codecs._
 
   def foo(i: Int): String = "BONUS"
 

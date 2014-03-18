@@ -1,47 +1,41 @@
 package srpc
 
 import scala.reflect.runtime.universe.TypeTag
-import scala.collection.concurrent.TrieMap
-import scalaz.concurrent.Task
-import scalaz.Monad
 import scodec.{Codec,Decoder,Encoder}
 
 // could do dynamic lookup of encoder, decoder, using type tags
 
-case class Environment(decoders: Map[String,Decoder[Nothing]],
-                       encoders: Map[String,Encoder[Any]],
-                       values: Map[String,Any]) {
+case class Environment(codecs: Codecs, values: Values) {
 
-  def encoder[A:TypeTag:Encoder]: Environment = {
-    val name = Remote.toTag(implicitly[TypeTag[A]])
-    this.copy(encoders = encoders + (name -> Encoder[A].asInstanceOf[Encoder[Any]]))
-  }
+  def decoders = codecs.decoders
+  def encoders = codecs.encoders
 
-  def decoder[A:TypeTag:Decoder]: Environment = {
-    val name = Remote.toTag(implicitly[TypeTag[A]])
-    this.copy(decoders = decoders + (name -> Decoder[A].asInstanceOf[Decoder[Nothing]]))
-  }
+  def encoder[A:TypeTag:Encoder]: Environment =
+    this.copy(codecs = codecs.encoder[A])
 
-  def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment = {
-    import Codecs.{codecAsEncoder,codecAsDecoder}
-    this.encoder[A].decoder[A]
-  }
+  def decoder[A:TypeTag:Decoder]: Environment =
+    this.copy(codecs = codecs.decoder[A])
+
+  def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
+    this.copy(codecs = codecs.codec[A])
 
   /** Declare or update the value for the given name in this `Environment` */
-  def update[A:TypeTag](name: String)(a: A): Environment = {
-    val tag = Remote.nameToTag[A](name)
-    this.copy(values = values + (tag -> a))
-  }
+  def update[A:TypeTag](name: String)(a: A): Environment =
+    this.copy(values = values.update[A](name)(a))
 
   /**
    * Declare the value for the given name in this `Environment`,
    * or throw an error if the type-qualified name is already bound.
    */
-  def declare[A:TypeTag](name: String)(a: A): Environment = {
-    val tag = Remote.nameToTag[A](name)
-    if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
-    else this.copy(values = values + (tag -> a))
-  }
+  def declare[A:TypeTag](name: String)(a: A): Environment =
+    this.copy(values = values.declare[A](name)(a))
+
+  /**
+   * Serve this `Environment` via a TCP server at the given address.
+   * Returns a thunk that can be used to stop the server.
+   */
+  def serve(addr: java.net.InetSocketAddress): () => Unit =
+    Server.start(this)(addr)
 
   def generateClient(moduleName: String): String = {
     def emitValue(s: String) = {
@@ -76,5 +70,5 @@ case class Environment(decoders: Map[String,Decoder[Nothing]],
 }
 
 object Environment {
-  def empty = Environment(Map(), Map(), Map())
+  val empty = Environment(Codecs.empty, Values.empty)
 }

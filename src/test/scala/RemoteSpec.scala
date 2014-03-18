@@ -7,7 +7,7 @@ import scalaz.concurrent.Task
 
 object RemoteSpec extends Properties("Remote") {
 
-  import Codecs._
+  import codecs._
   import Remote.implicits._
 
   val env = Environment.empty
