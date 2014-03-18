@@ -37,22 +37,9 @@ case class Environment(codecs: Codecs, values: Values) {
   def serve(addr: java.net.InetSocketAddress): () => Unit =
     Server.start(this)(addr)
 
-  def generateClient(moduleName: String): String = {
-    def emitValue(s: String) = {
-      val parts = s.split(':').toList
-      val name = parts.init.mkString(":").trim
-      s"val $name: Remote[${parts.last}] = Remote.Ref(s)"
-    }
-
-    s"""
-    |import srpc._
-    |import srpc.Codecs._
-    |
-    |object $moduleName {
-    |  ${values.keySet.toList.sorted.map(emitValue).mkString("\n\n    ")}
-    |}
-    """.stripMargin
-  }
+  /** Generate the Scala code for the client access to this `Environment`. */
+  def generateClient(moduleName: String): String =
+    Signatures(values.keySet).generateClient(moduleName)
 
   override def toString = {
     s"""Environment {
