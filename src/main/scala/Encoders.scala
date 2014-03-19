@@ -10,6 +10,8 @@ case class Encoders(encoders: Map[String,Encoder[Any]]) {
     this.copy(encoders = encoders + (name -> Encoder[A].asInstanceOf[Encoder[Any]]))
   }
 
+  def ++(e: Encoders): Encoders = Encoders { encoders ++ e.encoders }
+
   def keySet = encoders.keySet
 
   def get(k: String): Option[Encoder[Any]] = encoders.get(k)

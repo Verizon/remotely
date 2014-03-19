@@ -15,6 +15,8 @@ case class Codecs(decoders: Decoders,
   def codec[A:TypeTag:Codec]: Codecs =
     Codecs(decoders.decoder[A], encoders.encoder[A])
 
+  def ++(c: Codecs): Codecs = Codecs(decoders ++ c.decoders, encoders ++ c.encoders)
+
   def pretty: String =
     s"""Codecs(\n  ${decoders.pretty.replace("\n","\n  ")},\n  ${encoders.pretty.replace("\n","\n  ")}\n)"""
 

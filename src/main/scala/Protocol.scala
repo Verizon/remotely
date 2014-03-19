@@ -35,8 +35,26 @@ case class Protocol(codecs: Codecs, signatures: Signatures) {
   def generateClient(moduleName: String): String =
     signatures.generateClient(moduleName)
 
-  def generateServer(moduleName: String): String = ???
-    // signatures.generateServer(codecs)(moduleName)
+  def generateServer(traitName: String): String = s"""
+  |import srpc.{Codecs,Decoders,Encoders,Environment,Values}
+  |
+  |trait $traitName {
+  |  // This interface is generated from a `Protocol`. Do not modify.
+  |  def environment: Environment = Environment(
+  |${Signatures.indent("    ")(codecs.pretty)},
+  |    populateDeclarations(Values.empty)
+  |  )
+  |
+  |${Signatures.indent("  ")(signatures.generateServerTraitBody)}
+  |}
+  """.stripMargin
+
+  def pretty: String =
+    "Protocol(\n" +
+    Signatures.indent("  ")(codecs.pretty) + ",\n" +
+    Signatures.indent("  ")(signatures.pretty) + "\n)"
+
+  override def toString = pretty
 }
 
 object Protocol {

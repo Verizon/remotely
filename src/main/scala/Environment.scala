@@ -19,6 +19,8 @@ case class Environment(codecs: Codecs, values: Values) {
   def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
     this.copy(codecs = codecs.codec[A])
 
+  def codecs(c: Codecs): Environment = Environment(codecs ++ c, values)
+
   /** Declare or update the value for the given name in this `Environment` */
   def update[A:TypeTag](name: String)(a: A): Environment =
     this.copy(values = values.update[A](name)(a))
@@ -29,6 +31,30 @@ case class Environment(codecs: Codecs, values: Values) {
    */
   def declare[A:TypeTag](name: String)(a: A): Environment =
     this.copy(values = values.declare[A](name)(a))
+
+  /**
+   * Convenience function which just calls `declare[A => B](name)`.
+   */
+  def declare1[A:TypeTag,B:TypeTag](name: String)(f: A => B): Environment =
+    declare[A => B](name)(f)
+
+  /**
+   * Convenience function which just calls `declare[(A,B) => C](name)`.
+   */
+  def declare2[A:TypeTag,B:TypeTag,C:TypeTag](name: String)(f: (A,B) => C): Environment =
+    declare[(A,B) => C](name)(f)
+
+  /**
+   * Convenience function which just calls `declare[(A,B,C) => D](name)`.
+   */
+  def declare3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String)(f: (A,B,C) => D): Environment =
+    declare[(A,B,C) => D](name)(f)
+
+  /**
+   * Convenience function which just calls `declare[(A,B,C,D) => E](name)`.
+   */
+  def declare4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String)(f: (A,B,C,D) => E): Environment =
+    declare[(A,B,C,D) => E](name)(f)
 
   /**
    * Serve this `Environment` via a TCP server at the given address.
