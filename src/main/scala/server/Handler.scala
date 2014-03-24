@@ -24,26 +24,28 @@ trait Handler {
    * Build an `Actor` for this handler. The actor responds to the following
    * messages: `akka.io.Tcp.Received` and `akka.io.Tcp.ConnectionClosed`.
    */
-  def actor(system: ActorSystem)(connection: ActorRef): ActorRef = system.actorOf(Props(new Actor with ActorLogging {
+  def actor(system: ActorSystem)(conn: => ActorRef): ActorRef = system.actorOf(Props(new Actor with ActorLogging {
     private val (queue, src) = async.localQueue[ByteVector]
     @volatile var alive = true
+    lazy val connection = conn
 
-    apply(src).evalMap { b =>
-      Task.delay { connection ! Tcp.Write(ByteString(b.toArray)) }
-    }.run
-    .runAsync { _.fold(
-      err => {
-        log.error("uncaught exception in connection-processing logic: " + err)
-        log.error(err.getStackTrace.mkString("\n"))
-       },
-      _ => {
-        log.debug("done writing, closing connection")
-        if (alive) {
-          log.debug("server initiating connection close: " + connection)
-          connection ! Tcp.ConfirmedClose
+    override def preStart = {
+      apply(src).evalMap { b =>
+        Task.delay { connection ! Tcp.Write(ByteString(b.toArray)) }
+      }.run.runAsync { _.fold(
+        err => {
+          log.error("uncaught exception in connection-processing logic: " + err)
+          log.error(err.getStackTrace.mkString("\n"))
+         },
+        _ => {
+          log.debug("done writing, closing connection")
+          if (alive) {
+            log.debug("server initiating connection close: " + connection)
+            connection ! Tcp.ConfirmedClose
+          }
         }
-      }
-    )}
+      )}
+    }
 
     def receive = {
       case Tcp.Received(data) =>
