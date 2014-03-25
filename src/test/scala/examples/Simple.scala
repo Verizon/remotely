@@ -51,9 +51,12 @@ object Simple extends App {
   val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
   val result: Task[Int] = r.run(loc)
 
-  Thread.sleep(2000)
   try println { result.run }
   finally {
+    // hack to allow asynchronous actor shutdown messages to propagate,
+    // without this, we get some dead letter logging
+    // I'm sure there's a better way to do this
+    Thread.sleep(1000)
     server()
     clientPool.shutdown()
   }

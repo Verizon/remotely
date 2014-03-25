@@ -38,13 +38,17 @@ trait Handler {
         e.leftMap { err =>
           log.error("uncaught exception in connection-processing logic: " + err)
           log.error(err.getStackTrace.mkString("\n"))
+          connection ! Tcp.Close
         }
         if (open) {
           log.debug("done writing, closing connection")
           log.debug("server initiating connection close: " + connection)
           connection ! Tcp.Close
         }
-        else context stop self
+        else {
+          log.info("client initiated connection close")
+          context stop self
+        }
       }
     }
 
@@ -56,8 +60,9 @@ trait Handler {
       case Tcp.Aborted => open = false; queue.fail(new Exception("connection aborted"))
       case Tcp.ErrorClosed(msg) => open = false; queue.fail(new Exception("I/O error: " + msg))
       case Tcp.PeerClosed => open = false; queue.close
-      case Tcp.Closed => context stop self
-      case msg => println("what the shit is this: " + msg)
+      case Tcp.Closed =>
+        log.debug("connection closed gracefully by server, shutting down")
+        context stop self
     }
   }))
 }
