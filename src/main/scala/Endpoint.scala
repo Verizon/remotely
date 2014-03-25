@@ -1,10 +1,10 @@
 package srpc
 
 import akka.actor.{Actor,ActorLogging,ActorSystem,Props}
-import akka.io.{IO,Tcp}
+import akka.io.{BackpressureBuffer,IO,Tcp,SslTlsSupport,TcpPipelineHandler}
 import akka.util.ByteString
 import java.net.{InetSocketAddress,Socket,URL}
-import javax.net.ssl.SSLParameters
+import javax.net.ssl.SSLEngine
 import scalaz.concurrent.Task
 import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio}
 import scodec.bits.{BitVector,ByteVector}
@@ -30,11 +30,17 @@ object Endpoint {
   def empty: Endpoint = Endpoint(Process.halt)
 
   def single(host: InetSocketAddress)(implicit S: ActorSystem): Endpoint =
-    Endpoint(Process.constant(akkaRequest(S)(host)))
+    Endpoint(Process.constant(akkaRequest(S)(host, None)))
+
+  def singleSSL(createEngine: InetSocketAddress => SSLEngine)(
+                host: InetSocketAddress)(implicit S: ActorSystem): Endpoint =
+    Endpoint(Process.constant(akkaRequest(S)(host, Some(createEngine))))
+
     // Endpoint(connect(host).map(streamExchange).repeat)
 
-  private def akkaRequest(system: ActorSystem)(host: InetSocketAddress):
-      Process[Task,ByteVector] => Process[Task,ByteVector] = out => {
+  private def akkaRequest(system: ActorSystem)(
+      host: InetSocketAddress,
+      createEngine: Option[InetSocketAddress => SSLEngine] = None): Connection = out => {
     val (q, src) = async.localQueue[ByteVector]
     val actor = system.actorOf(Props(new Actor with ActorLogging {
       import context.system
@@ -47,28 +53,30 @@ object Endpoint {
           log.error("connection failed to " + host)
           q.fail(new Exception("connection failed to host " + host))
           context stop self
-
         case c @ Tcp.Connected(remote, local) =>
           log.debug("connection established to " + remote)
           val connection = sender
+          val core = context.system.actorOf(Props(new Actor with ActorLogging { def receive = {
+            case Tcp.Received(data) => q.enqueue(ByteVector(data.toArray))
+            case Tcp.Aborted => q.fail(new Exception("connection aborted"))
+            case Tcp.ErrorClosed(msg) => q.fail(new Exception("I/O error: " + msg))
+            case _ : Tcp.ConnectionClosed => q.close
+          }}))
+          val pipeline = createEngine.map { makeSslEngine =>
+            val init = TcpPipelineHandler.withLogger(log,
+              new SslTlsSupport(makeSslEngine(remote)) >>
+              new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
+            context.actorOf(TcpPipelineHandler.props(init, connection, core))
+          } getOrElse { core }
           connection ! Tcp.Register(self)
           out.evalMap { bytes => Task.delay { connection ! Tcp.Write(ByteString(bytes.toArray)) } }
              .run
              .runAsync { e =>
                e.leftMap(q.fail)
-               connection ! Tcp.ConfirmedClose
+               connection ! Tcp.Close
+               context stop self
              }
-
-          context become {
-            case Tcp.Received(data) =>
-              q.enqueue(ByteVector(data.toArray))
-            case Tcp.ConfirmedClosed =>
-              q.close
-              context stop self
-            case Tcp.PeerClosed =>
-              log.error("server terminated connection early")
-              q.fail(new Exception("server terminated connection early"))
-          }
+          context become { case msg => pipeline ! msg }
       }
     }))
     src
@@ -107,8 +115,6 @@ object Endpoint {
     }
 
   def forked[A](p: Process[Task,A]): Process[Task,A] = p.evalMap(a => Task(a))
-
-  def singleSSL(ssl: SSLParameters)(c: InetSocketAddress): Endpoint = ???
 
   def roundRobin(p: Endpoint*): Endpoint = {
     require(p.nonEmpty, "round robin must have at least one endpoint to choose from")
