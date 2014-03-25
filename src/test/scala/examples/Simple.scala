@@ -51,6 +51,7 @@ object Simple extends App {
   val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
   val result: Task[Int] = r.run(loc)
 
+  Thread.sleep(2000)
   try println { result.run }
   finally {
     server()

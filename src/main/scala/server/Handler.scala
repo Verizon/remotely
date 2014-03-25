@@ -1,8 +1,9 @@
 package srpc.server
 
-import scalaz.stream.{async,Process}
+import scalaz.stream.{async,Process,Process1}
 import scalaz.concurrent.Task
-import scodec.bits.ByteVector
+import scodec.bits.{BitVector,ByteVector}
+import scodec.codecs
 import akka.util.ByteString
 import akka.actor.{Actor,ActorRef,ActorLogging,ActorSystem,Props}
 import akka.io.Tcp
@@ -30,11 +31,10 @@ trait Handler {
     lazy val connection = conn
 
     override def preStart = {
-      apply(src).evalMap { b =>
-        Task.delay {
-          if (open) connection ! Tcp.Write(ByteString(b.toArray))
-        }
-      }.run.runAsync { e =>
+      apply(src).evalMap { b => Task.delay {
+        if (open) connection ! Tcp.Write(ByteString(b.toArray))
+        else throw Process.End
+      }}.run.runAsync { e =>
         e.leftMap { err =>
           log.error("uncaught exception in connection-processing logic: " + err)
           log.error(err.getStackTrace.mkString("\n"))
@@ -44,6 +44,7 @@ trait Handler {
           log.debug("server initiating connection close: " + connection)
           connection ! Tcp.Close
         }
+        else context stop self
       }
     }
 
@@ -54,7 +55,9 @@ trait Handler {
         queue.enqueue(bytes)
       case Tcp.Aborted => open = false; queue.fail(new Exception("connection aborted"))
       case Tcp.ErrorClosed(msg) => open = false; queue.fail(new Exception("I/O error: " + msg))
-      case _ : Tcp.ConnectionClosed => open = false; queue.close
+      case Tcp.PeerClosed => open = false; queue.close
+      case Tcp.Closed => context stop self
+      case msg => println("what the shit is this: " + msg)
     }
   }))
 }
@@ -67,10 +70,39 @@ object Handler {
       def apply(source: Process[Task,ByteVector]) = f(source)
     }
 
-  /** Create a handler from an effectful function that receives the full input. */
-  def strict(f: ByteVector => Task[ByteVector]): Handler =
-    Handler(_.chunkAll.map(_.foldLeft(ByteVector.empty)(_ ++ _)).evalMap(f))
+  private[srpc] def frame: Process1[ByteVector,ByteVector] = {
+    val core = Process.await1[ByteVector].map { bs =>
+      codecs.int32.encodeValid(bs.size).toByteVector ++ bs
+    }
+    (core.repeat: Process1[ByteVector,ByteVector]) ++ // type inference fail
+    Process.emit(codecs.int32.encodeValid(0).toByteVector)
+  }
 
-  /** The identity handler, which echoes its input stream. */
-  def id: Handler = Handler(a => a)
+  /**
+   * Break an input byte stream chunked at any granularity along frame
+   * boundaries. Input consists of a stream of frames, where each frame
+   * is just a number of bytes, encoded as an int32, followed by a
+   * packet of that many bytes. End of stream is indicated with a frame
+   * header whose byte count is <= 0. Output stream is the stream of frame
+   * payloads.
+   */
+  private[srpc] def frames: Process1[ByteVector,ByteVector] = {
+    def frameHeader(acc: ByteVector): Process1[ByteVector,ByteVector] =
+      if (acc.size < 4) Process.await1[ByteVector].flatMap(bs => frameHeader(acc ++ bs))
+      else codecs.int32.decode(acc.toBitVector).fold (
+        errMsg => Process.fail(new IllegalArgumentException(errMsg)),
+        { case (rem,size) => if (size <= 0) Process.halt else readFrame(size,rem) }
+      )
+    def readFrame(bytesToRead: Int, bits: BitVector): Process1[ByteVector,ByteVector] =
+      if (bits.size / 8 >= bytesToRead) {
+        val bytes = bits.toByteVector
+        val frame = bytes.take(bytesToRead)
+        Process.emit(frame) fby frameHeader(bytes.drop(bytesToRead))
+      }
+      else
+        Process.await1[ByteVector].flatMap {
+          bs => readFrame(bytesToRead, bits ++ BitVector(bs))
+        }
+    frameHeader(ByteVector.empty)
+  }
 }

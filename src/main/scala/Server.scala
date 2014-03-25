@@ -38,7 +38,13 @@ object Server {
    */
   def start(env: Environment)(addr: InetSocketAddress): () => Unit =
     server.start("rpc-server")(
-      Handler.strict(bytes => handle(env)(bytes.toBitVector).map(_.toByteVector)), addr)
+      Handler { bytes =>
+        // we assume the input is a framed stream, and encode the response(s)
+        // as a framed stream as well
+        bytes.pipe(Handler.frames).evalMap(bs => handle(env)(bs.toBitVector).map(_.toByteVector)).pipe(Handler.frame)
+      },
+      addr
+    )
 
   /** Evaluate a remote expression, using the given (untyped) environment. */
   def eval[A](env: Values)(r: Remote[A]): Task[A] = {

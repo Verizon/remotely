@@ -60,7 +60,7 @@ object Endpoint {
             case Tcp.Received(data) => q.enqueue(ByteVector(data.toArray))
             case Tcp.Aborted => q.fail(new Exception("connection aborted"))
             case Tcp.ErrorClosed(msg) => q.fail(new Exception("I/O error: " + msg))
-            case _ : Tcp.ConnectionClosed => q.close
+            case _ : Tcp.ConnectionClosed => q.close; context stop self
           }}))
           val pipeline = createEngine.map { makeSslEngine =>
             val init = TcpPipelineHandler.withLogger(log,
@@ -68,15 +68,11 @@ object Endpoint {
               new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
             context.actorOf(TcpPipelineHandler.props(init, connection, core))
           } getOrElse { core }
-          connection ! Tcp.Register(self)
+          connection ! Tcp.Register(pipeline)
+          // NB: the client does not close the connection; the server closes the
+          // connection when it is finished writing (or in the event of an error)
           out.evalMap { bytes => Task.delay { connection ! Tcp.Write(ByteString(bytes.toArray)) } }
-             .run
-             .runAsync { e =>
-               e.leftMap(q.fail)
-               connection ! Tcp.Close
-               context stop self
-             }
-          context become { case msg => pipeline ! msg }
+          .run.runAsync { e => e.leftMap(q.fail); context stop self }
       }
     }))
     src

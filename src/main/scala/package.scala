@@ -6,6 +6,7 @@ package object srpc {
   import scalaz.Monoid
   import scodec.bits.{BitVector,ByteVector}
   import scodec.Decoder
+  import srpc.server.Handler
 
   /**
    * Evaluate the given remote expression at the
@@ -18,7 +19,10 @@ package object srpc {
   def evaluate[A:Decoder:TypeTag](e: Endpoint)(r: Remote[A]): Task[A] = for {
     conn <- e.get
     reqBits <- codecs.encodeRequest(r)
-    respBytes <- fullyRead(conn(Process.emit(reqBits.toByteVector)))
+    respBytes <- {
+      val reqBytestream = Process.emit(reqBits.toByteVector).pipe(Handler.frame)
+      fullyRead(conn(reqBytestream).pipe(Handler.frames)) // we assume the server response is a framed stream
+    }
     resp <- codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes.toBitVector))
     result <- resp.fold(e => Task.fail(new Exception(e)),
                         a => Task.now(a))
