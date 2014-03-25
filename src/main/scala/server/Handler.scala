@@ -26,38 +26,35 @@ trait Handler {
    */
   def actor(system: ActorSystem)(conn: => ActorRef): ActorRef = system.actorOf(Props(new Actor with ActorLogging {
     private val (queue, src) = async.localQueue[ByteVector]
-    @volatile var alive = true
+    @volatile var open = true
     lazy val connection = conn
 
     override def preStart = {
       apply(src).evalMap { b =>
-        Task.delay { connection ! Tcp.Write(ByteString(b.toArray)) }
-      }.run.runAsync { _.fold(
-        err => {
+        Task.delay {
+          if (open) connection ! Tcp.Write(ByteString(b.toArray))
+        }
+      }.run.runAsync { e =>
+        e.leftMap { err =>
           log.error("uncaught exception in connection-processing logic: " + err)
           log.error(err.getStackTrace.mkString("\n"))
-         },
-        _ => {
-          log.debug("done writing, closing connection")
-          if (alive) {
-            log.debug("server initiating connection close: " + connection)
-            connection ! Tcp.ConfirmedClose
-          }
         }
-      )}
+        if (open) {
+          log.debug("done writing, closing connection")
+          log.debug("server initiating connection close: " + connection)
+          connection ! Tcp.Close
+        }
+      }
     }
 
     def receive = {
       case Tcp.Received(data) =>
         val bytes = ByteVector(data.toArray)
-        log.debug("server got bytes: " + bytes.toBitVector)
+        if (log.isDebugEnabled) log.debug("server got bytes: " + bytes.toBitVector)
         queue.enqueue(bytes)
-      case Tcp.PeerClosed =>
-        log.debug("peer closed writing half of connection")
-        queue.close
-      case Tcp.ConfirmedClosed =>
-        log.debug("server successfully closed the connection")
-        context stop self
+      case Tcp.Aborted => open = false; queue.fail(new Exception("connection aborted"))
+      case Tcp.ErrorClosed(msg) => open = false; queue.fail(new Exception("I/O error: " + msg))
+      case _ : Tcp.ConnectionClosed => open = false; queue.close
     }
   }))
 }
