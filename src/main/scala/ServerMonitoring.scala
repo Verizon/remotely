@@ -11,7 +11,7 @@ trait ServerMonitoring { self =>
 
   /**
    * Invoked with the request, the set of names referenced by that
-   * request, and how look it took
+   * request, the result, and how long it took.
    */
   def handled[A](req: Remote[A],
                  references: Iterable[String],
