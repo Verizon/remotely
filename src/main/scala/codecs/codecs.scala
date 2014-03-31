@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import scala.collection.immutable.{IndexedSeq,Set,SortedMap,SortedSet}
 import scala.math.Ordering
@@ -10,7 +10,7 @@ import scodec.{Codec,codecs => C,Decoder,Encoder}
 import scodec.bits.BitVector
 import Remote._
 
-private[srpc] trait lowerprioritycodecs {
+private[remotely] trait lowerprioritycodecs {
 
   // Since `Codec[A]` extends `Encoder[A]`, which is contravariant in `A`,
   // and there are a few places where we ask for an implicit `Encoder[A]`,

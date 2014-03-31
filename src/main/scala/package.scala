@@ -1,12 +1,12 @@
 
-package object srpc {
+package object remotely {
   import scala.reflect.runtime.universe.TypeTag
   import scalaz.stream.{Bytes,Process}
   import scalaz.concurrent.Task
   import scalaz.Monoid
   import scodec.bits.{BitVector,ByteVector}
   import scodec.Decoder
-  import srpc.server.Handler
+  import remotely.server.Handler
 
   /**
    * Evaluate the given remote expression at the
@@ -31,6 +31,6 @@ package object srpc {
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)
 
-  private[srpc] def fullyRead(s: Process[Task,ByteVector]): Task[ByteVector] =
+  private[remotely] def fullyRead(s: Process[Task,ByteVector]): Task[ByteVector] =
     s.runFoldMap(identity)
 }

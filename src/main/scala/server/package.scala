@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import akka.actor.{ActorSystem, Props}
 import java.net.InetSocketAddress

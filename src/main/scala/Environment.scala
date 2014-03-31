@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}

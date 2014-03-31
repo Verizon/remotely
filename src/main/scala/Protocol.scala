@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
@@ -36,7 +36,7 @@ case class Protocol(codecs: Codecs, signatures: Signatures) {
     signatures.generateClient(moduleName)
 
   def generateServer(traitName: String): String = s"""
-  |import srpc.{Codecs,Decoders,Encoders,Environment,Values}
+  |import remotely.{Codecs,Decoders,Encoders,Environment,Values}
   |
   |trait $traitName {
   |  // This interface is generated from a `Protocol`. Do not modify.

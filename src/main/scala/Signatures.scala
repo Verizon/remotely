@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import scala.reflect.runtime.universe.TypeTag
 
@@ -26,16 +26,16 @@ case class Signatures(signatures: Set[String]) {
     }
 
     s"""
-    |import srpc.Remote
+    |import remotely.Remote
     |
     |object $moduleName {
-    |  // This module contains code generated from a `srpc.Protocol`. Do not alter.
+    |  // This module contains code generated from a `remotely.Protocol`. Do not alter.
     |  ${signatures.toList.sorted.map(emitValue).mkString("\n\n  ")}
     |}
     |""".stripMargin
   }
 
-  private[srpc] def generateServerTraitBody: String = {
+  private[remotely] def generateServerTraitBody: String = {
     def emitSignature(s: String): String = {
       val (name, tname) = Signatures.split(s)
       s"def $name: $tname"
@@ -67,6 +67,6 @@ object Signatures {
     (name, typename)
   }
 
-  private[srpc] def indent(by: String)(s: String): String =
+  private[remotely] def indent(by: String)(s: String): String =
     by + s.replace("\n", "\n" + by)
 }

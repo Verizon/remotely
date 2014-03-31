@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import scala.collection.immutable.SortedSet
 import scala.reflect.runtime.universe._
@@ -66,7 +66,7 @@ object Remote {
   }
 
   /** Promote a local value to a remote value. */
-  private[srpc] case class Local[A](
+  private[remotely] case class Local[A](
     a: A, // the value
     format: Option[Encoder[A]], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
@@ -76,7 +76,7 @@ object Remote {
 
 
   /** Promote an asynchronous task to a remote value. */
-  private[srpc] case class Async[A](
+  private[remotely] case class Async[A](
     a: Task[A],
     format: Encoder[A], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
@@ -87,26 +87,26 @@ object Remote {
   /**
    * Reference to a remote value on the server.
    */
-  private[srpc] case class Ref[A](name: String) extends Remote[A] {
+  private[remotely] case class Ref[A](name: String) extends Remote[A] {
     override def toString = name.takeWhile(_ != ':')
   }
 
   // we require a separate constructor for each function
   // arity, since remote invocations must be fully saturated
-  private[srpc] case class Ap1[A,B](
+  private[remotely] case class Ap1[A,B](
     f: Remote[A => B],
     a: Remote[A]) extends Remote[B] {
     override def toString = s"$f($a)"
   }
 
-  private[srpc] case class Ap2[A,B,C](
+  private[remotely] case class Ap2[A,B,C](
     f: Remote[(A,B) => C],
     a: Remote[A],
     b: Remote[B]) extends Remote[C] {
     override def toString = s"$f($a, $b)"
   }
 
-  private[srpc] case class Ap3[A,B,C,D](
+  private[remotely] case class Ap3[A,B,C,D](
     f: Remote[(A,B,C) => D],
     a: Remote[A],
     b: Remote[B],
@@ -114,7 +114,7 @@ object Remote {
     override def toString = s"$f($a, $b, $c)"
   }
 
-  private[srpc] case class Ap4[A,B,C,D,E](
+  private[remotely] case class Ap4[A,B,C,D,E](
     f: Remote[(A,B,C,D) => E],
     a: Remote[A],
     b: Remote[B],
@@ -182,7 +182,7 @@ object Remote {
     s"$s: ${toTag[A]}"
 
   /** Lower priority implicits. */
-  private[srpc] trait lowpriority {
+  private[remotely] trait lowpriority {
     implicit def codecIsRemote[A:Codec:TypeTag](a: A): Remote[A] = local(a)
   }
 

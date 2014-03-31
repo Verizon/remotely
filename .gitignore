@@ -1,7 +1,6 @@
 *.class
 *.log
-*.un~
-*.swp
+.DS_Store
 
 # sbt specific
 dist/*
@@ -13,3 +12,6 @@ project/plugins/project/
 
 # Scala-IDE specific
 .scala_dependencies
+
+.ivy2
+catapult/

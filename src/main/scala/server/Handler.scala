@@ -1,4 +1,4 @@
-package srpc.server
+package remotely.server
 
 import scalaz.stream.{async,Process,Process1}
 import scalaz.concurrent.Task
@@ -75,7 +75,7 @@ object Handler {
       def apply(source: Process[Task,ByteVector]) = f(source)
     }
 
-  private[srpc] def frame: Process1[ByteVector,ByteVector] = {
+  private[remotely] def frame: Process1[ByteVector,ByteVector] = {
     val core = Process.await1[ByteVector].map { bs =>
       codecs.int32.encodeValid(bs.size).toByteVector ++ bs
     }
@@ -91,7 +91,7 @@ object Handler {
    * header whose byte count is <= 0. Output stream is the stream of frame
    * payloads.
    */
-  private[srpc] def frames: Process1[ByteVector,ByteVector] = {
+  private[remotely] def frames: Process1[ByteVector,ByteVector] = {
     def frameHeader(acc: ByteVector): Process1[ByteVector,ByteVector] =
       if (acc.size < 4) Process.await1[ByteVector].flatMap(bs => frameHeader(acc ++ bs))
       else codecs.int32.decode(acc.toBitVector).fold (

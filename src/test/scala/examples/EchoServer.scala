@@ -1,4 +1,4 @@
-package srpc
+package remotely
 package examples
 
 import java.net.InetSocketAddress

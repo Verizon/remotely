@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import java.net.InetSocketAddress
 import scalaz.{\/,Monad}
@@ -7,7 +7,7 @@ import scalaz.stream.{Bytes,merge,nio,Process}
 import scalaz.concurrent.Task
 import scodec.bits.{BitVector,ByteVector}
 import scodec.Encoder
-import srpc.server.Handler
+import remotely.server.Handler
 
 object Server {
 

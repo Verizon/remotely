@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import akka.actor.{Actor,ActorLogging,ActorSystem,Props}
 import akka.io.{BackpressureBuffer,IO,Tcp,SslTlsSupport,TcpPipelineHandler}

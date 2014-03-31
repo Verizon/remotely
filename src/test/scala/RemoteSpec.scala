@@ -1,4 +1,4 @@
-package srpc
+package remotely
 
 import java.net.InetSocketAddress
 import org.scalacheck._
