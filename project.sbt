@@ -20,3 +20,11 @@ libraryDependencies ++= Seq(
 OnCue.baseSettings
 
 ScalaCheck.settings
+
+scalacOptions <<= scalacOptions map { opts => 
+  val exclude = Set(
+    "-optimize", // triggers this bug - https://issues.scala-lang.org/browse/SI-3882 
+    "-Yinline"
+  )
+  opts.filterNot(exclude)
+}
