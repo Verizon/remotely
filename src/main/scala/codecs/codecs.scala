@@ -206,7 +206,4 @@ package object codecs extends lowerprioritycodecs {
         if (trailing.isEmpty) Task.now(a)
         else Task.fail(new DecodingFailure("trailing bits: " + trailing)) }
     )
-
-  class EncodingFailure(msg: String) extends Exception(msg)
-  class DecodingFailure(msg: String) extends Exception(msg)
 }
