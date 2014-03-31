@@ -60,8 +60,8 @@ case class Environment(codecs: Codecs, values: Values) {
    * Serve this `Environment` via a TCP server at the given address.
    * Returns a thunk that can be used to stop the server.
    */
-  def serve(addr: java.net.InetSocketAddress): () => Unit =
-    Server.start(this)(addr)
+  def serve(addr: java.net.InetSocketAddress)(monitoring: ServerMonitoring): () => Unit =
+    Server.start(this)(addr)(monitoring)
 
   /** Generate the Scala code for the client access to this `Environment`. */
   def generateClient(moduleName: String): String =
