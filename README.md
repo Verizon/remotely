@@ -1,4 +1,3 @@
-rpc
-===
+# Remotely
 
-RPC server and client
+A safe, convenient RPC system fo reasonable applications.
