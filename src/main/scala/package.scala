@@ -17,30 +17,44 @@ package object remotely {
    * activity occurs until the returned `Task` is
    * run, which means that retry and/or circuit-breaking
    * logic can be added with a separate layer.
+   *
+   * The `Monitoring` instance is notified of each request.
    */
-  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Task[A] = for {
-    start <- Task.delay { System.nanoTime }
-    conn <- e.get
-    reqBits <- codecs.encodeRequest(r)
-    respBytes <- {
-      val reqBytestream = Process.emit(reqBits.toByteVector).pipe(Handler.frame)
-      fullyRead(conn(reqBytestream).pipe(Handler.frames)) // we assume the server response is a framed stream
+  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Task[A] = {
+    val refs = Remote.refs(r)
+    def reportErrors[R](startNanos: Long)(t: Task[R]): Task[R] =
+      t.attempt.flatMap { _.fold(
+        { err =>
+          M.handled(r, refs, left(err), Duration.fromNanos(System.nanoTime - startNanos))
+          Task.fail(err)
+        },
+        Task.now
+      )}
+    Task.delay { System.nanoTime } flatMap { start =>
+      for {
+        conn <- e.get
+        reqBits <- codecs.encodeRequest(r)
+        respBytes <- reportErrors(start) {
+          val reqBytestream = Process.emit(reqBits.toByteVector).pipe(Handler.frame)
+          fullyRead(conn(reqBytestream).pipe(Handler.frames)) // we assume the server response is a framed stream
+        }
+        resp <- reportErrors(start) { codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes.toBitVector)) }
+        result <- resp.fold(
+          { e =>
+            val ex = ServerException(e)
+            val delta = System.nanoTime - start
+            M.handled(r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
+            Task.fail(ex)
+          },
+          { a =>
+            val delta = System.nanoTime - start
+            M.handled(r, refs, right(a), Duration.fromNanos(delta))
+            Task.now(a)
+          }
+        )
+      } yield result
     }
-    resp <- codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes.toBitVector))
-    result <- resp.fold(
-      { e =>
-        val ex = ServerException(e)
-        val delta = System.nanoTime - start
-        M.handled(r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
-        Task.fail(ex)
-      },
-      { a =>
-        val delta = System.nanoTime - start
-        M.handled(r, Remote.refs(r), right(a), Duration.fromNanos(delta))
-        Task.now(a)
-      }
-    )
-  } yield result
+  }
 
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)
