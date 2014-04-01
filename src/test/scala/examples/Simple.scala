@@ -27,7 +27,7 @@ object Simple extends App {
   val addr = new InetSocketAddress("localhost", 8080)
 
   // create a server for this environment
-  val server = env.serve(addr)(ServerMonitoring.consoleLogger)
+  val server = env.serve(addr)(Monitoring.consoleLogger)
 
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated

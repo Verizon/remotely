@@ -20,7 +20,7 @@ object Server {
    * use the `monitoring` argument if you wish to observe
    * these failures.
    */
-  def handle(env: Environment)(request: BitVector)(monitoring: ServerMonitoring):
+  def handle(env: Environment)(request: BitVector)(monitoring: Monitoring):
   Task[BitVector] =
   Task.delay(System.nanoTime).flatMap { startNanos => Task.suspend {
     // decode the request from the environment
@@ -67,7 +67,7 @@ object Server {
   /**
    * Start an RPC server on the given port.
    */
-  def start(env: Environment)(addr: InetSocketAddress)(monitoring: ServerMonitoring): () => Unit =
+  def start(env: Environment)(addr: InetSocketAddress)(monitoring: Monitoring): () => Unit =
     server.start("rpc-server")(
       Handler { bytes =>
         // we assume the input is a framed stream, and encode the response(s)

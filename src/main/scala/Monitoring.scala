@@ -7,7 +7,7 @@ import scalaz.\/
  * A collection of callbacks that can be passed to `[[remotely.Server.start]]`
  * to gather statistics about a running RPC server.
  */
-trait ServerMonitoring { self =>
+trait Monitoring { self =>
 
   /**
    * Invoked with the request, the set of names referenced by that
@@ -19,10 +19,10 @@ trait ServerMonitoring { self =>
                  took: Duration): Unit
 
   /**
-   * Return a new `ServerMonitoring` instance that send statistics
+   * Return a new `Monitoring` instance that send statistics
    * to both `this` and `other`.
    */
-  def ++(other: ServerMonitoring): ServerMonitoring = new ServerMonitoring {
+  def ++(other: Monitoring): Monitoring = new Monitoring {
     def handled[A](req: Remote[A],
                    references: Iterable[String],
                    result: Throwable \/ A,
@@ -33,12 +33,12 @@ trait ServerMonitoring { self =>
   }
 
   /**
-   * Returns a `ServerMonitoring` instance that records at most one
+   * Returns a `Monitoring` instance that records at most one
    * update for `every` elapsed duration.
    */
-  def sample(every: Duration): ServerMonitoring = {
+  def sample(every: Duration): Monitoring = {
     val nextUpdate = new java.util.concurrent.atomic.AtomicLong(System.nanoTime + every.toNanos)
-    new ServerMonitoring {
+    new Monitoring {
       def handled[A](req: Remote[A],
                      references: Iterable[String],
                      result: Throwable \/ A,
@@ -56,10 +56,10 @@ trait ServerMonitoring { self =>
   }
 }
 
-object ServerMonitoring {
+object Monitoring {
 
-  /** The `ServerMonitoring` instance that just ignores all inputs. */
-  val empty: ServerMonitoring = new ServerMonitoring {
+  /** The `Monitoring` instance that just ignores all inputs. */
+  val empty: Monitoring = new Monitoring {
     def handled[A](req: Remote[A],
                    references: Iterable[String],
                    result: Throwable \/ A,
@@ -67,10 +67,10 @@ object ServerMonitoring {
   }
 
   /**
-   * A `ServerMonitoring` instance that logs all requests to the console.
+   * A `Monitoring` instance that logs all requests to the console.
    * Useful for debugging.
    */
-  val consoleLogger: ServerMonitoring = new ServerMonitoring {
+  val consoleLogger: Monitoring = new Monitoring {
     def handled[A](req: Remote[A],
                    references: Iterable[String],
                    result: Throwable \/ A,
