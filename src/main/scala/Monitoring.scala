@@ -68,17 +68,18 @@ object Monitoring {
 
   /**
    * A `Monitoring` instance that logs all requests to the console.
-   * Useful for debugging.
+   * Useful for debugging. All lines output will begin with the given
+   * prefix.
    */
-  val consoleLogger: Monitoring = new Monitoring {
+  def consoleLogger(prefix: String = ""): Monitoring = new Monitoring {
     def handled[A](req: Remote[A],
                    references: Iterable[String],
                    result: Throwable \/ A,
                    took: Duration): Unit = {
-      println("----------------")
-      println("request: " + req)
-      println("result: " + result)
-      println("duration: " + took)
+      println(s"$prefix ----------------")
+      println(s"$prefix request: " + req)
+      println(s"$prefix result: " + result)
+      println(s"$prefix duration: " + took)
     }
   }
 }

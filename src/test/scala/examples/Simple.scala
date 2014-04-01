@@ -27,7 +27,7 @@ object Simple extends App {
   val addr = new InetSocketAddress("localhost", 8080)
 
   // create a server for this environment
-  val server = env.serve(addr)(Monitoring.consoleLogger)
+  val server = env.serve(addr)(Monitoring.consoleLogger("[server]"))
 
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated
@@ -49,7 +49,7 @@ object Simple extends App {
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
 
   val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
-  val result: Task[Int] = r.run(loc)
+  val result: Task[Int] = r.run(loc, Monitoring.consoleLogger("[client]"))
 
   try println { result.run }
   finally {
