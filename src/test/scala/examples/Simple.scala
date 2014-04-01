@@ -51,7 +51,8 @@ object Simple extends App {
   val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
   val result: Task[Int] = r.run(loc, Monitoring.consoleLogger("[client]"))
 
-  try println { result.run }
+  // running a couple times just to see the latency improve for subsequent reqs
+  try println { result.run; result.run; result.run }
   finally {
     // hack to allow asynchronous actor shutdown messages to propagate,
     // without this, we get some dead letter logging
