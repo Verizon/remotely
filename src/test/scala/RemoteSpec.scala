@@ -14,8 +14,9 @@ object RemoteSpec extends Properties("Remote") {
     .codec[Int]
     .codec[Double]
     .codec[List[Int]]
+    .codec[List[Double]]
     .declare("sum") { (d: List[Int]) => d.sum }
-    .declare("sum") { (d: List[Double]) => d.sum }
+    .modifyValues { _.declare1("sum") { (d: List[Double]) => Task.delay(d.sum) } }
 
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
   val addr = new InetSocketAddress("localhost", 8080)
@@ -23,9 +24,13 @@ object RemoteSpec extends Properties("Remote") {
   val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
 
   val sum = Remote.ref[List[Int] => Int]("sum")
+  val sumD = Remote.ref[List[Double] => Double]("sum")
 
   property("roundtrip") =
     forAll { (l: List[Int]) => l.sum == sum(l).run(loc).run }
+
+  property("roundtrip[Double]") =
+    forAll { (l: List[Double]) => l.sum == sumD(l).run(loc).run }
 
   property("check-serializers") = secure {
     // verify that server returns a meaningful error when it asks for
