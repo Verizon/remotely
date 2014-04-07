@@ -19,42 +19,24 @@ case class Environment(codecs: Codecs, values: Values) {
   def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
     this.copy(codecs = codecs.codec[A])
 
-  def codecs(c: Codecs): Environment = Environment(codecs ++ c, values)
+  /** Add the given codecs to this `Environment`, keeping existing codecs. */
+  def codecs(c: Codecs): Environment =
+    Environment(codecs ++ c, values)
 
-  /** Declare or update the value for the given name in this `Environment` */
-  def update[A:TypeTag](name: String)(a: A): Environment =
-    this.copy(values = values.update[A](name)(a))
-
-  /**
-   * Declare the value for the given name in this `Environment`,
-   * or throw an error if the type-qualified name is already bound.
-   */
+  /** Add the given (strict) value or function to this `Environment`, keeping existing codecs. */
   def declare[A:TypeTag](name: String)(a: A): Environment =
-    this.copy(values = values.declare[A](name)(a))
+    this.copy(values = values.declareStrict[A](name)(a))
 
   /**
-   * Convenience function which just calls `declare[A => B](name)`.
+   * Modify the values inside this `Environment`, using the given function `f`.
+   * Example: `Environment.empty.modifyValues { _.declare0("x")(Task.now(42)) }`.
    */
-  def declare1[A:TypeTag,B:TypeTag](name: String)(f: A => B): Environment =
-    declare[A => B](name)(f)
+  def modifyValues(f: Values => Values): Environment =
+    this.copy(values = f(values))
 
-  /**
-   * Convenience function which just calls `declare[(A,B) => C](name)`.
-   */
-  def declare2[A:TypeTag,B:TypeTag,C:TypeTag](name: String)(f: (A,B) => C): Environment =
-    declare[(A,B) => C](name)(f)
-
-  /**
-   * Convenience function which just calls `declare[(A,B,C) => D](name)`.
-   */
-  def declare3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String)(f: (A,B,C) => D): Environment =
-    declare[(A,B,C) => D](name)(f)
-
-  /**
-   * Convenience function which just calls `declare[(A,B,C,D) => E](name)`.
-   */
-  def declare4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String)(f: (A,B,C,D) => E): Environment =
-    declare[(A,B,C,D) => E](name)(f)
+  /** Alias for `this.modifyValues(_ => v)`. */
+  def values(v: Values): Environment =
+    this.modifyValues(_ => v)
 
   /**
    * Serve this `Environment` via a TCP server at the given address.

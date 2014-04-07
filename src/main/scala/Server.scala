@@ -88,12 +88,14 @@ object Server {
       case Local(a,_,_) => Task.now(a)
       case Ref(name) => env.values.lift(name) match {
         case None => Task.delay { sys.error("Unknown name on server: " + name) }
-        case Some(a) => Task.now(a.asInstanceOf[A])
+        case Some(a) => a().asInstanceOf[Task[A]]
       }
-      case Ap1(f,a) => T.apply2(eval(env)(f), eval(env)(a))(_(_))
-      case Ap2(f,a,b) => T.apply3(eval(env)(f), eval(env)(a), eval(env)(b))(_(_,_))
-      case Ap3(f,a,b,c) => T.apply4(eval(env)(f), eval(env)(a), eval(env)(b), eval(env)(c))(_(_,_,_))
-      case Ap4(f,a,b,c,d) => T.apply5(eval(env)(f), eval(env)(a), eval(env)(b), eval(env)(c), eval(env)(d))(_(_,_,_,_))
+      // on the server, only concern ourselves w/ tree of fully saturated calls
+      case Ap1(Ref(f),a) => env.values(f)(eval(env)(a)) .asInstanceOf[Task[A]]
+      case Ap2(Ref(f),a,b) => env.values(f)(eval(env)(a), eval(env)(b)) .asInstanceOf[Task[A]]
+      case Ap3(Ref(f),a,b,c) => env.values(f)(eval(env)(a),eval(env)(b),eval(env)(c)) .asInstanceOf[Task[A]]
+      case Ap4(Ref(f),a,b,c,d) => env.values(f)(eval(env)(a),eval(env)(b),eval(env)(c),eval(env)(d)) .asInstanceOf[Task[A]]
+      case _ => Task.delay { sys.error("unable to interpret remote expression of form: " + r) }
     }
   }
 
