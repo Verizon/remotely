@@ -20,45 +20,43 @@ object Server {
    * use the `monitoring` argument if you wish to observe
    * these failures.
    */
-  def handle(env: Environment)(request: BitVector)(monitoring: Monitoring):
-  Task[BitVector] =
-  Task.delay(System.nanoTime).flatMap { startNanos => Task.suspend {
-    // decode the request from the environment
-    val (trailing, (respEncoder,r)) =
-      codecs.requestDecoder(env).decode(request)
-            .fold(e => throw new Error(e), identity)
-    val expected = Remote.refs(r)
-    val unknown = (expected -- env.values.keySet).toList
-    if (unknown.nonEmpty) // fail fast if the Environment doesn't know about some referenced values
-      fail(s"[validation] server does not have referenced values:\n${unknown.mkString('\n'.toString)}")
-    else if (trailing.nonEmpty) // also fail fast if the request has trailing bits (usually a codec error)
-      fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
-    else // we are good to try executing the request
-      eval(env.values)(r).flatMap {
-        a =>
-          val deltaNanos = System.nanoTime - startNanos
-          val delta = Duration.fromNanos(deltaNanos)
-          val result = right(a)
-          monitoring.handled(r, expected, result, delta)
-          toTask(codecs.responseEncoder(respEncoder).encode(result))
-      }.attempt.flatMap {
-        // this is a little convoluted - we catch this exception just so
-        // we can log the failure using `monitoring`, then reraise it
-        _.fold(
-          e => {
+  def handle(env: Environment)(request: BitVector)(monitoring: Monitoring): Task[BitVector] =
+    Task.delay(System.nanoTime).flatMap { startNanos => Task.suspend {
+      // decode the request from the environment
+      val (trailing, (respEncoder,r)) =
+        codecs.requestDecoder(env).decode(request)
+              .fold(e => throw new Error(e), identity)
+      val expected = Remote.refs(r)
+      val unknown = (expected -- env.values.keySet).toList
+      if (unknown.nonEmpty) // fail fast if the Environment doesn't know about some referenced values
+        fail(s"[validation] server does not have referenced values:\n${unknown.mkString('\n'.toString)}")
+      else if (trailing.nonEmpty) // also fail fast if the request has trailing bits (usually a codec error)
+        fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
+      else // we are good to try executing the request
+        eval(env.values)(r).flatMap {
+          a =>
             val deltaNanos = System.nanoTime - startNanos
             val delta = Duration.fromNanos(deltaNanos)
-            monitoring.handled(r, expected, left(e), delta)
-            Task.fail(e)
-          },
-          bits => Task.now(bits)
-        )
-      }
-  }}.attempt.flatMap { _.fold(
-    e => toTask(codecs.responseEncoder(codecs.utf8).encode(left(formatThrowable(e)))),
-    bits => Task.now(bits)
-  )}
-
+            val result = right(a)
+            monitoring.handled(r, expected, result, delta)
+            toTask(codecs.responseEncoder(respEncoder).encode(result))
+        }.attempt.flatMap {
+          // this is a little convoluted - we catch this exception just so
+          // we can log the failure using `monitoring`, then reraise it
+          _.fold(
+            e => {
+              val deltaNanos = System.nanoTime - startNanos
+              val delta = Duration.fromNanos(deltaNanos)
+              monitoring.handled(r, expected, left(e), delta)
+              Task.fail(e)
+            },
+            bits => Task.now(bits)
+          )
+        }
+    }}.attempt.flatMap { _.fold(
+      e => toTask(codecs.responseEncoder(codecs.utf8).encode(left(formatThrowable(e)))),
+      bits => Task.now(bits)
+    )}
 
   val P = Process
 
@@ -67,7 +65,7 @@ object Server {
   /**
    * Start an RPC server on the given port.
    */
-  def start(env: Environment)(addr: InetSocketAddress)(monitoring: Monitoring): () => Unit =
+  def start(env: Environment)(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =
     server.start("rpc-server")(
       Handler { bytes =>
         // we assume the input is a framed stream, and encode the response(s)
