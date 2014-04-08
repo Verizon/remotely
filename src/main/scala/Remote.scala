@@ -45,8 +45,8 @@ object Remote {
     /**
      * Run this `Remote[A]` at the given `Endpoint`. We require a `TypeTag[A]` and
      * `Codec[A]` in order to deserialize the response and check that it has the . */
-    def run(at: Endpoint)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
-      evaluate(at)(self)
+    def run(at: Endpoint, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
+      evaluate(at, M)(self)
   }
   implicit class Ap1Syntax[A,B](self: Remote[A => B]) {
     def apply(a: Remote[A]): Remote[B] =

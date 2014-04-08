@@ -27,7 +27,7 @@ object Simple extends App {
   val addr = new InetSocketAddress("localhost", 8080)
 
   // create a server for this environment
-  val server = Server.start(env)(addr)
+  val server = env.serve(addr)(Monitoring.consoleLogger("[server]"))
 
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated
@@ -49,9 +49,10 @@ object Simple extends App {
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
 
   val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
-  val result: Task[Int] = r.run(loc)
+  val result: Task[Int] = r.run(loc, Monitoring.consoleLogger("[client]"))
 
-  try println { result.run }
+  // running a couple times just to see the latency improve for subsequent reqs
+  try println { result.run; result.run; result.run }
   finally {
     // hack to allow asynchronous actor shutdown messages to propagate,
     // without this, we get some dead letter logging
