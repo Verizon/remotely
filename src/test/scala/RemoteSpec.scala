@@ -15,8 +15,10 @@ object RemoteSpec extends Properties("Remote") {
     .codec[Double]
     .codec[List[Int]]
     .codec[List[Double]]
-    .declare("sum") { (d: List[Int]) => d.sum }
-    .modifyValues { _.declare1("sum") { (d: List[Double]) => Task.delay(d.sum) } }
+    .populate { _
+      .declareStrict("sum", (d: List[Int]) => d.sum)
+      .declare("sum", (d: List[Double]) => Task.now(d.sum))
+    }
 
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
   val addr = new InetSocketAddress("localhost", 8080)

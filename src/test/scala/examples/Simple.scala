@@ -17,17 +17,18 @@ object Simple extends App {
     .codec[Double]
     .codec[Float]
     .codec[List[Int]]
-    .codec[List[String]]
-    .declare("sum") { (d: List[Int]) => d.sum }
-    .declare("fac") { (n: Int) => (1 to n).foldLeft(1)(_ * _) }
-    .declare("foo") { foo _ } // referencing existing functions works, too
+    .codec[List[String]].populate { _
+      .declareStrict("sum", (d: List[Int]) => d.sum )
+      .declare("fac", (n: Int) => Task.delay { (1 to n).foldLeft(1)(_ * _)} ) // async functions also work
+      .declareStrict("foo", foo _ ) // referencing existing functions works, too
+    }
 
   println(env)
 
   val addr = new InetSocketAddress("localhost", 8080)
 
   // create a server for this environment
-  val server = env.serve(addr)(Monitoring.consoleLogger("[server]"))
+  val server = env.serve(addr, Monitoring.consoleLogger("[server]"))
 
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated

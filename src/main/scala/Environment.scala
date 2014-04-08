@@ -23,26 +23,22 @@ case class Environment(codecs: Codecs, values: Values) {
   def codecs(c: Codecs): Environment =
     Environment(codecs ++ c, values)
 
-  /** Add the given (strict) value or function to this `Environment`, keeping existing codecs. */
-  def declare[A:TypeTag](name: String)(a: A): Environment =
-    this.copy(values = values.declareStrict[A](name)(a))
-
   /**
    * Modify the values inside this `Environment`, using the given function `f`.
-   * Example: `Environment.empty.modifyValues { _.declare0("x")(Task.now(42)) }`.
+   * Example: `Environment.empty.populate { _.declare("x")(Task.now(42)) }`.
    */
-  def modifyValues(f: Values => Values): Environment =
+  def populate(f: Values => Values): Environment =
     this.copy(values = f(values))
 
-  /** Alias for `this.modifyValues(_ => v)`. */
+  /** Alias for `this.populate(_ => v)`. */
   def values(v: Values): Environment =
-    this.modifyValues(_ => v)
+    this.populate(_ => v)
 
   /**
    * Serve this `Environment` via a TCP server at the given address.
    * Returns a thunk that can be used to stop the server.
    */
-  def serve(addr: java.net.InetSocketAddress)(monitoring: Monitoring): () => Unit =
+  def serve(addr: java.net.InetSocketAddress, monitoring: Monitoring = Monitoring.empty): () => Unit =
     Server.start(this)(addr)(monitoring)
 
   /** Generate the Scala code for the client access to this `Environment`. */

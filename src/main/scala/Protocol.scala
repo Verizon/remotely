@@ -37,6 +37,7 @@ case class Protocol(codecs: Codecs, signatures: Signatures) {
 
   def generateServer(traitName: String): String = s"""
   |import remotely.{Codecs,Decoders,Encoders,Environment,Values}
+  |import scalaz.concurrent.Task
   |
   |trait $traitName {
   |  // This interface is generated from a `Protocol`. Do not modify.
