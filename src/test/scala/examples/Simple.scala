@@ -3,10 +3,9 @@ package examples
 
 import java.net.InetSocketAddress
 import scalaz.concurrent.Task
+import codecs._
 
-object Simple extends App {
-
-  import codecs._
+object Simple {
 
   def foo(i: Int): String = "BONUS"
 
@@ -23,12 +22,7 @@ object Simple extends App {
       .declareStrict("foo", foo _ ) // referencing existing functions works, too
     }
 
-  println(env)
-
   val addr = new InetSocketAddress("localhost", 8080)
-
-  // create a server for this environment
-  val server = env.serve(addr, Monitoring.consoleLogger("[server]"))
 
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated
@@ -45,12 +39,24 @@ object Simple extends App {
   val ar3 = sum(List(0,1,2,3,4))
   val ar2: Remote[Int] = ar
   val r: Remote[Int] = ar3
+}
+
+object SimpleMain extends App {
+
+  import Simple.{env,addr,sum}
+  import Remote.implicits._
+
+  println(env)
+
+  // create a server for this environment
+  val server = env.serve(addr, Monitoring.consoleLogger("[server]"))
 
   // to actually run a remote expression, we need an endpoint
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
 
+  val expr: Remote[Int] = sum(List(0,1,2,3,4))
   val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
-  val result: Task[Int] = r.run(loc, Monitoring.consoleLogger("[client]"))
+  val result: Task[Int] = expr.run(loc, Monitoring.consoleLogger("[client]"))
 
   // running a couple times just to see the latency improve for subsequent reqs
   try println { result.run; result.run; result.run }
