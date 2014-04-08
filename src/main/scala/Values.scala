@@ -35,7 +35,7 @@ object Value {
 
   /** Create an asynchronous value or function from the given `A`. */
   private[remotely] def async[A](a: A): Value = new Value {
-    def apply(args: Task[Any]*): Task[Any] = Task.delay { (args.length: @annotation.switch) match {
+    def apply(args: Task[Any]*): Task[Any] = Task.suspend { (args.length: @annotation.switch) match {
       case 0 => a.asInstanceOf[Task[Any]]
       case 1 => T.bind(args(0))(a.asInstanceOf[Any => Task[Any]])
       case 2 => T.join(T.apply2(args(0),args(1))(a.asInstanceOf[(Any,Any) => Task[Any]]))
