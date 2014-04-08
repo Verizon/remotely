@@ -32,7 +32,7 @@ object Endpoint {
   def single(host: InetSocketAddress)(implicit S: ActorSystem): Endpoint =
     Endpoint(Process.constant(akkaRequest(S)(host, None)))
 
-  def singleSSL(createEngine: InetSocketAddress => SSLEngine)(
+  def singleSSL(createEngine: () => SSLEngine)(
                 host: InetSocketAddress)(implicit S: ActorSystem): Endpoint =
     Endpoint(Process.constant(akkaRequest(S)(host, Some(createEngine))))
 
@@ -40,7 +40,7 @@ object Endpoint {
 
   private def akkaRequest(system: ActorSystem)(
       host: InetSocketAddress,
-      createEngine: Option[InetSocketAddress => SSLEngine] = None): Connection = out => {
+      createEngine: Option[() => SSLEngine] = None): Connection = out => {
     val (q, src) = async.localQueue[ByteVector]
     val actor = system.actorOf(Props(new Actor with ActorLogging {
       import context.system
@@ -64,7 +64,7 @@ object Endpoint {
           }}))
           val pipeline = createEngine.map { makeSslEngine =>
             val init = TcpPipelineHandler.withLogger(log,
-              new SslTlsSupport(makeSslEngine(remote)) >>
+              new SslTlsSupport(makeSslEngine()) >>
               new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
             context.actorOf(TcpPipelineHandler.props(init, connection, core))
           } getOrElse { core }
