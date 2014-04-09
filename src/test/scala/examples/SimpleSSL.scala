@@ -13,15 +13,17 @@ object SimpleSSL extends App {
 
   println(env)
 
+  val sslProvider = tls.enableCiphers(tls.ciphers.rsa: _*)(tls.default)
+
   // create a server for this environment
-  val server = env.serveSSL(addr, tls.server(tls.default))(Monitoring.consoleLogger("[server]"))
+  val server = env.serveSSL(addr, tls.server(sslProvider))(Monitoring.consoleLogger("[server]"))
 
   // to actually run a remote expression, we need an endpoint
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
 
   try {
     val expr: Remote[Int] = sum(List(0,1,2,3,4))
-    val loc: Endpoint = Endpoint.singleSSL(tls.client(tls.default))(addr) // takes ActorSystem implicitly
+    val loc: Endpoint = Endpoint.singleSSL(tls.client(sslProvider))(addr) // takes ActorSystem implicitly
     val result: Task[Int] = expr.run(loc, Monitoring.consoleLogger("[client]"))
 
     // running a couple times just to see the latency improve for subsequent reqs
