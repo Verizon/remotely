@@ -1,6 +1,6 @@
 package remotely
 
-import akka.actor.{Actor,ActorLogging,ActorSystem,Props}
+import akka.actor.{Actor,ActorLogging,ActorSystem,OneForOneStrategy,Props,SupervisorStrategy}
 import akka.io.{BackpressureBuffer,IO,Tcp,SslTlsSupport,TcpPipelineHandler}
 import akka.util.ByteString
 import java.net.{InetSocketAddress,Socket,URL}
@@ -36,8 +36,6 @@ object Endpoint {
                 host: InetSocketAddress)(implicit S: ActorSystem): Endpoint =
     Endpoint(Process.constant(akkaRequest(S)(host, Some(createEngine))))
 
-    // Endpoint(connect(host).map(streamExchange).repeat)
-
   private def akkaRequest(system: ActorSystem)(
       host: InetSocketAddress,
       createEngine: Option[() => SSLEngine] = None): Connection = out => {
@@ -54,7 +52,6 @@ object Endpoint {
           q.fail(new Exception("connection failed to host " + host))
           context stop self
         case c @ Tcp.Connected(remote, local) =>
-          log.debug("connection established to " + remote)
           val connection = sender
           val core = context.system.actorOf(Props(new Actor with ActorLogging { def receive = {
             case Tcp.Received(data) => q.enqueue(ByteVector(data.toArray))
@@ -62,20 +59,39 @@ object Endpoint {
             case Tcp.ErrorClosed(msg) => q.fail(new Exception("I/O error: " + msg))
             case _ : Tcp.ConnectionClosed => q.close; context stop self
           }}))
-          val pipeline = createEngine.map { engine =>
-            val init = TcpPipelineHandler.withLogger(log,
-              new SslTlsSupport(engine()) >>
-              new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
-            context.actorOf(TcpPipelineHandler.props(init, connection, core))
-          } getOrElse { core }
+
+          val (writeBytes, pipeline) = createEngine.map { engine =>
+            val init = TcpPipelineHandler.withLogger(log, new SslTlsSupport(engine()))
+              //new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
+            val pipeline = context.actorOf(TcpPipelineHandler.props(init, connection, core))
+            // write all the bytes to the connection
+            out.evalMap { bytes => Task.delay {
+              pipeline ! init.Command(Tcp.Write(ByteString(bytes.toArray)))
+            }}.run.runAsync { e => e.leftMap(q.fail); context stop self }
+
+            //Akka.onComplete(context.system, pipeline) {
+            //  println("finishingEEASDFASDFASDFASDFASDFASDFAS")
+            //  q.close
+            //}
+
+            val writeBytes = (bs: ByteVector) =>
+              pipeline ! init.Command(Tcp.Write(ByteString(bs.toArray)))
+            (writeBytes, pipeline)
+          } getOrElse {
+            ((bs: ByteVector) => connection ! Tcp.Write(ByteString(bs.toArray)), core)
+          }
+
           // Underlying connection needs to `keepOpenOnPeerClosed` if using SSL
-          connection ! Tcp.Register(pipeline, keepOpenOnPeerClosed = createEngine.isDefined)
           // NB: the client does not close the connection; the server closes the
           // connection when it is finished writing (or in the event of an error)
-          // probably shouldn't be sending directly to the connection in the event of using
-          // ssl
-          out.evalMap { bytes => Task.delay { connection ! Tcp.Write(ByteString(bytes.toArray)) } }
-          .run.runAsync { e => e.leftMap(q.fail); context stop self }
+          connection ! Tcp.Register(pipeline, keepOpenOnPeerClosed = createEngine.isDefined)
+
+          // write all the bytes to the connection, this must happen AFTER the Tcp.Register above
+          out.evalMap { bytes => Task.delay { writeBytes(bytes) } }
+             .run.runAsync { e => e.fold(
+               e => { q.fail(e); context stop self },
+               _ => { context stop self }
+             )}
       }
     }))
     src

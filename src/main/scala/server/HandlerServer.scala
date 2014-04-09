@@ -37,7 +37,6 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress, ssl: Option[() =>
       val connection = sender
       val pipeline = ssl.map { engine =>
         val sslEngine = engine()
-        sslEngine.setUseClientMode(false) // magic initialization step
         val init = TcpPipelineHandler.withLogger(log,
           new SslTlsSupport(sslEngine) >>
           new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
