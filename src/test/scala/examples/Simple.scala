@@ -49,7 +49,7 @@ object SimpleMain extends App {
   println(env)
 
   // create a server for this environment
-  val server = env.serve(addr, Monitoring.consoleLogger("[server]"))
+  val server = env.serve(addr)(Monitoring.consoleLogger("[server]"))
 
   // to actually run a remote expression, we need an endpoint
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")

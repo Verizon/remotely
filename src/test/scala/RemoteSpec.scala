@@ -22,7 +22,7 @@ object RemoteSpec extends Properties("Remote") {
 
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
   val addr = new InetSocketAddress("localhost", 8080)
-  val server = Server.start(env)(addr)(Monitoring.empty)
+  val server = env.serve(addr)(Monitoring.empty)
   val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
 
   val sum = Remote.ref[List[Int] => Int]("sum")

@@ -1,10 +1,27 @@
 package remotely
 
+import java.net.InetSocketAddress
+import javax.net.ssl.SSLEngine
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
 
-// could do dynamic lookup of encoder, decoder, using type tags
-
+/**
+ * A collection of codecs and values, which can be populated
+ * and then served over RPC.
+ *
+ * Example: {{{
+ *   val env: Environment = Environment.empty
+ *     .codec[Int]
+ *     .codec[List[Int]]
+ *     .populate { _
+ *        .declareStrict[List[Int] => Int]("sum", _.sum)
+ *        .declare("fac", (n: Int) => Task { (1 to n).product })
+ *     }
+ *   val stopper = env.serve(new InetSocketAddress("localhost",8080))
+ *   ///
+ *   stopper() // shutdown the server
+ * }}}
+ */
 case class Environment(codecs: Codecs, values: Values) {
 
   def decoders = codecs.decoders
@@ -34,12 +51,23 @@ case class Environment(codecs: Codecs, values: Values) {
   def values(v: Values): Environment =
     this.populate(_ => v)
 
-  /**
-   * Serve this `Environment` via a TCP server at the given address.
-   * Returns a thunk that can be used to stop the server.
-   */
-  def serve(addr: java.net.InetSocketAddress, monitoring: Monitoring = Monitoring.empty): () => Unit =
-    Server.start(this)(addr)(monitoring)
+  private def serverHandler(monitoring: Monitoring): server.Handler =
+    server.Handler { bytes =>
+      // we assume the input is a framed stream, and encode the response(s)
+      // as a framed stream as well
+      (bytes pipe server.Handler.frames) evalMap { bs =>
+        Server.handle(this)(bs.toBitVector)(monitoring).map(_.toByteVector)
+      } pipe server.Handler.frame
+    }
+
+  /** Start an RPC server on the given port. */
+  def serve(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =
+    server.start("rpc-server")(serverHandler(monitoring), addr, None)
+
+  /** Start an RPC server on the given port using an `SSLEngine` provider. */
+  def serveSSL(addr: InetSocketAddress, ssl: () => SSLEngine)(
+      monitoring: Monitoring = Monitoring.empty): () => Unit =
+    server.start("ssl-rpc-server")(serverHandler(monitoring), addr, Some(ssl))
 
   /** Generate the Scala code for the client access to this `Environment`. */
   def generateClient(moduleName: String): String =
