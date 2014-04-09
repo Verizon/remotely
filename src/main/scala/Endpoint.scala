@@ -40,11 +40,21 @@ object Endpoint {
       host: InetSocketAddress,
       createEngine: Option[() => SSLEngine] = None): Connection = out => {
     val (q, src) = async.localQueue[ByteVector]
+    @volatile var normal = false // did the logic of this request complete gracefully?
     val actor = system.actorOf(Props(new Actor with ActorLogging {
       import context.system
 
       override def preStart() =
         IO(Tcp)(context.system) ! Tcp.Connect(host)
+
+      // PC: This seemingly does nothing - I'd expect child actors to report errors here,
+      // but they don't for some reason
+      override val supervisorStrategy = OneForOneStrategy() {
+        case err: Throwable =>
+          log.error("failure: " + err)
+          q.fail(err)
+          SupervisorStrategy.Stop
+      }
 
       def receive = {
         case Tcp.CommandFailed(_: Tcp.Connect) ⇒
@@ -55,25 +65,20 @@ object Endpoint {
           val connection = sender
           val core = context.system.actorOf(Props(new Actor with ActorLogging { def receive = {
             case Tcp.Received(data) => q.enqueue(ByteVector(data.toArray))
-            case Tcp.Aborted => q.fail(new Exception("connection aborted"))
-            case Tcp.ErrorClosed(msg) => q.fail(new Exception("I/O error: " + msg))
-            case _ : Tcp.ConnectionClosed => q.close; context stop self
+            case Tcp.Aborted => q.fail(new Exception("connection aborted")); normal = true
+            case Tcp.ErrorClosed(msg) => q.fail(new Exception("I/O error: " + msg)); normal = true
+            case _ : Tcp.ConnectionClosed => q.close; normal = true; context stop self
           }}))
 
           val (writeBytes, pipeline) = createEngine.map { engine =>
             val init = TcpPipelineHandler.withLogger(log, new SslTlsSupport(engine()))
-              //new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
             val pipeline = context.actorOf(TcpPipelineHandler.props(init, connection, core))
-            // write all the bytes to the connection
-            out.evalMap { bytes => Task.delay {
-              pipeline ! init.Command(Tcp.Write(ByteString(bytes.toArray)))
-            }}.run.runAsync { e => e.leftMap(q.fail); context stop self }
-
-            //Akka.onComplete(context.system, pipeline) {
-            //  println("finishingEEASDFASDFASDFASDFASDFASDFAS")
-            //  q.close
-            //}
-
+            Akka.onComplete(context.system, pipeline) {
+              // Did we complete normally? If not, raise an exception
+              if (!normal) q.fail(new Exception(
+                "SSL pipeline terminated, most likely because of an error in negotiating SSL session")
+              )
+            }
             val writeBytes = (bs: ByteVector) =>
               pipeline ! init.Command(Tcp.Write(ByteString(bs.toArray)))
             (writeBytes, pipeline)
@@ -89,7 +94,7 @@ object Endpoint {
           // write all the bytes to the connection, this must happen AFTER the Tcp.Register above
           out.evalMap { bytes => Task.delay { writeBytes(bytes) } }
              .run.runAsync { e => e.fold(
-               e => { q.fail(e); context stop self },
+               e => { normal = true; q.fail(e); context stop self },
                _ => { context stop self }
              )}
       }
