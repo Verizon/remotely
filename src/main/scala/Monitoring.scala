@@ -4,7 +4,7 @@ import scala.concurrent.duration._
 import scalaz.\/
 
 /**
- * A collection of callbacks that can be passed to `[[remotely.Server.start]]`
+ * A collection of callbacks that can be passed to `[[remotely.Environment#serve]]`
  * to gather statistics about a running RPC server.
  */
 trait Monitoring { self =>
