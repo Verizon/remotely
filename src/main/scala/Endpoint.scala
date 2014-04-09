@@ -71,7 +71,9 @@ object Endpoint {
           }}))
 
           val (writeBytes, pipeline) = createEngine.map { engine =>
-            val init = TcpPipelineHandler.withLogger(log, new SslTlsSupport(engine()))
+            val sslEngine = engine()
+            log.debug("client enabled cipher suites: " + sslEngine.getEnabledCipherSuites.toList)
+            val init = TcpPipelineHandler.withLogger(log, new SslTlsSupport(sslEngine))
             val pipeline = context.actorOf(TcpPipelineHandler.props(init, connection, core))
             Akka.onComplete(context.system, pipeline) {
               // Did we complete normally? If not, raise an exception
