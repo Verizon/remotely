@@ -62,15 +62,18 @@ object Endpoint {
             case Tcp.ErrorClosed(msg) => q.fail(new Exception("I/O error: " + msg))
             case _ : Tcp.ConnectionClosed => q.close; context stop self
           }}))
-          val pipeline = createEngine.map { makeSslEngine =>
+          val pipeline = createEngine.map { engine =>
             val init = TcpPipelineHandler.withLogger(log,
-              new SslTlsSupport(makeSslEngine()) >>
+              new SslTlsSupport(engine()) >>
               new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
             context.actorOf(TcpPipelineHandler.props(init, connection, core))
           } getOrElse { core }
-          connection ! Tcp.Register(pipeline)
+          // Underlying connection needs to `keepOpenOnPeerClosed` if using SSL
+          connection ! Tcp.Register(pipeline, keepOpenOnPeerClosed = createEngine.isDefined)
           // NB: the client does not close the connection; the server closes the
           // connection when it is finished writing (or in the event of an error)
+          // probably shouldn't be sending directly to the connection in the event of using
+          // ssl
           out.evalMap { bytes => Task.delay { connection ! Tcp.Write(ByteString(bytes.toArray)) } }
           .run.runAsync { e => e.leftMap(q.fail); context stop self }
       }
