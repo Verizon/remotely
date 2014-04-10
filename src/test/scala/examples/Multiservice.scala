@@ -55,13 +55,20 @@ object Multiservice extends App {
       .declare("average2", (xs: List[Double]) => div(sum(xs), length(xs)).run(serviceA))
       // Using infix syntax
       .declare("average3", (xs: List[Double]) => (sum(xs) / length(xs)).run(serviceA))
-
+      // this version will make two requests to `serviceA`, but will make both
+      // requests in parallel
+      .declare("average4", (xs: List[Double]) =>
+        Response.par.apply2(
+          sum(xs).run(serviceA),
+          length(xs).run(serviceA))(_ / _)
+      )
     }
 
   // Manually generate the client API for this service
   val average = Remote.ref[List[Double] => Double]("average")
   val average2 = Remote.ref[List[Double] => Double]("average2")
   val average3 = Remote.ref[List[Double] => Double]("average3")
+  val average4 = Remote.ref[List[Double] => Double]("average4")
 
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8081)
@@ -74,11 +81,14 @@ object Multiservice extends App {
     val r1: Task[Double] = average(List(1.0, 2.0, 3.0)).runWithContext(at = serviceB, ctx, M)
     val r2: Task[Double] = average2(List(1.0, 2.0)).runWithContext(at = serviceB, ctx, M)
     val r3: Task[Double] = average3((0 to 10).map(_.toDouble).toList).runWithContext(at = serviceB, ctx, M)
+    val r4: Task[Double] = average4((1 to 5).map(_.toDouble).toList).runWithContext(at = serviceB, ctx, M)
     println { "RESULT 1: " + r1.run }
     println
     println { "RESULT 2: " + r2.run }
     println
     println { "RESULT 3: " + r3.run }
+    println
+    println { "RESULT 4: " + r4.run }
   }
   finally {
     stopA()
