@@ -10,6 +10,11 @@ package object tls {
 
   def default = () => SSLContext.getDefault.createSSLEngine
 
+  /** Create an `SSLEngine` provider from an `SSLContext`. */
+  def fromContext(ctx: SSLContext) = () => {
+    ctx.createSSLEngine
+  }
+
   /** Modify the given provider to set client mode on the `SSLEngine`. */
   def client(ssl: () => SSLEngine): () => SSLEngine = () => {
     val engine = ssl()
