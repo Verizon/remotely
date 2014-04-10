@@ -46,21 +46,21 @@ object Multiservice extends App {
   val env2 = Environment.empty
     .codec[Double]
     .codec[List[Double]].populate { _
-      // this version will make two requests to `serviceA`
+      // This version will make a single request to `serviceA`
+      .declare("average2", (xs: List[Double]) => div(sum(xs), length(xs)).run(serviceA))
+      // this version will make two requests to `serviceA`, and run them sequentially
       .declare("average", (xs: List[Double]) => for {
         sumR <- sum(xs).run(serviceA)
         countR <- length(xs).run(serviceA)
       } yield sumR / countR )
-      // This version will make a single request to `serviceA`
-      .declare("average2", (xs: List[Double]) => div(sum(xs), length(xs)).run(serviceA))
       // Using infix syntax
       .declare("average3", (xs: List[Double]) => (sum(xs) / length(xs)).run(serviceA))
-      // this version will make two requests to `serviceA`, but will make both
-      // requests in parallel
+      // This version will make three requests to `serviceA`, but will make
+      // the first two requests (for the sum and count) in parallel
       .declare("average4", (xs: List[Double]) =>
-        Response.par.apply2(
-          sum(xs).run(serviceA),
-          length(xs).run(serviceA))(_ / _)
+        // The number of round trips is just the number of calls to run
+        div(sum(xs).run(serviceA),
+            length(xs).run(serviceA)).run(serviceA)
       )
       // This version checks the "flux-capacitor-status" key of the header
       .declare("average5", (xs: List[Double]) => for {

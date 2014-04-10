@@ -37,6 +37,10 @@ object Remote {
 
   /** Promote an asynchronous `Task` to a remote value. */
   def async[A:Encoder:TypeTag](a: Task[A]): Remote[A] =
+    Remote.Async(Response.async(a), Encoder[A], Remote.toTag[A])
+
+  /** Promote a `Response` (from another request) to a remote value. */
+  def response[A:Encoder:TypeTag](a: Response[A]): Remote[A] =
     Remote.Async(a, Encoder[A], Remote.toTag[A])
 
   /** Provides the syntax `expr.run(endpoint)`, where `endpoint: Endpoint`. */
@@ -82,7 +86,7 @@ object Remote {
 
   /** Promote an asynchronous task to a remote value. */
   private[remotely] case class Async[A](
-    a: Task[A],
+    a: Response[A],
     format: Encoder[A], // serializer for `A`
     tag: String // identifies the deserializer to be used by server
   ) extends Remote[A] {
@@ -128,28 +132,20 @@ object Remote {
     override def toString = s"$f($a, $b, $c, $d)"
   }
 
-  // private val T = Monad[Task] // the sequential Task monad
-
-  /** This `Applicative[Task]` runs the tasks in parallel. */
-  private val T = new Applicative[Task] {
-    def point[A](a: => A) = Task.now(a)
-    def ap[A,B](a: => Task[A])(f: => Task[A => B]): Task[B] = apply2(f,a)(_(_))
-    override def apply2[A,B,C](a: => Task[A], b: => Task[B])(f: (A,B) => C): Task[C] =
-      Nondeterminism[Task].mapBoth(a, b)(f)
-  }
-
   /**
    * Precursor to serializing a remote computation
    * to send to server for evaluation. This function
-   * removes all `Async` constructors.
+   * removes all `Async` constructors by executing all
+   * outstanding `Async` in parallel.
    */
-  def localize[A](r: Remote[A]): Task[Remote[A]] = r match {
+  def localize[A](r: Remote[A]): Response[Remote[A]] = r match {
+    // NB: change this to just `Monad[Response].apply2(..)` if want to issue requests sequentially
     case Async(a,c,t) => a.map { a => Local(a,c.asInstanceOf[Option[Encoder[A]]],t) }
-    case Ap1(f,a) => T.apply2(localize(f), localize(a))(Ap1.apply)
-    case Ap2(f,a,b) => T.apply3(localize(f), localize(a), localize(b))(Ap2.apply)
-    case Ap3(f,a,b,c) => T.apply4(localize(f), localize(a), localize(b), localize(c))(Ap3.apply)
-    case Ap4(f,a,b,c,d) => T.apply5(localize(f), localize(a), localize(b), localize(c), localize(d))(Ap4.apply)
-    case _ => Task.now(r) // Ref or Local
+    case Ap1(f,a) => Response.par.apply2(localize(f), localize(a))(Ap1.apply)
+    case Ap2(f,a,b) => Response.par.apply3(localize(f), localize(a), localize(b))(Ap2.apply)
+    case Ap3(f,a,b,c) => Response.par.apply4(localize(f), localize(a), localize(b), localize(c))(Ap3.apply)
+    case Ap4(f,a,b,c,d) => Response.par.apply5(localize(f), localize(a), localize(b), localize(c), localize(d))(Ap4.apply)
+    case _ => Response.now(r) // Ref or Local
   }
 
   /** Collect up all the `Ref` names referenced by `r`. */
@@ -193,6 +189,9 @@ object Remote {
 
   /** Provides implicits for promoting values to `Remote[A]`. */
   object implicits extends lowpriority {
+
+    /** Implicitly promote a `Task[A]` to a `Remote[A]`. */
+    implicit def responseToRemote[A:Encoder:TypeTag](t: Response[A]): Remote[A] = response(t)
 
     /** Implicitly promote a `Task[A]` to a `Remote[A]`. */
     implicit def taskToRemote[A:Encoder:TypeTag](t: Task[A]): Remote[A] = async(t)
