@@ -20,12 +20,13 @@ package object remotely {
    *
    * The `Monitoring` instance is notified of each request.
    */
-  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] = Response { ctx =>
+  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
+  Response.scope { Response { ctx => // push a fresh ID onto the call stack
     val refs = Remote.refs(r)
     def reportErrors[R](startNanos: Long)(t: Task[R]): Task[R] =
       t.attempt.flatMap { _.fold(
         { err =>
-          M.handled(r, refs, left(err), Duration.fromNanos(System.nanoTime - startNanos))
+          M.handled(ctx, r, refs, left(err), Duration.fromNanos(System.nanoTime - startNanos))
           Task.fail(err)
         },
         Task.now
@@ -43,18 +44,18 @@ package object remotely {
           { e =>
             val ex = ServerException(e)
             val delta = System.nanoTime - start
-            M.handled(r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
+            M.handled(ctx, r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
             Task.fail(ex)
           },
           { a =>
             val delta = System.nanoTime - start
-            M.handled(r, refs, right(a), Duration.fromNanos(delta))
+            M.handled(ctx, r, refs, right(a), Duration.fromNanos(delta))
             Task.now(a)
           }
         )
       } yield result
     }
-  }
+  }}
 
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)

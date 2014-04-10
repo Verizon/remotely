@@ -39,7 +39,7 @@ object Server {
             val delta = Duration.fromNanos(deltaNanos)
             val result = right(a)
             // monitoring.handled(ctx, r, expected, result, delta)
-            monitoring.handled(r, expected, result, delta)
+            monitoring.handled(ctx, r, expected, result, delta)
             toTask(codecs.responseEncoder(respEncoder).encode(result))
         }.attempt.flatMap {
           // this is a little convoluted - we catch this exception just so
@@ -48,7 +48,7 @@ object Server {
             e => {
               val deltaNanos = System.nanoTime - startNanos
               val delta = Duration.fromNanos(deltaNanos)
-              monitoring.handled(r, expected, left(e), delta)
+              monitoring.handled(ctx, r, expected, left(e), delta)
               Task.fail(e)
             },
             bits => Task.now(bits)
