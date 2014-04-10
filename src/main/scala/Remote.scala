@@ -140,7 +140,7 @@ object Remote {
    */
   def localize[A](r: Remote[A]): Response[Remote[A]] = r match {
     // NB: change this to just `Monad[Response].apply2(..)` if want to issue requests sequentially
-    case Async(a,c,t) => a.map { a => Local(a,c.asInstanceOf[Option[Encoder[A]]],t) }
+    case Async(a,c,t) => a.map { a => Local(a,Some(c).asInstanceOf[Option[Encoder[A]]],t) }
     case Ap1(f,a) => Response.par.apply2(localize(f), localize(a))(Ap1.apply)
     case Ap2(f,a,b) => Response.par.apply3(localize(f), localize(a), localize(b))(Ap2.apply)
     case Ap3(f,a,b,c) => Response.par.apply4(localize(f), localize(a), localize(b), localize(c))(Ap3.apply)

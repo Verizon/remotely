@@ -14,14 +14,13 @@ package object remotely {
    * Evaluate the given remote expression at the
    * specified endpoint, and get back the result.
    * This function is completely pure - no network
-   * activity occurs until the returned `Task` is
-   * run, which means that retry and/or circuit-breaking
-   * logic can be added with a separate layer.
+   * activity occurs until the returned `Response` is
+   * run.
    *
    * The `Monitoring` instance is notified of each request.
    */
   def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
-  Response.scope { Response { ctx => // push a fresh ID onto the call stack
+  Remote.localize(r).flatMap { r => Response.scope { Response { ctx => // push a fresh ID onto the call stack
     val refs = Remote.refs(r)
     def reportErrors[R](startNanos: Long)(t: Task[R]): Task[R] =
       t.attempt.flatMap { _.fold(
@@ -55,7 +54,7 @@ package object remotely {
         )
       } yield result
     }
-  }}
+  }}}
 
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)
