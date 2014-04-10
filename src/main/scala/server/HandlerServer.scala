@@ -13,7 +13,7 @@ import scalaz.stream.{async,Process}
  * Create a server on the given `InetSockeAddress`, using `handler` for processing
  * each request, and using `ssl` to optionally
  */
-class HandlerServer(handler: Handler, addr: InetSocketAddress, ssl: Option[InetSocketAddress => SSLEngine] = None) extends Actor with ActorLogging {
+class HandlerServer(handler: Handler, addr: InetSocketAddress, ssl: Option[() => SSLEngine] = None) extends Actor with ActorLogging {
 
   import context.system
 
@@ -35,9 +35,11 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress, ssl: Option[InetS
     case Tcp.Connected(remote, _) =>
       log.debug("connection established")
       val connection = sender
-      val pipeline = ssl.map { makeSslEngine =>
+      val pipeline = ssl.map { engine =>
+        val sslEngine = engine()
+        log.debug("server enabled cipher suites: " + sslEngine.getEnabledCipherSuites.toList)
         val init = TcpPipelineHandler.withLogger(log,
-          new SslTlsSupport(makeSslEngine(remote)) >>
+          new SslTlsSupport(sslEngine) >>
           new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
         lazy val sslConnection: ActorRef =
           context.actorOf(TcpPipelineHandler.props(

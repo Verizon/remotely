@@ -4,16 +4,18 @@ import scala.concurrent.duration._
 import scalaz.\/
 
 /**
- * A collection of callbacks that can be passed to `[[remotely.Server.start]]`
+ * A collection of callbacks that can be passed to `[[remotely.Environment#serve]]`
  * to gather statistics about a running RPC server.
  */
 trait Monitoring { self =>
 
   /**
-   * Invoked with the request, the set of names referenced by that
-   * request, the result, and how long it took.
+   * Invoked with the request, the request context,
+   * the set of names referenced by that request,
+   * the result, and how long it took.
    */
-  def handled[A](req: Remote[A],
+  def handled[A](ctx: Response.Context,
+                 req: Remote[A],
                  references: Iterable[String],
                  result: Throwable \/ A,
                  took: Duration): Unit
@@ -23,12 +25,13 @@ trait Monitoring { self =>
    * to both `this` and `other`.
    */
   def ++(other: Monitoring): Monitoring = new Monitoring {
-    def handled[A](req: Remote[A],
+    def handled[A](ctx: Response.Context,
+                   req: Remote[A],
                    references: Iterable[String],
                    result: Throwable \/ A,
                    took: Duration): Unit = {
-      self.handled(req, references, result, took)
-      other.handled(req, references, result, took)
+      self.handled(ctx, req, references, result, took)
+      other.handled(ctx, req, references, result, took)
     }
   }
 
@@ -39,13 +42,14 @@ trait Monitoring { self =>
   def sample(every: Duration): Monitoring = {
     val nextUpdate = new java.util.concurrent.atomic.AtomicLong(System.nanoTime + every.toNanos)
     new Monitoring {
-      def handled[A](req: Remote[A],
+      def handled[A](ctx: Response.Context,
+                     req: Remote[A],
                      references: Iterable[String],
                      result: Throwable \/ A,
                      took: Duration): Unit = {
         val cur = nextUpdate.get
         if (System.nanoTime > cur) {
-          self.handled(req, references, result, took)
+          self.handled(ctx, req, references, result, took)
           // only one thread gets to bump this
           nextUpdate.compareAndSet(cur, cur + every.toNanos)
           ()
@@ -60,7 +64,8 @@ object Monitoring {
 
   /** The `Monitoring` instance that just ignores all inputs. */
   val empty: Monitoring = new Monitoring {
-    def handled[A](req: Remote[A],
+    def handled[A](ctx: Response.Context,
+                   req: Remote[A],
                    references: Iterable[String],
                    result: Throwable \/ A,
                    took: Duration): Unit = ()
@@ -72,11 +77,14 @@ object Monitoring {
    * prefix.
    */
   def consoleLogger(prefix: String = ""): Monitoring = new Monitoring {
-    def handled[A](req: Remote[A],
+    def handled[A](ctx: Response.Context,
+                   req: Remote[A],
                    references: Iterable[String],
                    result: Throwable \/ A,
                    took: Duration): Unit = {
       println(s"$prefix ----------------")
+      println(s"$prefix header: " + ctx.header)
+      println(s"$prefix trace: " + ctx.stack.mkString(" "))
       println(s"$prefix request: " + req)
       println(s"$prefix result: " + result)
       println(s"$prefix duration: " + took)

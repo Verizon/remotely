@@ -1,10 +1,27 @@
 package remotely
 
+import java.net.InetSocketAddress
+import javax.net.ssl.SSLEngine
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
 
-// could do dynamic lookup of encoder, decoder, using type tags
-
+/**
+ * A collection of codecs and values, which can be populated
+ * and then served over RPC.
+ *
+ * Example: {{{
+ *   val env: Environment = Environment.empty
+ *     .codec[Int]
+ *     .codec[List[Int]]
+ *     .populate { _
+ *        .declareStrict[List[Int] => Int]("sum", _.sum)
+ *        .declare("fac", (n: Int) => Task { (1 to n).product })
+ *     }
+ *   val stopper = env.serve(new InetSocketAddress("localhost",8080))
+ *   ///
+ *   stopper() // shutdown the server
+ * }}}
+ */
 case class Environment(codecs: Codecs, values: Values) {
 
   def decoders = codecs.decoders
@@ -19,49 +36,38 @@ case class Environment(codecs: Codecs, values: Values) {
   def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
     this.copy(codecs = codecs.codec[A])
 
-  def codecs(c: Codecs): Environment = Environment(codecs ++ c, values)
-
-  /** Declare or update the value for the given name in this `Environment` */
-  def update[A:TypeTag](name: String)(a: A): Environment =
-    this.copy(values = values.update[A](name)(a))
+  /** Add the given codecs to this `Environment`, keeping existing codecs. */
+  def codecs(c: Codecs): Environment =
+    Environment(codecs ++ c, values)
 
   /**
-   * Declare the value for the given name in this `Environment`,
-   * or throw an error if the type-qualified name is already bound.
+   * Modify the values inside this `Environment`, using the given function `f`.
+   * Example: `Environment.empty.populate { _.declare("x")(Task.now(42)) }`.
    */
-  def declare[A:TypeTag](name: String)(a: A): Environment =
-    this.copy(values = values.declare[A](name)(a))
+  def populate(f: Values => Values): Environment =
+    this.copy(values = f(values))
 
-  /**
-   * Convenience function which just calls `declare[A => B](name)`.
-   */
-  def declare1[A:TypeTag,B:TypeTag](name: String)(f: A => B): Environment =
-    declare[A => B](name)(f)
+  /** Alias for `this.populate(_ => v)`. */
+  def values(v: Values): Environment =
+    this.populate(_ => v)
 
-  /**
-   * Convenience function which just calls `declare[(A,B) => C](name)`.
-   */
-  def declare2[A:TypeTag,B:TypeTag,C:TypeTag](name: String)(f: (A,B) => C): Environment =
-    declare[(A,B) => C](name)(f)
+  private def serverHandler(monitoring: Monitoring): server.Handler =
+    server.Handler { bytes =>
+      // we assume the input is a framed stream, and encode the response(s)
+      // as a framed stream as well
+      (bytes pipe server.Handler.frames) evalMap { bs =>
+        Server.handle(this)(bs.toBitVector)(monitoring).map(_.toByteVector)
+      } pipe server.Handler.frame
+    }
 
-  /**
-   * Convenience function which just calls `declare[(A,B,C) => D](name)`.
-   */
-  def declare3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String)(f: (A,B,C) => D): Environment =
-    declare[(A,B,C) => D](name)(f)
+  /** Start an RPC server on the given port. */
+  def serve(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =
+    server.start("rpc-server")(serverHandler(monitoring), addr, None)
 
-  /**
-   * Convenience function which just calls `declare[(A,B,C,D) => E](name)`.
-   */
-  def declare4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String)(f: (A,B,C,D) => E): Environment =
-    declare[(A,B,C,D) => E](name)(f)
-
-  /**
-   * Serve this `Environment` via a TCP server at the given address.
-   * Returns a thunk that can be used to stop the server.
-   */
-  def serve(addr: java.net.InetSocketAddress)(monitoring: Monitoring): () => Unit =
-    Server.start(this)(addr)(monitoring)
+  /** Start an RPC server on the given port using an `SSLEngine` provider. */
+  def serveSSL(addr: InetSocketAddress, ssl: () => SSLEngine)(
+      monitoring: Monitoring = Monitoring.empty): () => Unit =
+    server.start("ssl-rpc-server")(serverHandler(monitoring), addr, Some(ssl))
 
   /** Generate the Scala code for the client access to this `Environment`. */
   def generateClient(moduleName: String): String =
