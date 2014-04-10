@@ -6,6 +6,8 @@ scalaVersion in Global := "2.10.4"
 
 name := "core"
 
+resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
+
 scalacOptions ++= Seq(
   "-language:existentials",
   "-language:postfixOps"
