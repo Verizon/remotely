@@ -36,19 +36,19 @@ case class Signatures(signatures: Set[String]) {
   }
 
   private[remotely] def generateServerTraitBody: String = {
-    // converts from `A` to `Task[A]`, `A => B` to `A => Task[B]`, `(A,B) => C` to `Task[C]`, etc
-    // via string munging
+    // converts from `A` to `Response[A]`, `A => B` to `A => Response[B]`,
+    // `(A,B) => C` to `(A,B) => Response[C]`, etc, via string munging
     // NB: this regex is too simplistic to work for types like `A => (B => C)`,
     // but we don't have to worry about these types as a remote function cannot
-    // return a function type in its result (as functions cannot be encoded and sent over wire)
+    // return a function type in its result (as functions cannot be encoded and sent over wire!)
     val Arrow = "(.*)=>(.*)".r
-    def wrapTask(typename: String): String = typename match {
-      case Arrow(l,r) => s"$l=> Task[${r.trim}]"
-      case _ => s"Task[$typename]"
+    def wrapResponse(typename: String): String = typename match {
+      case Arrow(l,r) => s"$l=> Response[${r.trim}]"
+      case _ => s"Response[$typename]"
     }
     def emitSignature(s: String): String = {
       val (name, tname) = Signatures.split(s)
-      s"def $name: ${wrapTask(tname)}"
+      s"def $name: ${wrapResponse(tname)}"
     }
     def emitDeclaration(s: String): String = {
       val (name, tname) = Signatures.split(s)
