@@ -13,10 +13,7 @@ class CircuitBreaker(timeout: Duration,
 
   def attempt[A](a: Task[A]): Task[A] = {
     def doAttempt: Task[A] = a.attempt.flatMap {
-      case -\/(e) => for {
-        _ <- addFailure
-        r <- Task.fail(e)
-      } yield r
+      case -\/(e) => addFailure.flatMap(_ => Task.fail(e))
       case \/-(a) => for {
         _ <- close
         r <- Task.now(a)
