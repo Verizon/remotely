@@ -135,8 +135,11 @@ object Response {
     /** Push the given `ID` onto the `stack` of this `Context`. */
     def push(id: ID): Context = copy(stack = id :: stack)
 
-    /** Add the given entries to the `header` of this `Context`. */
+    /** Add the given entries to the `header` of this `Context`, overwriting on collisions. */
     def entries(kvs: (String,String)*): Context = copy(header = header ++ kvs)
+
+    /** Add the given entries to the `header` of this `Context`, overwriting on collisions. */
+    def ++(kvs: Iterable[(String,String)]): Context = copy(header = header ++ kvs)
   }
 
   object Context {

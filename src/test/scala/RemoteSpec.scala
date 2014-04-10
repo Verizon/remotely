@@ -31,10 +31,14 @@ object RemoteSpec extends Properties("Remote") {
   val ctx = Response.Context.empty
 
   property("roundtrip") =
-    forAll { (l: List[Int]) => l.sum == sum(l).runWithContext(loc, ctx).run }
+    forAll { (l: List[Int], kvs: Map[String,String]) =>
+      l.sum == sum(l).runWithContext(loc, ctx ++ kvs).run
+    }
 
   property("roundtrip[Double]") =
-    forAll { (l: List[Double]) => l.sum == sumD(l).runWithContext(loc, ctx).run }
+    forAll { (l: List[Double], kvs: Map[String,String]) =>
+      l.sum == sumD(l).runWithContext(loc, ctx ++ kvs).run
+    }
 
   property("check-serializers") = secure {
     // verify that server returns a meaningful error when it asks for
