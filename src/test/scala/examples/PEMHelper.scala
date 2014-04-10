@@ -1,12 +1,13 @@
 package remotely.examples
 
+import scala.annotation.tailrec
+import scala.language.reflectiveCalls
 import javax.xml.bind.DatatypeConverter
 import java.security.{KeyFactory, PrivateKey}
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.cert.{ Certificate, CertificateFactory }
 import java.io.{ FileInputStream, InputStream, ByteArrayInputStream }
 import io.Source
-import scala.annotation.tailrec
 import java.util.NoSuchElementException
 
 case class PemIterator(pemPath: String, tag: String) extends Iterator[Array[Byte]] {
