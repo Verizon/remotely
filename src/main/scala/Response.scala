@@ -21,6 +21,10 @@ sealed trait Response[+A] {
 
   def attempt: Response[Throwable \/ A] =
     Response { ctx => Task.suspend { this(ctx).attempt }}
+
+  /** Modify the asychronous result of this `Response`. */
+  def edit[B](f: Task[A] => Task[B]): Response[B] =
+    Response { ctx => Task.suspend { f(this.apply(ctx))} }
 }
 
 object Response {
