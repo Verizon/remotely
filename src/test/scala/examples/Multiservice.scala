@@ -62,6 +62,16 @@ object Multiservice extends App {
           sum(xs).run(serviceA),
           length(xs).run(serviceA))(_ / _)
       )
+      // This version checks the "flux-capacitor-status" key of the header
+      .declare("average5", (xs: List[Double]) => for {
+        ctx <- Response.ask
+        avg <- if (ctx.header.contains("flux-capacitor")) {
+                 println("Flux capacitor is enabled, calling service A in a single request!!")
+                 (sum(xs) / length(xs)).run(serviceA)
+               }
+               else // okay, do the same thing anyway
+                 (sum(xs) / length(xs)).run(serviceA)
+      } yield avg)
     }
 
   // Manually generate the client API for this service
@@ -69,6 +79,7 @@ object Multiservice extends App {
   val average2 = Remote.ref[List[Double] => Double]("average2")
   val average3 = Remote.ref[List[Double] => Double]("average3")
   val average4 = Remote.ref[List[Double] => Double]("average4")
+  val average5 = Remote.ref[List[Double] => Double]("average5")
 
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8081)
@@ -76,12 +87,13 @@ object Multiservice extends App {
   val serviceB: Endpoint = Endpoint.single(addr2)
 
   try {
-    val ctx = Response.Context.empty ++ List("key" -> "dontcare")
+    val ctx = Response.Context.empty ++ List("flux-capacitor" -> "great SCOTT!")
     val M = Monitoring.consoleLogger("[client]")
     val r1: Task[Double] = average(List(1.0, 2.0, 3.0)).runWithContext(at = serviceB, ctx, M)
     val r2: Task[Double] = average2(List(1.0, 2.0)).runWithContext(at = serviceB, ctx, M)
     val r3: Task[Double] = average3((0 to 10).map(_.toDouble).toList).runWithContext(at = serviceB, ctx, M)
     val r4: Task[Double] = average4((1 to 5).map(_.toDouble).toList).runWithContext(at = serviceB, ctx, M)
+    val r5: Task[Double] = average5((1 to 5).map(_.toDouble).toList).runWithContext(at = serviceB, ctx, M)
     println { "RESULT 1: " + r1.run }
     println
     println { "RESULT 2: " + r2.run }
@@ -89,6 +101,8 @@ object Multiservice extends App {
     println { "RESULT 3: " + r3.run }
     println
     println { "RESULT 4: " + r4.run }
+    println
+    println { "RESULT 5: " + r5.run }
   }
   finally {
     stopA()
