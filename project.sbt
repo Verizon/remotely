@@ -6,6 +6,8 @@ name := "remotely"
 
 scalaVersion := "2.10.3"
 
+resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
+
 scalacOptions ++= Seq(
   "-language:existentials",
   "-language:postfixOps"

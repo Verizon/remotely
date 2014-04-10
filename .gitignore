@@ -16,3 +16,7 @@ project/plugins/project/
 
 .ivy2
 catapult/
+
+# vim specific
+*~
+tags
