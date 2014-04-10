@@ -37,7 +37,7 @@ object SimpleSSL extends App {
   try {
     val expr: Remote[Int] = sum(List(0,1,2,3,4))
     val loc: Endpoint = Endpoint.singleSSL(tls.client(clientSslProvider))(addr) // takes ActorSystem implicitly
-    val result: Task[Int] = expr.run(loc, Monitoring.consoleLogger("[client]"))
+    val result: Task[Int] = expr.runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
     // running a couple times just to see the latency improve for subsequent reqs
     println { result.run; result.run; result.run }

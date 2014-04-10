@@ -17,7 +17,7 @@ object RemoteSpec extends Properties("Remote") {
     .codec[List[Double]]
     .populate { _
       .declareStrict("sum", (d: List[Int]) => d.sum)
-      .declare("sum", (d: List[Double]) => Task.now(d.sum))
+      .declare("sum", (d: List[Double]) => Response.now(d.sum))
     }
 
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
@@ -28,17 +28,19 @@ object RemoteSpec extends Properties("Remote") {
   val sum = Remote.ref[List[Int] => Int]("sum")
   val sumD = Remote.ref[List[Double] => Double]("sum")
 
+  val ctx = Response.Context.empty
+
   property("roundtrip") =
-    forAll { (l: List[Int]) => l.sum == sum(l).run(loc).run }
+    forAll { (l: List[Int]) => l.sum == sum(l).runWithContext(loc, ctx).run }
 
   property("roundtrip[Double]") =
-    forAll { (l: List[Double]) => l.sum == sumD(l).run(loc).run }
+    forAll { (l: List[Double]) => l.sum == sumD(l).runWithContext(loc, ctx).run }
 
   property("check-serializers") = secure {
     // verify that server returns a meaningful error when it asks for
     // decoder(s) the server does not know about
     val wrongsum = Remote.ref[List[Float] => Float]("sum")
-    val t: Task[Float] = wrongsum(List(1.0f, 2.0f, 3.0f)).run(loc)
+    val t: Task[Float] = wrongsum(List(1.0f, 2.0f, 3.0f)).runWithContext(loc, ctx)
     t.attemptRun.fold(
       e => {
         println("test resulted in error, as expected:")
@@ -53,7 +55,7 @@ object RemoteSpec extends Properties("Remote") {
     // verify that server returns a meaningful error when client asks
     // for a remote ref that is unknown
     val wrongsum = Remote.ref[List[Int] => Int]("product")
-    val t: Task[Int] = wrongsum(List(1, 2, 3)).run(loc)
+    val t: Task[Int] = wrongsum(List(1, 2, 3)).runWithContext(loc, ctx)
     t.attemptRun.fold(
       e => {
         println("test resulted in error, as expected:")
@@ -93,7 +95,7 @@ object RemoteSpec extends Properties("Remote") {
     val l: List[Int] = List(1)
     val N = 5000
     val t = time {
-      (0 until N).foreach { _ => sum(l).run(loc).run; () }
+      (0 until N).foreach { _ => sum(l).runWithContext(loc, ctx).run; () }
     }
     println { "round trip took average of: " + (t/N.toDouble) + " milliseconds" }
     true

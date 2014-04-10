@@ -81,6 +81,18 @@ package object codecs extends lowerprioritycodecs {
       e.flatMap(bv => r.map(bv ++ _))
   }
 
+  implicit def contextEncoder: Encoder[Response.Context] = new Encoder[Response.Context] {
+    def encode(ctx: Response.Context) =
+      map[String,String].encode(ctx.header) <+>
+      list[String].encode(ctx.stack.map(_.toString))
+  }
+  implicit def contextDecoder: Decoder[Response.Context] = for {
+    header <- map[String,String]
+    stackS <- list[String]
+    stack <- try succeed(stackS.map(Response.ID.fromString))
+             catch { case e: IllegalArgumentException => fail(s"[decoding] error decoding ID in tracing stack: ${e.getMessage}") }
+  } yield Response.Context(header, stack)
+
   def remoteEncode[A](r: Remote[A]): String \/ BitVector =
     r match {
       case Local(a,e,t) => C.uint8.encode(0) <+> // tag byte
@@ -145,19 +157,21 @@ package object codecs extends lowerprioritycodecs {
    *
    * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
    */
-  def encodeRequest[A:TypeTag](r: Remote[A]): Task[BitVector] =
+  def encodeRequest[A:TypeTag](r: Remote[A])(ctx: Response.Context): Task[BitVector] =
     localize(r).flatMap { a =>
       Codec[String].encode(Remote.toTag[A]) <+>
-      sortedSet[String].encode(formats(a)) <+>
+      Encoder[Response.Context].encode(ctx)   <+>
+      sortedSet[String].encode(formats(a))  <+>
       remoteEncode(a) fold (
         err => Task.fail(new EncodingFailure(err)),
         bits => Task.now(bits)
       )
     }
 
-  def requestDecoder(env: Environment): Decoder[(Encoder[Any],Remote[Any])] =
+  def requestDecoder(env: Environment): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
     for {
       responseTag <- utf8
+      ctx <- Decoder[Response.Context]
       formatTags <- sortedSet[String]
       r <- {
         val unknown = ((formatTags + responseTag) -- env.decoders.keySet).toList
@@ -171,7 +185,7 @@ package object codecs extends lowerprioritycodecs {
         case None => fail(s"[decoding] server does not have response serializer for: $responseTag")
         case Some(a) => succeed(a)
       }
-    } yield (responseDec, r)
+    } yield (responseDec, ctx, r)
 
   def responseCodec[A:Codec] = either[String,A]
 

@@ -20,7 +20,7 @@ package object remotely {
    *
    * The `Monitoring` instance is notified of each request.
    */
-  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Task[A] = {
+  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] = Response { ctx =>
     val refs = Remote.refs(r)
     def reportErrors[R](startNanos: Long)(t: Task[R]): Task[R] =
       t.attempt.flatMap { _.fold(
@@ -33,7 +33,7 @@ package object remotely {
     Task.delay { System.nanoTime } flatMap { start =>
       for {
         conn <- e.get
-        reqBits <- codecs.encodeRequest(r)
+        reqBits <- codecs.encodeRequest(r)(ctx)
         respBytes <- reportErrors(start) {
           val reqBytestream = Process.emit(reqBits.toByteVector).pipe(Handler.frame)
           fullyRead(conn(reqBytestream).pipe(Handler.frames)) // we assume the server response is a framed stream

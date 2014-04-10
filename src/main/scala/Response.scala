@@ -48,6 +48,16 @@ object Response {
   /** Produce a `Response[A]` from a strict value. */
   def now[A](a: A): Response[A] = Response { _ => Task.now(a) }
 
+  /**
+   * Produce a `Response[A]` from a nonstrict value, whose result
+   * will not be cached if this `Response` is used more than once.
+   */
+  def delay[A](a: => A): Response[A] = Response { _ => Task.delay(a) }
+
+  /** Produce a `Response` nonstrictly. Do not cache the produced `Response`. */
+  def suspend[A](a: => Response[A]): Response[A] =
+    Response { ctx => Task.suspend { a(ctx) } }
+
   /** Obtain the current `Context`. */
   def ask: Response[Context] = Response { ctx => Task.now(ctx) }
 
@@ -103,6 +113,11 @@ object Response {
       case id: ID => id.get == get
       case _ => false
     }
+  }
+
+  object ID {
+    private[remotely] def fromString(s: String): ID =
+      new ID { val get = UUID.fromString(s) } // let the exception propagate
   }
 
   /** Create a new `ID`, guaranteed to be globally unique. */
