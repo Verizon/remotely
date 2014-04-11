@@ -1,10 +1,10 @@
 import oncue.build._
 
-organization := "oncue.svc"
+organization in Global := "oncue.svc.remotely"
 
-name := "remotely"
+scalaVersion in Global := "2.10.4"
 
-scalaVersion := "2.10.3"
+name := "core"
 
 scalacOptions ++= Seq(
   "-language:existentials",
