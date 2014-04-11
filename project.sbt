@@ -14,7 +14,7 @@ scalacOptions ++= Seq(
 libraryDependencies ++= Seq(
   "org.scalaz.stream" %% "scalaz-stream" % "snapshot-0.4",
   "org.typelevel" %% "scodec-core" % "1.0.0",
-  "com.typesafe.akka" %% "akka-kernel"   % "2.2.3"
+  "com.typesafe.akka" %% "akka-kernel"   % "2.2.4"
 )
 
 OnCue.baseSettings
