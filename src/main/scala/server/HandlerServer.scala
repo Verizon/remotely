@@ -40,7 +40,7 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress, ssl: Option[() =>
         log.debug("server enabled cipher suites: " + sslEngine.getEnabledCipherSuites.toList)
         val init = TcpPipelineHandler.withLogger(log,
           new SslTlsSupport(sslEngine) >>
-          new BackpressureBuffer(lowBytes = 128, highBytes = 1024 * 16, maxBytes = 4096 * 1000 * 100))
+          new BackpressureBuffer(lowBytes = 128l, highBytes = 1024l * 16l, maxBytes = 4096l * 1000l * 100l))
         lazy val sslConnection: ActorRef =
           context.actorOf(TcpPipelineHandler.props(
             init,
