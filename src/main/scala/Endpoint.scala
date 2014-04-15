@@ -9,6 +9,10 @@ import scalaz.concurrent.Task
 import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio}
 import scodec.bits.{BitVector,ByteVector}
 import Endpoint.Connection
+import scala.concurrent.duration._
+import Process._
+import scalaz._
+import java.util.Date
 
 /**
  * A 'logical' endpoint for some service, represented
@@ -19,11 +23,85 @@ case class Endpoint(connections: Process[Task,Connection]) {
     case None => Task.fail(new Exception("No available connections"))
     case Some(a) => Task.now(a)
   }
+
+  /**
+   * Adds a circuit-breaker to this endpoint that "opens" (fails fast) after
+   * `maxErrors` consecutive failures, and attempts a connection again
+   * when `timeout` has passed.
+   */
+  def circuitBroken(timeout: Duration, maxErrors: Int): Task[Endpoint] =
+    CircuitBreaker(timeout, maxErrors).map { cb =>
+      Endpoint(connections.map(c => bs => c(bs).translate(cb.transform)))
+    }
+
+  import Endpoint._
+
 }
 
 object Endpoint {
 
-  type Connection = Process[Task,ByteVector] => Process[Task,ByteVector]
+  /**
+   * If a connection in an endpoint fails, then attempt the same call to the next
+   * endpoint, but only if `timeout` has not passed AND we didn't fail in a
+   * "committed state", i.e. we haven't received any bytes.
+   */
+  def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint =
+    Endpoint(transpose(es.map(_.connections)).flatMap { cs =>
+      cs.reduce((c1, c2) => bs => joinAwaits(c1(bs)) match {
+        case w@Await(a, k, y, z) =>
+          await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
+            case (d, -\/(e)) =>
+              if (timeout - d > 0.milliseconds) c2(bs)
+              else eval(Task.fail(new Exception(s"Failover chain timed out after $timeout")))
+            case (d, \/-(x)) => k(x)
+          }, y, z)
+        case x => x
+      })
+    })
+
+  // TODO: Update to latest scalaz-stream to get mergeN
+  //def uber(maxWait: Duration, circuitOpenTime: Duration, es: Process[Task, Endpoint]): Endpoint =
+  //  mergeN(es.permutations.map(ps => failoverChain(maxWait, ps.map(_.circuitBroken))))
+
+  /**
+   * Transpose a process of processes to emit all their first elements, then all their second
+   * elements, and so on.
+   */
+  def transpose[F[_]:Monad, A](as: Process[F, Process[F, A]]): Process[F, Process[F, A]] =
+    emit(as.flatMap(_.take(1))) ++ eval(isEmpty(as.flatMap(_.drop(1)))).flatMap(b =>
+      if(b) halt else transpose(as.map(_.drop(1))))
+
+  /**
+   * Normalize a process such that if it awaits input multiple times without emitting,
+   * merge those awaits into a single step.
+   */
+  def joinAwaits[F[_], O](p: Process[F, O])(implicit F: Functor[F]): Process[F, O] = p match {
+    case Await(req, recv, fb, c) =>
+      await(F.map(req.asInstanceOf[F[Any]])(
+                  x => joinAwaits(recv(x).asInstanceOf[Process[F,O]])))(
+            (x: Process[F, O]) => x, fb.asInstanceOf[Process[F, O]], c.asInstanceOf[Process[F, O]])
+    case Emit(e, k) => Emit(e.asInstanceOf[Seq[O]], joinAwaits(k.asInstanceOf[Process[F, O]]))
+    case x => x
+  }
+
+  /**
+   * Returns true if the given process never emits.
+   */
+  def isEmpty[F[_], O](p: Process[F, O])(implicit F: Monad[F]): F[Boolean] = joinAwaits(p) match {
+    case Halt(e) => F.point(true)
+    case Await(t, k, _, _) =>
+      F.bind(t.asInstanceOf[F[Any]])((a:Any) => isEmpty(k(a).asInstanceOf[Process[F,O]]))
+    case Emit(_, _) => F.point(false)
+  }
+
+  def time[A](task: Task[A]): Task[(Duration, A)] = for {
+    t1 <- Task(new Date().getTime: Long)
+    a  <- task
+    t2 <- Task(new Date().getTime: Long)
+    t3 <- Task(t1 - t2)
+  } yield (t3.milliseconds, a)
+
+  type Connection = Process[Task,ByteVector] => Process[Task, ByteVector]
 
   // combinators for building up Endpoints
 
@@ -135,12 +213,4 @@ object Endpoint {
   def logical(name: String)(resolve: String => Endpoint): Endpoint =
     resolve(name)
 
-  // loadBalanced
-  // circuitBroken
-  // when a connection fails, it is removed from the pool
-  // until the next tick of schedule; when pool is empty
-  // we fail fast
-  // def circuitBroken(schedule: Process[Task,Unit])(
-  // healthy: Channel[Task, InetSocketAddress, Boolean])(
-  // addr: Endpoint): Endpoint = ???
 }

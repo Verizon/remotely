@@ -9,9 +9,13 @@ case class BreakerState(halfOpen: Boolean = false, errors: Int = 0, openTime: Op
 
 class CircuitBreaker(timeout: Duration,
                      maxErrors: Int,
-                     breaker: IORef[BreakerState]) {
+                     breaker: IORef[BreakerState]) { self =>
 
-  def attempt[A](a: Task[A]): Task[A] = {
+  def transform: Task ~> Task = new (Task ~> Task) {
+    def apply[A](a: Task[A]) = self(a)
+  }
+
+  def apply[A](a: Task[A]): Task[A] = {
     def doAttempt: Task[A] = a.attempt.flatMap {
       case -\/(e) => addFailure.flatMap(_ => Task.fail(e))
       case \/-(a) => for {
@@ -30,7 +34,7 @@ class CircuitBreaker(timeout: Duration,
           val t2 = new Date().getTime
           if (t2 - t1 >= timeout.toMillis && !halfOpen)
             breaker.compareAndSet(bs, BreakerState(true, n, Some(t1))).flatMap { b =>
-              if (b) doAttempt else attempt(a)
+              if (b) doAttempt else apply(a)
             }
           else Task.fail(new Exception("Circuit-breaker open"))
       }
