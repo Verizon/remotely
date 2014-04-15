@@ -60,8 +60,12 @@ object Endpoint {
     })
 
   // TODO: Update to latest scalaz-stream to get mergeN
-  //def uber(maxWait: Duration, circuitOpenTime: Duration, es: Process[Task, Endpoint]): Endpoint =
-  //  mergeN(es.permutations.map(ps => failoverChain(maxWait, ps.map(_.circuitBroken))))
+  //def uber(maxWait: Duration,
+  //         circuitOpenTime: Duration,
+  //         maxErrors: Int,
+  //         es: Process[Task, Endpoint]): Endpoint =
+  //  mergeN(es.permutations.map(ps =>
+  //    failoverChain(maxWait, ps.map(_.circuitBroken(circuitOpenTime, maxErrors)))))
 
   /**
    * Transpose a process of processes to emit all their first elements, then all their second
@@ -98,7 +102,7 @@ object Endpoint {
     t1 <- Task(new Date().getTime: Long)
     a  <- task
     t2 <- Task(new Date().getTime: Long)
-    t3 <- Task(t1 - t2)
+    t3 <- Task(t2 - t1)
   } yield (t3.milliseconds, a)
 
   type Connection = Process[Task,ByteVector] => Process[Task, ByteVector]
