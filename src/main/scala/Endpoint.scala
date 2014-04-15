@@ -10,8 +10,8 @@ import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio}
 import scodec.bits.{BitVector,ByteVector}
 import Endpoint.Connection
 import scala.concurrent.duration._
-import Process._
 import scalaz._
+import Process.{Await, Emit, Halt, emit, await, halt, eval}
 import java.util.Date
 
 /**
@@ -99,9 +99,9 @@ object Endpoint {
   }
 
   def time[A](task: Task[A]): Task[(Duration, A)] = for {
-    t1 <- Task(new Date().getTime: Long)
+    t1 <- Task(System.currentTimeMillis)
     a  <- task
-    t2 <- Task(new Date().getTime: Long)
+    t2 <- Task(System.currentTimeMillis)
     t3 <- Task(t2 - t1)
   } yield (t3.milliseconds, a)
 
