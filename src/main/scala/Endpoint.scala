@@ -6,13 +6,13 @@ import akka.util.ByteString
 import java.net.{InetSocketAddress,Socket,URL}
 import javax.net.ssl.SSLEngine
 import scalaz.concurrent.Task
-import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio}
+import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio,Process1}
 import scodec.bits.{BitVector,ByteVector}
 import Endpoint.Connection
 import scala.concurrent.duration._
 import scalaz._
-import Process.{Await, Emit, Halt, emit, await, halt, eval}
-import java.util.Date
+import Process.{Await, Emit, Halt, emit, await, halt, eval, await1, iterate}
+import scalaz.stream.merge._
 
 /**
  * A 'logical' endpoint for some service, represented
@@ -59,13 +59,38 @@ object Endpoint {
       })
     })
 
-  // TODO: Add this when Merge is published to scalaz-stream
-  //def uber(maxWait: Duration,
-  //         circuitOpenTime: Duration,
-  //         maxErrors: Int,
-  //         es: Process[Task, Endpoint]): Endpoint =
-  //  Merge.mergeN(permutations(es).map(ps =>
-  //    failoverChain(maxWait, ps.map(_.circuitBroken(circuitOpenTime, maxErrors)))))
+  /**
+   * An endpoint backed by a (static) pool of other endpoints.
+   * Each endpoint has its own circuit-breaker, and fails over to all the others
+   * on failure.
+   */
+  def uber(maxWait: Duration,
+           circuitOpenTime: Duration,
+           maxErrors: Int,
+           es: Process[Task, Endpoint]): Endpoint =
+    Endpoint(mergeN(permutations(es).map(ps =>
+      failoverChain(maxWait, ps.evalMap(p => p.circuitBroken(circuitOpenTime, maxErrors))).connections)))
+
+  /**
+   * Produce a stream of all the permutations of the given stream.
+   */
+  def permutations[A](p: Process[Task, A]): Process[Task, Process[Task, A]] = {
+    val xs = iterate(0)(_ + 1) zip p
+    for {
+      b <- eval(isEmpty(xs))
+      r <- if (b) emit(xs) else for {
+        x <- xs
+        ps <- permutations(xs |> delete { case (i, v) => i == x._1 })
+      } yield emit(x) ++ ps
+    } yield r.map(_._2)
+  }
+
+  /** Skips the first element that matches the predicate. */
+  def delete[I](f: I => Boolean): Process1[I,I] = {
+    def go(s: Boolean): Process1[I,I] =
+      await1[I] flatMap (i => if (s && f(i)) go(false) else emit(i) ++ go(s))
+    go(true)
+  }
 
   /**
    * Transpose a process of processes to emit all their first elements, then all their second
