@@ -15,7 +15,7 @@ sealed abstract class IORef[A] {
 }
 
 object IORef {
-  def apply[A](value: A): Task[IORef[A]] = Task(new IORef[A] {
+  def apply[A](value: => A): Task[IORef[A]] = Task(new IORef[A] {
     val ref = new AtomicReference(value)
     def read = Task(ref.get)
     def write(value: A) = Task(ref.set(value))
