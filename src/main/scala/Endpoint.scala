@@ -59,12 +59,12 @@ object Endpoint {
       })
     })
 
-  // TODO: Update to latest scalaz-stream to get mergeN
+  // TODO: Add this when Merge is published to scalaz-stream
   //def uber(maxWait: Duration,
   //         circuitOpenTime: Duration,
   //         maxErrors: Int,
   //         es: Process[Task, Endpoint]): Endpoint =
-  //  mergeN(es.permutations.map(ps =>
+  //  Merge.mergeN(permutations(es).map(ps =>
   //    failoverChain(maxWait, ps.map(_.circuitBroken(circuitOpenTime, maxErrors)))))
 
   /**
