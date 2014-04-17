@@ -3,7 +3,8 @@ package remotely
 import scalaz._
 import scalaz.concurrent.Task
 import scala.concurrent.duration._
-import java.util.Date
+
+case object CircuitBreakerOpen extends Exception
 
 case class BreakerState(halfOpen: Boolean = false, errors: Int = 0, openTime: Option[Long] = None)
 
@@ -27,16 +28,17 @@ class CircuitBreaker(timeout: Duration,
       s <- breaker.read
       r <- s match {
         // Breaker is closed. Everything is fine.
-        case BreakerState(_, _, None) => doAttempt
+        case BreakerState(_, _, None) =>
+          doAttempt
         // Breaker is open
         case bs@BreakerState(halfOpen, n, Some(t1)) =>
           // Attempt to enter the half-open state
-          val t2 = new Date().getTime
+          val t2 = System.currentTimeMillis
           if (t2 - t1 >= timeout.toMillis && !halfOpen)
             breaker.compareAndSet(bs, BreakerState(true, n, Some(t1))).flatMap { b =>
               if (b) doAttempt else apply(a)
             }
-          else Task.fail(new Exception("Circuit-breaker open"))
+          else Task.fail(CircuitBreakerOpen)
       }
     } yield r
   }
@@ -48,10 +50,10 @@ class CircuitBreaker(timeout: Duration,
         BreakerState(false, n + 1, None)
       // The breaker is closed, but should be opened
       case BreakerState(ho, _, None) =>
-        BreakerState(false, 0, Some(new Date().getTime))
+        BreakerState(false, 0, Some(System.currentTimeMillis))
       // The breaker is open. A non-failfast error just happened, so we reset the time.
       case BreakerState(ho, n, Some(t)) =>
-        BreakerState(false, n + 1, Some(new Date().getTime))
+        BreakerState(false, n + 1, Some(System.currentTimeMillis))
     }
   } yield ()
 
