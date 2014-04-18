@@ -6,9 +6,13 @@ import akka.util.ByteString
 import java.net.{InetSocketAddress,Socket,URL}
 import javax.net.ssl.SSLEngine
 import scalaz.concurrent.Task
-import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio}
+import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio,Process1}
 import scodec.bits.{BitVector,ByteVector}
 import Endpoint.Connection
+import scala.concurrent.duration._
+import scalaz._
+import Process.{Await, Emit, Halt, emit, await, halt, eval, await1, iterate}
+import scalaz.stream.merge._
 
 /**
  * A 'logical' endpoint for some service, represented
@@ -19,11 +23,114 @@ case class Endpoint(connections: Process[Task,Connection]) {
     case None => Task.fail(new Exception("No available connections"))
     case Some(a) => Task.now(a)
   }
+
+  /**
+   * Adds a circuit-breaker to this endpoint that "opens" (fails fast) after
+   * `maxErrors` consecutive failures, and attempts a connection again
+   * when `timeout` has passed.
+   */
+  def circuitBroken(timeout: Duration, maxErrors: Int): Task[Endpoint] =
+    CircuitBreaker(timeout, maxErrors).map { cb =>
+      Endpoint(connections.map(c => bs => c(bs).translate(cb.transform)))
+    }
+
+  import Endpoint._
+
 }
 
 object Endpoint {
 
-  type Connection = Process[Task,ByteVector] => Process[Task,ByteVector]
+  /**
+   * If a connection in an endpoint fails, then attempt the same call to the next
+   * endpoint, but only if `timeout` has not passed AND we didn't fail in a
+   * "committed state", i.e. we haven't received any bytes.
+   */
+  def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint =
+    Endpoint(transpose(es.map(_.connections)).flatMap { cs =>
+      cs.reduce((c1, c2) => bs => joinAwaits(c1(bs)) match {
+        case w@Await(a, k, y, z) =>
+          await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
+            case (d, -\/(e)) =>
+              if (timeout - d > 0.milliseconds) c2(bs)
+              else eval(Task.fail(new Exception(s"Failover chain timed out after $timeout")))
+            case (d, \/-(x)) => k(x)
+          }, y, z)
+        case x => x
+      })
+    })
+
+  /**
+   * An endpoint backed by a (static) pool of other endpoints.
+   * Each endpoint has its own circuit-breaker, and fails over to all the others
+   * on failure.
+   */
+  def uber(maxWait: Duration,
+           circuitOpenTime: Duration,
+           maxErrors: Int,
+           es: Process[Task, Endpoint]): Endpoint =
+    Endpoint(mergeN(permutations(es).map(ps =>
+      failoverChain(maxWait, ps.evalMap(p => p.circuitBroken(circuitOpenTime, maxErrors))).connections)))
+
+  /**
+   * Produce a stream of all the permutations of the given stream.
+   */
+  def permutations[A](p: Process[Task, A]): Process[Task, Process[Task, A]] = {
+    val xs = iterate(0)(_ + 1) zip p
+    for {
+      b <- eval(isEmpty(xs))
+      r <- if (b) emit(xs) else for {
+        x <- xs
+        ps <- permutations(xs |> delete { case (i, v) => i == x._1 })
+      } yield emit(x) ++ ps
+    } yield r.map(_._2)
+  }
+
+  /** Skips the first element that matches the predicate. */
+  def delete[I](f: I => Boolean): Process1[I,I] = {
+    def go(s: Boolean): Process1[I,I] =
+      await1[I] flatMap (i => if (s && f(i)) go(false) else emit(i) ++ go(s))
+    go(true)
+  }
+
+  /**
+   * Transpose a process of processes to emit all their first elements, then all their second
+   * elements, and so on.
+   */
+  def transpose[F[_]:Monad, A](as: Process[F, Process[F, A]]): Process[F, Process[F, A]] =
+    emit(as.flatMap(_.take(1))) ++ eval(isEmpty(as.flatMap(_.drop(1)))).flatMap(b =>
+      if(b) halt else transpose(as.map(_.drop(1))))
+
+  /**
+   * Normalize a process such that if it awaits input multiple times without emitting,
+   * merge those awaits into a single step.
+   */
+  def joinAwaits[F[_], O](p: Process[F, O])(implicit F: Functor[F]): Process[F, O] = p match {
+    case Await(req, recv, fb, c) =>
+      await(F.map(req.asInstanceOf[F[Any]])(
+                  x => joinAwaits(recv(x).asInstanceOf[Process[F,O]])))(
+            (x: Process[F, O]) => x, fb.asInstanceOf[Process[F, O]], c.asInstanceOf[Process[F, O]])
+    case Emit(e, k) => Emit(e.asInstanceOf[Seq[O]], joinAwaits(k.asInstanceOf[Process[F, O]]))
+    case x => x
+  }
+
+  /**
+   * Returns true if the given process never emits.
+   */
+  def isEmpty[F[_], O](p: Process[F, O])(implicit F: Monad[F]): F[Boolean] = joinAwaits(p) match {
+    case Halt(e) => F.point(true)
+    case Await(t, k, _, _) =>
+      F.bind(t.asInstanceOf[F[Any]])((a:Any) => isEmpty(k(a).asInstanceOf[Process[F,O]]))
+    case Emit(_, _) => F.point(false)
+  }
+
+  def time[A](task: Task[A]): Task[(Duration, A)] = for {
+    t1 <- Task(System.currentTimeMillis)
+    a  <- task
+    t2 <- Task(System.currentTimeMillis)
+    t3 <- Task(t2 - t1)
+  } yield (t3.milliseconds, a)
+
+  type Connection = Process[Task,ByteVector] => Process[Task, ByteVector]
 
   // combinators for building up Endpoints
 
@@ -161,12 +268,4 @@ object Endpoint {
   def logical(name: String)(resolve: String => Endpoint): Endpoint =
     resolve(name)
 
-  // loadBalanced
-  // circuitBroken
-  // when a connection fails, it is removed from the pool
-  // until the next tick of schedule; when pool is empty
-  // we fail fast
-  // def circuitBroken(schedule: Process[Task,Unit])(
-  // healthy: Channel[Task, InetSocketAddress, Boolean])(
-  // addr: Endpoint): Endpoint = ???
 }
