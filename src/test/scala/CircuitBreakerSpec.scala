@@ -15,11 +15,9 @@ import \/._
 object CircuitBreakerSpec extends Properties("CircuitBreaker") {
 
   def failures(n: Int, cb: CircuitBreaker) =
-    List.fill(n)(cb(fail).attempt).foldLeft(Task.now(right[Throwable, Int](0))) {
+    List.fill(n)(cb(Task.fail(new Error("oops"))).attempt).foldLeft(Task.now(right[Throwable, Int](0))) {
       (t1, t2) => t1.flatMap(_ => t2)
     }
-
-  val fail: Task[Int] = Task.fail(new RuntimeException("oops"))
 
   // The CB doesn't open until maxErrors has been reached.
   property("remains-closed") = forAll { (b: Byte) =>
@@ -53,25 +51,27 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
   }
 
   // The CB closes again
-  property("closes") = {
+  property("closes") = secure {
     val p = for {
-      _ <- Task(println("I'm starting"))
-      cb <- CircuitBreaker(3.seconds, 1)
-      _ <- Task(println("Breaking"))
-      // This should make it open
-      _ <- cb(fail).attempt
-      _ <- Task(println("I'm sleeping"))
-      _ <- Task(Thread.sleep(3100))
-      _ <- Task(println("I'm up"))
-      // Should by now have entered the half-open state
-      r <- cb(Task.now(0)).attempt
-      _ <- Task(println("More up"))
+      cb <- CircuitBreaker(1.milliseconds, 0)
+      _ <- cb(Task.fail(new Error("oops"))).attempt
+      _ <- Task(Thread.sleep(2))
+      // The breaker should have closed by now
+      r <- cb(Task.now(0))
     } yield r
-    p.run.fold(_ => false, _ == 0)
+    p.attemptRun.fold(_ => false, _ == 0)
   }
 
-  // The CB closes after the timeout
-
   // The CB doesn't open as long as there are successes
+  property("stays-closed") = secure {
+    val p = for {
+      cb <- CircuitBreaker(3.hours, 1)
+      _ <- cb(Task.fail(new Error("oops"))).attempt
+      _ <- cb(Task.now(0))
+      _ <- cb(Task.fail(new Error("oops"))).attempt
+      r <- cb(Task.now(1))
+    } yield r
+    p.attemptRun.fold(_ => false, _ == 1)
+  }
 
 }

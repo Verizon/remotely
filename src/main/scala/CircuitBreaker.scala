@@ -18,7 +18,10 @@ class CircuitBreaker(timeout: Duration,
 
   def apply[A](a: Task[A]): Task[A] = {
     def doAttempt: Task[A] = a.attempt.flatMap {
-      case -\/(e) => addFailure.flatMap(_ => Task.fail(e))
+      case -\/(e) => for {
+        _ <- addFailure
+        r <- Task.fail(e) : Task[A]
+      } yield r
       case \/-(a) => for {
         _ <- close
         r <- Task.now(a)
@@ -28,8 +31,7 @@ class CircuitBreaker(timeout: Duration,
       s <- breaker.read
       r <- s match {
         // Breaker is closed. Everything is fine.
-        case BreakerState(_, _, None) =>
-          doAttempt
+        case BreakerState(_, _, None) => doAttempt
         // Breaker is open
         case bs@BreakerState(halfOpen, n, Some(t1)) =>
           // Attempt to enter the half-open state

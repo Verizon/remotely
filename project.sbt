@@ -22,3 +22,4 @@ libraryDependencies ++= Seq(
 OnCue.baseSettings
 
 ScalaCheck.settings
+
