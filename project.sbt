@@ -4,19 +4,12 @@ organization in Global := "oncue.svc.remotely"
 
 scalaVersion in Global := "2.10.4"
 
-name := "core"
+lazy val remotely = project.in(file(".")).aggregate(core, examples)
 
-scalacOptions ++= Seq(
-  "-language:existentials",
-  "-language:postfixOps"
-)
+lazy val core = project
 
-libraryDependencies ++= Seq(
-  "org.scalaz.stream" %% "scalaz-stream" % "0.4.1",
-  "org.typelevel"     %% "scodec-core"   % "1.1.0",
-  "com.typesafe.akka" %% "akka-kernel"   % "2.2.+"
-)
+lazy val examples = project.dependsOn(core)
 
 OnCue.baseSettings
 
-ScalaCheck.settings
+Publishing.ignore
