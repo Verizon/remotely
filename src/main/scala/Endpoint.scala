@@ -6,7 +6,7 @@ import akka.util.ByteString
 import java.net.{InetSocketAddress,Socket,URL}
 import javax.net.ssl.SSLEngine
 import scalaz.concurrent.Task
-import scalaz.stream.{async,Bytes,Channel,Exchange,io,Process,nio,Process1}
+import scalaz.stream.{async,Channel,Exchange,io,Process,nio,Process1}
 import scodec.bits.{BitVector,ByteVector}
 import Endpoint.Connection
 import scala.concurrent.duration._
@@ -211,39 +211,26 @@ object Endpoint {
     src
   }
 
-  /**
-   * Send a stream of bytes to a server and get back a
-   * stream of bytes, allowing for nondeterminism in the
-   * rate of processing. (That is, we never block on awaiting
-   * confirmation of sending bytes to the server.) Note that
-   * this does not do an SSL handshake or encryption.
-   */
-  private def request(host: InetSocketAddress)(
-                      bytes: Process[Task,ByteVector]): Process[Task,ByteVector] =
-    nio.connect(host).flatMap { exch =>
-      streamExchange {
-        exch.mapO(bs => ByteVector.view(bs.toArray))
-            .mapW[ByteVector](bs => Bytes.of(bs.toArray))
-      } (bytes)
-    }
-
   def streamExchange(exch: Exchange[ByteVector,ByteVector]): Process[Task,ByteVector] => Process[Task,ByteVector] =
     bytes => bytes.to(exch.write).drain ++ exch.read
 
   def connect(host: InetSocketAddress): Process[Task, Exchange[ByteVector, ByteVector]] =
     Process.eval(Task.delay(new Socket(host.getAddress, host.getPort))).map { socket =>
       val in = socket.getInputStream
+
       val read  = forked(Process.constant(4096))
-                . through (io.chunkR(in))
-                . map (ByteVector.view(_))
-                . onComplete { Process.eval(Task.delay(socket.shutdownInput)).attempt().drain }
-      val write = forked(io.chunkW(socket.getOutputStream).contramap[ByteVector](_.toArray))
-                  . map { a => println("socket closed: " + socket.isClosed); a }
-                  . onComplete { Process.eval(Task.delay(socket.shutdownOutput)).attempt().drain }
+                  .through(io.chunkR(in))
+                  .onComplete { Process.eval(Task.delay(socket.shutdownInput)).attempt().drain }
+
+      val write = forked(io.chunkW(socket.getOutputStream))
+                  .map { a => println("socket closed: " + socket.isClosed); a }
+                  .onComplete { Process.eval(Task.delay(socket.shutdownOutput)).attempt().drain }
+
       Exchange[ByteVector,ByteVector](read, write)
     }
 
-  def forked[A](p: Process[Task,A]): Process[Task,A] = p.evalMap(a => Task(a))
+  def forked[A](p: Process[Task,A]): Process[Task,A] =
+    p.evalMap(a => Task(a))
 
   def roundRobin(p: Endpoint*): Endpoint = {
     require(p.nonEmpty, "round robin must have at least one endpoint to choose from")

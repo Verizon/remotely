@@ -6,20 +6,17 @@ scalaVersion in Global := "2.10.4"
 
 name := "core"
 
-resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
-
 scalacOptions ++= Seq(
   "-language:existentials",
   "-language:postfixOps"
 )
 
 libraryDependencies ++= Seq(
-  "org.scalaz.stream" %% "scalaz-stream" % "snapshot-0.4",
-  "org.typelevel" %% "scodec-core" % "1.0.0",
-  "com.typesafe.akka" %% "akka-kernel"   % "2.2.4"
+  "org.scalaz.stream" %% "scalaz-stream" % "0.4.1",
+  "org.typelevel"     %% "scodec-core"   % "1.1.0",
+  "com.typesafe.akka" %% "akka-kernel"   % "2.2.+"
 )
 
 OnCue.baseSettings
 
 ScalaCheck.settings
-

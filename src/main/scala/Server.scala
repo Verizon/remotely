@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 import scala.concurrent.duration._
 import scalaz.{\/,Monad}
 import scalaz.\/.{right,left}
-import scalaz.stream.{Bytes,merge,nio,Process}
+import scalaz.stream.{merge,nio,Process}
 import scalaz.concurrent.Task
 import scodec.bits.{BitVector,ByteVector}
 import scodec.Encoder

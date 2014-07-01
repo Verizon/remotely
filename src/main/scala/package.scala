@@ -2,7 +2,7 @@
 package object remotely {
   import scala.concurrent.duration._
   import scala.reflect.runtime.universe.TypeTag
-  import scalaz.stream.{Bytes,Process}
+  import scalaz.stream.Process
   import scalaz.concurrent.Task
   import scalaz.\/.{left,right}
   import scalaz.Monoid
