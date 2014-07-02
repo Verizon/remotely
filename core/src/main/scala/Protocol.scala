@@ -35,8 +35,11 @@ case class Protocol(codecs: Codecs, signatures: Signatures) {
   def generateClient(moduleName: String): String =
     signatures.generateClient(moduleName)
 
-  def generateServer(traitName: String): String = s"""
+  def generateServer(traitName: String, pkg: String = "default"): String = s"""
+  |package $pkg
+  |
   |import remotely.{Codecs,Decoders,Encoders,Environment,Response,Values}
+  |import remotely.codecs._
   |
   |trait $traitName {
   |  // This interface is generated from a `Protocol`. Do not modify.
