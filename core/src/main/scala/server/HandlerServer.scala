@@ -2,7 +2,6 @@ package remotely.server
 
 import akka.actor.{Actor,ActorLogging,ActorRef,ActorSystem,Props}
 import akka.io.{BackpressureBuffer,IO,Tcp,SslTlsSupport,TcpPipelineHandler}
-import akka.kernel.Bootable
 import akka.util.ByteString
 import java.net.InetSocketAddress
 import javax.net.ssl.SSLEngine
