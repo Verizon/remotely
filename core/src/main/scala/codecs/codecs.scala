@@ -31,11 +31,14 @@ package object codecs extends lowerprioritycodecs {
   implicit val utf8 = C.variableSizeBytes(int32, C.utf8)
   implicit val bool = C.bool(8) // use a full byte
 
-  implicit def tuple2[A:Codec,B:Codec]: Codec[(A,B)] =
+  implicit def tuple2[A:Codec,B: Codec]: Codec[(A,B)] =
     Codec[A] ~ Codec[B]
 
-  implicit def either[A:Codec,B:Codec]: Codec[A \/ B] = C.either(bool, Codec[A], Codec[B])
-  implicit def stdEither[A:Codec,B:Codec]: Codec[Either[A,B]] = C.stdEither(bool, Codec[A], Codec[B])
+  implicit def either[A:Codec,B:Codec]: Codec[A \/ B] =
+    C.either(bool, Codec[A], Codec[B])
+
+  implicit def stdEither[A:Codec,B:Codec]: Codec[Either[A,B]] =
+    C.stdEither(bool, Codec[A], Codec[B])
 
   implicit def byteArray: Codec[Array[Byte]] = {
     val B = new Codec[Array[Byte]] {

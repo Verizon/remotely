@@ -70,8 +70,8 @@ case class Environment(codecs: Codecs, values: Values) {
     server.start("ssl-rpc-server")(serverHandler(monitoring), addr, Some(ssl))
 
   /** Generate the Scala code for the client access to this `Environment`. */
-  def generateClient(moduleName: String): String =
-    Signatures(values.keySet).generateClient(moduleName)
+  def generateClient(moduleName: String, pkg: String): String =
+    Signatures(values.keySet).generateClient(moduleName, pkg)
 
   override def toString = {
     s"""Environment {

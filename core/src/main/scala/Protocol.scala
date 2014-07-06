@@ -32,8 +32,8 @@ case class Protocol(codecs: Codecs, signatures: Signatures) {
   def specify4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String): Protocol =
     specify[(A,B,C,D) => E](name)
 
-  def generateClient(moduleName: String): String =
-    signatures.generateClient(moduleName)
+  def generateClient(moduleName: String, pkg: String = "default"): String =
+    signatures.generateClient(moduleName, pkg)
 
   def generateServer(traitName: String, pkg: String = "default"): String = s"""
   |package $pkg

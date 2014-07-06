@@ -19,13 +19,15 @@ case class Signatures(signatures: Set[String]) {
   def specify4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String): Signatures =
     specify[(A,B,C,D) => E](name)
 
-  def generateClient(moduleName: String): String = {
+  def generateClient(moduleName: String, pkg: String): String = {
     def emitValue(s: String) = {
       val (name,tname) = Signatures.split(s)
       s"""val $name = Remote.ref[$tname]("$name")"""
     }
 
     s"""
+    |package $pkg
+    |
     |import remotely.Remote
     |
     |object $moduleName {
