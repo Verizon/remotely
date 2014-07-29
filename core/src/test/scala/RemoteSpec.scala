@@ -18,6 +18,7 @@ object RemoteSpec extends Properties("Remote") {
     .populate { _
       .declareStrict("sum", (d: List[Int]) => d.sum)
       .declare("sum", (d: List[Double]) => Response.now(d.sum))
+      .declare("add1", (d: List[Int]) => Response.now(d.map(_ + 1):List[Int]))
     }
 
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
@@ -27,6 +28,7 @@ object RemoteSpec extends Properties("Remote") {
 
   val sum = Remote.ref[List[Int] => Int]("sum")
   val sumD = Remote.ref[List[Double] => Double]("sum")
+  val mapI = Remote.ref[List[Int] => List[Int]]("add1")
 
   val ctx = Response.Context.empty
 
@@ -38,6 +40,11 @@ object RemoteSpec extends Properties("Remote") {
   property("roundtrip[Double]") =
     forAll { (l: List[Double], kvs: Map[String,String]) =>
       l.sum == sumD(l).runWithContext(loc, ctx ++ kvs).run
+    }
+
+  property("roundtrip[List[Int]]") =
+    forAll { (l: List[Int], kvs: Map[String,String]) =>
+      l.map(_ + 1) == mapI(l).runWithContext(loc, ctx ++ kvs).run
     }
 
   property("check-serializers") = secure {
