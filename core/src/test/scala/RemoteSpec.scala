@@ -6,7 +6,6 @@ import Prop._
 import scalaz.concurrent.Task
 
 object RemoteSpec extends Properties("Remote") {
-
   import codecs._
   import Remote.implicits._
 

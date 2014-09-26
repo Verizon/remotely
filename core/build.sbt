@@ -9,10 +9,12 @@ scalacOptions ++= Seq(
 
 libraryDependencies ++= Seq(
   "org.scalaz.stream" %% "scalaz-stream" % "0.4.1",
-  "org.typelevel"     %% "scodec-core"   % "1.1.0",
+  "org.typelevel"     %% "scodec-core"   % "1.1.0-SNAPSHOT",
   "com.typesafe.akka" %% "akka-actor"    % "2.2.4"
 )
 
 OnCue.baseSettings
 
 ScalaCheck.settings
+
+ScalaTest.settings

@@ -191,7 +191,7 @@ package object codecs extends lowerprioritycodecs {
 
   def responseCodec[A:Codec] = either[String,A]
 
-  def responseDecoder[A:Decoder] = bool flatMap {
+  def responseDecoder[A:Decoder]: Decoder[String \/ A] = bool flatMap {
     case false => utf8.map(left)
     case true => Decoder[A].map(right)
   }
@@ -202,8 +202,8 @@ package object codecs extends lowerprioritycodecs {
              a => bool.encode(true) <+> Encoder[A].encode(a))
   }
 
-  def fail(msg: String): Decoder[Nothing] =
-    new Decoder[Nothing] { def decode(bits: BitVector) = left(msg) }
+  def fail[A](msg: String): Decoder[A] =
+    new Decoder[A] { def decode(bits: BitVector) = left(msg) }.asInstanceOf[Decoder[A]]
 
   def succeed[A](a: A): Decoder[A] = C.provide(a)
 

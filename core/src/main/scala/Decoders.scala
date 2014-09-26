@@ -7,7 +7,7 @@ case class Decoders(decoders: Map[String,Decoder[Any]]) {
 
   def decoder[A:TypeTag:Decoder]: Decoders = {
     val name = Remote.toTag(implicitly[TypeTag[A]])
-    this.copy(decoders = decoders + (name -> Decoder[A].asInstanceOf[Decoder[Nothing]]))
+    this.copy(decoders = decoders + (name -> Decoder[A].asInstanceOf[Decoder[Any]]))
   }
 
   def ++(d: Decoders): Decoders = Decoders { decoders ++ d.decoders }
