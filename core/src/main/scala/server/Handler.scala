@@ -1,5 +1,7 @@
 package remotely.server
 
+import scalaz.concurrent.Strategy
+import scalaz.stream.Cause
 import scalaz.stream.{async,Process,Process1}
 import scalaz.concurrent.Task
 import scodec.bits.{BitVector,ByteVector}
@@ -26,15 +28,22 @@ trait Handler {
    * messages: `akka.io.Tcp.Received` and `akka.io.Tcp.ConnectionClosed`.
    */
   def actor(system: ActorSystem)(conn: => ActorRef): ActorRef = system.actorOf(Props(new Actor with ActorLogging {
-    private val (queue, src) = async.localQueue[ByteVector]
+    private val src = async.unboundedQueue[ByteVector](Strategy.Sequential)
+    val queue = src.dequeue
     @volatile var open = true
     lazy val connection = conn
 
     override def preStart = {
-      apply(src).evalMap { b => Task.delay {
-        if (open) connection ! Tcp.Write(ByteString(b.toArray))
-        else throw Process.End
-      }}.run.runAsync { e =>
+      val write: Task[Unit] = apply(queue).evalMap { b =>
+        Task.delay {
+          if (open) {
+            println(s"writing ${b.toArray.length} bytes")
+            connection ! Tcp.Write(ByteString(b.toArray))
+          } else throw Cause.End.asThrowable
+        }
+      }.run
+      write.runAsync { e =>
+        println("inside runAsync")
         e.leftMap { err =>
           log.error("uncaught exception in connection-processing logic: " + err)
           log.error(err.getStackTrace.mkString("\n"))
@@ -56,10 +65,10 @@ trait Handler {
       case Tcp.Received(data) =>
         val bytes = ByteVector(data.toArray)
         if (log.isDebugEnabled) log.debug("server got bytes: " + bytes.toBitVector)
-        queue.enqueue(bytes)
-      case Tcp.Aborted => open = false; queue.fail(new Exception("connection aborted"))
-      case Tcp.ErrorClosed(msg) => open = false; queue.fail(new Exception("I/O error: " + msg))
-      case Tcp.PeerClosed => open = false; queue.close
+        src.enqueueOne(bytes).run
+      case Tcp.Aborted => open = false; src.fail(new Exception("connection aborted")).run
+      case Tcp.ErrorClosed(msg) => open = false; src.fail(new Exception("I/O error: " + msg)).run
+      case Tcp.PeerClosed => open = false; src.close.run
       case Tcp.Closed =>
         log.debug("connection closed gracefully by server, shutting down")
         context stop self

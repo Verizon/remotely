@@ -23,9 +23,8 @@ class ProtocolSpec extends FlatSpec
 
   it should "foo" in {
     import remotely.Remote.implicits._
-
-    println("factorial: " + Client.factorial(10).runWithContext(endpoint, Context.empty).run)
-    println("foo: " + Client.foo(9).runWithContext(endpoint, Context.empty).run)
+    val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+    val lst: List[Int] = Client.foo(9).runWithContext(endpoint, Context.empty).run
   }
 
   override def afterAll(){
