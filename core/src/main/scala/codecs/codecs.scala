@@ -123,12 +123,12 @@ package object codecs extends lowerprioritycodecs {
    * to a decoder that is not found in `env`, decoding fails
    * with an error.
    */
-  def remoteDecoder(env: Decoders): Decoder[Remote[Any]] = {
+  def remoteDecoder(env: Codecs): Decoder[Remote[Any]] = {
     lazy val go = remoteDecoder(env)
     C.uint8.flatMap {
       case 0 =>
         utf8.flatMap { fmt =>
-                    env.decoders.get(fmt) match {
+                    env.codecs.get(fmt) match {
                       case None => fail(s"[decoding] unknown format type: $fmt")
                       case Some(dec) => dec.map { a => Local(a,None,fmt) }
                     }
@@ -176,14 +176,14 @@ package object codecs extends lowerprioritycodecs {
       ctx <- Decoder[Response.Context]
       formatTags <- sortedSet[String]
       r <- {
-        val unknown = ((formatTags + responseTag) -- env.decoders.keySet).toList
-        if (unknown.isEmpty) remoteDecoder(env.decoders)
+        val unknown = ((formatTags + responseTag) -- env.codecs.keySet).toList
+        if (unknown.isEmpty) remoteDecoder(env.codecs)
         else {
           val unknownMsg = unknown.mkString("\n")
           fail(s"[decoding] server does not have deserializers for:\n$unknownMsg")
         }
       }
-      responseDec <- env.encoders.get(responseTag) match {
+      responseDec <- env.codecs.get(responseTag) match {
         case None => fail(s"[decoding] server does not have response serializer for: $responseTag")
         case Some(a) => succeed(a)
       }
