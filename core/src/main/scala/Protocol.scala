@@ -5,15 +5,6 @@ import scodec.{Codec,Decoder,Encoder}
 
 case class Protocol(codecs: Codecs, signatures: Signatures) {
 
-  def decoders = codecs.decoders
-  def encoders = codecs.encoders
-
-  def encoder[A:TypeTag:Encoder]: Protocol =
-    this.copy(codecs = codecs.encoder[A])
-
-  def decoder[A:TypeTag:Decoder]: Protocol =
-    this.copy(codecs = codecs.decoder[A])
-
   def codec[A:TypeTag:Codec]: Protocol =
     this.copy(codecs = codecs.codec[A])
 
@@ -38,7 +29,7 @@ case class Protocol(codecs: Codecs, signatures: Signatures) {
   def generateServer(traitName: String, pkg: String = "default"): String = s"""
   |package $pkg
   |
-  |import remotely.{Codecs,Decoders,Encoders,Environment,Response,Values}
+  |import remotely.{Codecs,Environment,Response,Values}
   |import remotely.codecs._
   |
   |trait $traitName {

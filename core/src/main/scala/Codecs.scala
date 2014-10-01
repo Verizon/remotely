@@ -3,27 +3,26 @@ package remotely
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
 
-case class Codecs(decoders: Decoders,
-                  encoders: Encoders) {
+case class Codecs(codecs: Map[String,Codec[Any]]) {
+  def codec[A:TypeTag:Codec]: Codecs = {
+    val name = Remote.toTag(implicitly[TypeTag[A]])
+    this.copy(codecs = codecs + (name -> Codec[A].asInstanceOf[Codec[Any]]))
+  }
+    
 
-  def encoder[A:TypeTag:Encoder]: Codecs =
-    this.copy(encoders = encoders.encoder[A])
+  def ++(c: Codecs): Codecs = Codecs(codecs ++ c.codecs)
 
-  def decoder[A:TypeTag:Decoder]: Codecs =
-    this.copy(decoders = decoders.decoder[A])
+  def keySet = codecs.keySet
 
-  def codec[A:TypeTag:Codec]: Codecs =
-    Codecs(decoders.decoder[A], encoders.encoder[A])
+  def get(k: String): Option[Codec[Any]] = codecs.get(k)
 
-  def ++(c: Codecs): Codecs = Codecs(decoders ++ c.decoders, encoders ++ c.encoders)
-
-  def pretty: String =
-    s"""Codecs(\n  ${decoders.pretty.replace("\n","\n  ")},\n  ${encoders.pretty.replace("\n","\n  ")}\n)"""
+  def pretty =
+    "Codecs.empty\n  " + codecs.keySet.toList.sorted.map(d => s".codec[$d]").mkString("\n  ")
 
   override def toString = pretty
 }
 
 object Codecs {
 
-  val empty = Codecs(Decoders.empty, Encoders.empty)
+  val empty = Codecs(Map.empty)
 }
