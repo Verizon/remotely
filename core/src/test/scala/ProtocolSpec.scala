@@ -36,14 +36,9 @@ trait TestServerBase {
   import Codecs._
 
   def environment: Environment = Environment(
-    Codecs(
-      Decoders.empty
-        .decoder[Int]
-        .decoder[List[Int]],
-      Encoders.empty
-        .encoder[Int]
-        .encoder[List[Int]]
-    ),
+    Codecs.empty
+      .codec[Int]
+      .codec[List[Int]],
     populateDeclarations(Values.empty)
   )
 

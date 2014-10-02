@@ -26,15 +26,6 @@ import scalaz.stream.Process
  */
 case class Environment(codecs: Codecs, values: Values) {
 
-  def decoders = codecs.decoders
-  def encoders = codecs.encoders
-
-  def encoder[A:TypeTag:Encoder]: Environment =
-    this.copy(codecs = codecs.encoder[A])
-
-  def decoder[A:TypeTag:Decoder]: Environment =
-    this.copy(codecs = codecs.decoder[A])
-
   def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
     this.copy(codecs = codecs.codec[A])
 
@@ -79,11 +70,8 @@ case class Environment(codecs: Codecs, values: Values) {
     s"""Environment {
     |  ${values.keySet.toList.sorted.mkString("\n  ")}
     |
-    |  decoders:
-    |    ${decoders.keySet.toList.sorted.mkString("\n    ")}
-    |
-    |  encoders:
-    |    ${encoders.keySet.toList.sorted.mkString("\n    ")}
+    |  codecs:
+    |    ${codecs.keySet.toList.sorted.mkString("\n    ")}
     |}
     """.stripMargin
   }
