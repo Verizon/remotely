@@ -37,13 +37,11 @@ trait Handler {
       val write: Task[Unit] = apply(queue).evalMap { b =>
         Task.delay {
           if (open) {
-            println(s"writing ${b.toArray.length} bytes")
             connection ! Tcp.Write(ByteString(b.toArray))
           } else throw Cause.End.asThrowable
         }
       }.run
       write.runAsync { e =>
-        println("inside runAsync")
         e.leftMap { err =>
           log.error("uncaught exception in connection-processing logic: " + err)
           log.error(err.getStackTrace.mkString("\n"))
@@ -84,12 +82,12 @@ object Handler {
       def apply(source: Process[Task,ByteVector]) = f(source)
     }
 
-  private[remotely] def frame: Process1[ByteVector,ByteVector] = {
-    val core = Process.await1[ByteVector].map { bs =>
+  private[remotely] def enframe: Process1[ByteVector,ByteVector] = {
+    Process.await1[ByteVector].map { bs =>
       codecs.int32.encodeValid(bs.size).toByteVector ++ bs
     }
-    (core.repeat: Process1[ByteVector,ByteVector]) ++ // type inference fail
-    Process.emit(codecs.int32.encodeValid(0).toByteVector)
+  //  (core.repeat: Process1[ByteVector,ByteVector]) ++ // type inference fail
+//    core ++ Process.emit(codecs.int32.encodeValid(0).toByteVector)
   }
 
   /**
@@ -100,23 +98,23 @@ object Handler {
    * header whose byte count is <= 0. Output stream is the stream of frame
    * payloads.
    */
-  private[remotely] def frames: Process1[ByteVector,ByteVector] = {
-    def frameHeader(acc: ByteVector): Process1[ByteVector,ByteVector] =
-      if (acc.size < 4) Process.await1[ByteVector].flatMap(bs => frameHeader(acc ++ bs))
-      else codecs.int32.decode(acc.toBitVector).fold (
-        errMsg => Process.fail(new IllegalArgumentException(errMsg)),
-        { case (rem,size) => if (size <= 0) Process.halt else readFrame(size,rem) }
-      )
-    def readFrame(bytesToRead: Int, bits: BitVector): Process1[ByteVector,ByteVector] =
+  private[remotely] def deframe: Process1[ByteVector,ByteVector] = {
+    def readFrame(bits: BitVector, bytesToRead: Int): Process1[ByteVector,ByteVector] =
       if (bits.size / 8 >= bytesToRead) {
         val bytes = bits.toByteVector
         val frame = bytes.take(bytesToRead)
-        Process.emit(frame) fby frameHeader(bytes.drop(bytesToRead))
+        Process.emit(frame)
       }
       else
         Process.await1[ByteVector].flatMap {
-          bs => readFrame(bytesToRead, bits ++ BitVector(bs))
+          bs => readFrame(bits ++ BitVector(bs), bytesToRead)
         }
-    frameHeader(ByteVector.empty)
+
+    Process.await1[ByteVector].flatMap(bs =>
+      codecs.int32.decode(bs.toBitVector).fold (
+        errMsg => Process.fail(new IllegalArgumentException(errMsg)),
+        (readFrame _).tupled
+      )
+    )
   }
 }

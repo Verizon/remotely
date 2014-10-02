@@ -188,7 +188,7 @@ object Endpoint {
           connection ! Tcp.Register(pipeline, keepOpenOnPeerClosed = createEngine.isDefined)
 
           // write all the bytes to the connection, this must happen AFTER the Tcp.Register above
-          out.evalMap { bytes => println(s"bytesssss: + $bytes") ; Task.delay { writeBytes(bytes) } }
+          out.evalMap { bytes => Task.delay { writeBytes(bytes) } }
             .run.runAsync { e => e.fold(
                              e => { normal = true; src.fail(e).run; context stop self },
                              _ => { context stop self }
