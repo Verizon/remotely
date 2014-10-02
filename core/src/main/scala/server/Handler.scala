@@ -81,40 +81,4 @@ object Handler {
     new Handler {
       def apply(source: Process[Task,ByteVector]) = f(source)
     }
-
-  private[remotely] def enframe: Process1[ByteVector,ByteVector] = {
-    Process.await1[ByteVector].map { bs =>
-      codecs.int32.encodeValid(bs.size).toByteVector ++ bs
-    }
-  //  (core.repeat: Process1[ByteVector,ByteVector]) ++ // type inference fail
-//    core ++ Process.emit(codecs.int32.encodeValid(0).toByteVector)
-  }
-
-  /**
-   * Break an input byte stream chunked at any granularity along frame
-   * boundaries. Input consists of a stream of frames, where each frame
-   * is just a number of bytes, encoded as an int32, followed by a
-   * packet of that many bytes. End of stream is indicated with a frame
-   * header whose byte count is <= 0. Output stream is the stream of frame
-   * payloads.
-   */
-  private[remotely] def deframe: Process1[ByteVector,ByteVector] = {
-    def readFrame(bits: BitVector, bytesToRead: Int): Process1[ByteVector,ByteVector] =
-      if (bits.size / 8 >= bytesToRead) {
-        val bytes = bits.toByteVector
-        val frame = bytes.take(bytesToRead)
-        Process.emit(frame)
-      }
-      else
-        Process.await1[ByteVector].flatMap {
-          bs => readFrame(bits ++ BitVector(bs), bytesToRead)
-        }
-
-    Process.await1[ByteVector].flatMap(bs =>
-      codecs.int32.decode(bs.toBitVector).fold (
-        errMsg => Process.fail(new IllegalArgumentException(errMsg)),
-        (readFrame _).tupled
-      )
-    )
-  }
 }
