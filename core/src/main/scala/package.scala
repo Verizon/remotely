@@ -35,8 +35,8 @@ package object remotely {
         conn <- e.get
         reqBits <- codecs.encodeRequest(r).apply(ctx)
         respBytes <- reportErrors(start) {
-          val reqBytestream = Process.emit(reqBits.toByteVector).pipe(Handler.frame)
-          fullyRead(conn(reqBytestream).pipe(Handler.frames)) // we assume the server response is a framed stream
+          val reqBytestream = Process.emit(reqBits.toByteVector)//.pipe(Handler.enframe)
+          fullyRead(conn(reqBytestream).pipe(Process.await1[ByteVector]/*Handler.deframe*/)) // we assume the server response is a framed stream
         }
         resp <- reportErrors(start) { codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes.toBitVector)) }
         result <- resp.fold(

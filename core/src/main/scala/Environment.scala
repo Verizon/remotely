@@ -4,6 +4,8 @@ import java.net.InetSocketAddress
 import javax.net.ssl.SSLEngine
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
+import scodec.bits.{ByteVector}
+import scalaz.stream.Process
 
 /**
  * A collection of codecs and values, which can be populated
@@ -46,9 +48,9 @@ case class Environment(codecs: Codecs, values: Values) {
     server.Handler { bytes =>
       // we assume the input is a framed stream, and encode the response(s)
       // as a framed stream as well
-      (bytes pipe server.Handler.frames) evalMap { bs =>
+      bytes pipe Process.await1[ByteVector] /*server.Handler.deframe*/ evalMap { bs =>
         Server.handle(this)(bs.toBitVector)(monitoring).map(_.toByteVector)
-      } pipe server.Handler.frame
+      } /*pipe server.Handler.enframe*/
     }
 
   /** Start an RPC server on the given port. */

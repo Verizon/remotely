@@ -1,5 +1,7 @@
 package remotely.server
 
+import scalaz.concurrent.Strategy
+import scalaz.stream.Cause
 import scalaz.stream.{async,Process,Process1}
 import scalaz.concurrent.Task
 import scodec.bits.{BitVector,ByteVector}
@@ -26,15 +28,20 @@ trait Handler {
    * messages: `akka.io.Tcp.Received` and `akka.io.Tcp.ConnectionClosed`.
    */
   def actor(system: ActorSystem)(conn: => ActorRef): ActorRef = system.actorOf(Props(new Actor with ActorLogging {
-    private val (queue, src) = async.localQueue[ByteVector]
+    private val src = async.unboundedQueue[ByteVector](Strategy.Sequential)
+    val queue = src.dequeue
     @volatile var open = true
     lazy val connection = conn
 
     override def preStart = {
-      apply(src).evalMap { b => Task.delay {
-        if (open) connection ! Tcp.Write(ByteString(b.toArray))
-        else throw Process.End
-      }}.run.runAsync { e =>
+      val write: Task[Unit] = apply(queue).evalMap { b =>
+        Task.delay {
+          if (open) {
+            connection ! Tcp.Write(ByteString(b.toArray))
+          } else throw Cause.End.asThrowable
+        }
+      }.run
+      write.runAsync { e =>
         e.leftMap { err =>
           log.error("uncaught exception in connection-processing logic: " + err)
           log.error(err.getStackTrace.mkString("\n"))
@@ -56,10 +63,10 @@ trait Handler {
       case Tcp.Received(data) =>
         val bytes = ByteVector(data.toArray)
         if (log.isDebugEnabled) log.debug("server got bytes: " + bytes.toBitVector)
-        queue.enqueue(bytes)
-      case Tcp.Aborted => open = false; queue.fail(new Exception("connection aborted"))
-      case Tcp.ErrorClosed(msg) => open = false; queue.fail(new Exception("I/O error: " + msg))
-      case Tcp.PeerClosed => open = false; queue.close
+        src.enqueueOne(bytes).run
+      case Tcp.Aborted => open = false; src.fail(new Exception("connection aborted")).run
+      case Tcp.ErrorClosed(msg) => open = false; src.fail(new Exception("I/O error: " + msg)).run
+      case Tcp.PeerClosed => open = false; src.close.run
       case Tcp.Closed =>
         log.debug("connection closed gracefully by server, shutting down")
         context stop self
@@ -74,40 +81,4 @@ object Handler {
     new Handler {
       def apply(source: Process[Task,ByteVector]) = f(source)
     }
-
-  private[remotely] def frame: Process1[ByteVector,ByteVector] = {
-    val core = Process.await1[ByteVector].map { bs =>
-      codecs.int32.encodeValid(bs.size).toByteVector ++ bs
-    }
-    (core.repeat: Process1[ByteVector,ByteVector]) ++ // type inference fail
-    Process.emit(codecs.int32.encodeValid(0).toByteVector)
-  }
-
-  /**
-   * Break an input byte stream chunked at any granularity along frame
-   * boundaries. Input consists of a stream of frames, where each frame
-   * is just a number of bytes, encoded as an int32, followed by a
-   * packet of that many bytes. End of stream is indicated with a frame
-   * header whose byte count is <= 0. Output stream is the stream of frame
-   * payloads.
-   */
-  private[remotely] def frames: Process1[ByteVector,ByteVector] = {
-    def frameHeader(acc: ByteVector): Process1[ByteVector,ByteVector] =
-      if (acc.size < 4) Process.await1[ByteVector].flatMap(bs => frameHeader(acc ++ bs))
-      else codecs.int32.decode(acc.toBitVector).fold (
-        errMsg => Process.fail(new IllegalArgumentException(errMsg)),
-        { case (rem,size) => if (size <= 0) Process.halt else readFrame(size,rem) }
-      )
-    def readFrame(bytesToRead: Int, bits: BitVector): Process1[ByteVector,ByteVector] =
-      if (bits.size / 8 >= bytesToRead) {
-        val bytes = bits.toByteVector
-        val frame = bytes.take(bytesToRead)
-        Process.emit(frame) fby frameHeader(bytes.drop(bytesToRead))
-      }
-      else
-        Process.await1[ByteVector].flatMap {
-          bs => readFrame(bytesToRead, bits ++ BitVector(bs))
-        }
-    frameHeader(ByteVector.empty)
-  }
 }

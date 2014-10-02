@@ -5,8 +5,11 @@ import akka.io.{BackpressureBuffer,IO,Tcp,SslTlsSupport,TcpPipelineHandler}
 import akka.util.ByteString
 import java.net.{InetSocketAddress,Socket,URL}
 import javax.net.ssl.SSLEngine
+import scalaz.concurrent.Strategy
+import scalaz.std.anyVal._
 import scalaz.concurrent.Task
-import scalaz.stream.{async,Channel,Exchange,io,Process,nio,Process1}
+import scalaz.syntax.functor._
+import scalaz.stream.{async,Channel,Exchange,io,Process,nio,Process1, process1, Sink}
 import scodec.bits.{BitVector,ByteVector}
 import Endpoint.Connection
 import scala.concurrent.duration._
@@ -47,14 +50,14 @@ object Endpoint {
    */
   def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint =
     Endpoint(transpose(es.map(_.connections)).flatMap { cs =>
-      cs.reduce((c1, c2) => bs => joinAwaits(c1(bs)) match {
-        case w@Await(a, k, y, z) =>
+               cs.reduce((c1, c2) => bs => c1(bs) match {
+        case w@Await(a, k) =>
           await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
             case (d, -\/(e)) =>
               if (timeout - d > 0.milliseconds) c2(bs)
               else eval(Task.fail(new Exception(s"Failover chain timed out after $timeout")))
-            case (d, \/-(x)) => k(x)
-          }, y, z)
+            case (d, \/-(x)) => k(\/-(x)).run
+          })
         case x => x
       })
     })
@@ -96,32 +99,15 @@ object Endpoint {
    * Transpose a process of processes to emit all their first elements, then all their second
    * elements, and so on.
    */
-  def transpose[F[_]:Monad, A](as: Process[F, Process[F, A]]): Process[F, Process[F, A]] =
+  def transpose[F[_]:Monad: Catchable, A](as: Process[F, Process[F, A]]): Process[F, Process[F, A]] =
     emit(as.flatMap(_.take(1))) ++ eval(isEmpty(as.flatMap(_.drop(1)))).flatMap(b =>
       if(b) halt else transpose(as.map(_.drop(1))))
 
   /**
-   * Normalize a process such that if it awaits input multiple times without emitting,
-   * merge those awaits into a single step.
-   */
-  def joinAwaits[F[_], O](p: Process[F, O])(implicit F: Functor[F]): Process[F, O] = p match {
-    case Await(req, recv, fb, c) =>
-      await(F.map(req.asInstanceOf[F[Any]])(
-                  x => joinAwaits(recv(x).asInstanceOf[Process[F,O]])))(
-            (x: Process[F, O]) => x, fb.asInstanceOf[Process[F, O]], c.asInstanceOf[Process[F, O]])
-    case Emit(e, k) => Emit(e.asInstanceOf[Seq[O]], joinAwaits(k.asInstanceOf[Process[F, O]]))
-    case x => x
-  }
-
-  /**
    * Returns true if the given process never emits.
    */
-  def isEmpty[F[_], O](p: Process[F, O])(implicit F: Monad[F]): F[Boolean] = joinAwaits(p) match {
-    case Halt(e) => F.point(true)
-    case Await(t, k, _, _) =>
-      F.bind(t.asInstanceOf[F[Any]])((a:Any) => isEmpty(k(a).asInstanceOf[Process[F,O]]))
-    case Emit(_, _) => F.point(false)
-  }
+  def isEmpty[F[_]: Monad: Catchable, O](p: Process[F, O]): F[Boolean] = ((p as false) |> Process.await1).runLast.map(_.getOrElse(true))
+
 
   def time[A](task: Task[A]): Task[(Duration, A)] = for {
     t1 <- Task(System.currentTimeMillis)
@@ -146,7 +132,8 @@ object Endpoint {
   private def akkaRequest(system: ActorSystem)(
       host: InetSocketAddress,
       createEngine: Option[() => SSLEngine] = None): Connection = out => {
-    val (q, src) = async.localQueue[ByteVector]
+    val src = async.unboundedQueue[ByteVector](Strategy.Sequential)
+    val queue = src.dequeue
     @volatile var normal = false // did the logic of this request complete gracefully?
     val actor = system.actorOf(Props(new Actor with ActorLogging {
       import context.system
@@ -159,22 +146,22 @@ object Endpoint {
       override val supervisorStrategy = OneForOneStrategy() {
         case err: Throwable =>
           log.error("failure: " + err)
-          q.fail(err)
+          src.fail(err).run
           SupervisorStrategy.Stop
       }
 
       def receive = {
         case Tcp.CommandFailed(_: Tcp.Connect) ⇒
           log.error("connection failed to " + host)
-          q.fail(new Exception("connection failed to host " + host))
+          src.fail(new Exception("connection failed to host " + host)).run
           context stop self
         case c @ Tcp.Connected(remote, local) =>
           val connection = sender
           val core = context.system.actorOf(Props(new Actor with ActorLogging { def receive = {
-            case Tcp.Received(data) => q.enqueue(ByteVector(data.toArray))
-            case Tcp.Aborted => q.fail(new Exception("connection aborted")); normal = true
-            case Tcp.ErrorClosed(msg) => q.fail(new Exception("I/O error: " + msg)); normal = true
-            case _ : Tcp.ConnectionClosed => q.close; normal = true; context stop self
+           case Tcp.Received(data) => src.enqueueOne(ByteVector(data.toArray)).run
+            case Tcp.Aborted => src.fail(new Exception("connection aborted")).run; normal = true
+            case Tcp.ErrorClosed(msg) => src.fail(new Exception("I/O error: " + msg)).run; normal = true
+            case _ : Tcp.ConnectionClosed => src.close.run; normal = true; context stop self
           }}))
 
           val (writeBytes, pipeline) = createEngine.map { engine =>
@@ -184,9 +171,9 @@ object Endpoint {
             val pipeline = context.actorOf(TcpPipelineHandler.props(init, connection, core))
             Akka.onComplete(context.system, pipeline) {
               // Did we complete normally? If not, raise an exception
-              if (!normal) q.fail(new Exception(
+              if (!normal) src.fail(new Exception(
                 "SSL pipeline terminated, most likely because of an error in negotiating SSL session")
-              )
+              ).run
             }
             val writeBytes = (bs: ByteVector) =>
               pipeline ! init.Command(Tcp.Write(ByteString(bs.toArray)))
@@ -202,13 +189,13 @@ object Endpoint {
 
           // write all the bytes to the connection, this must happen AFTER the Tcp.Register above
           out.evalMap { bytes => Task.delay { writeBytes(bytes) } }
-             .run.runAsync { e => e.fold(
-               e => { normal = true; q.fail(e); context stop self },
-               _ => { context stop self }
-             )}
+            .run.runAsync { e => e.fold(
+                             e => { normal = true; src.fail(e).run; context stop self },
+                             _ => { context stop self }
+                           )}
       }
     }))
-    src
+    queue
   }
 
   def streamExchange(exch: Exchange[ByteVector,ByteVector]): Process[Task,ByteVector] => Process[Task,ByteVector] =
