@@ -31,6 +31,12 @@ package object codecs extends lowerprioritycodecs {
   implicit val utf8 = C.variableSizeBytes(int32, C.utf8)
   implicit val bool = C.bool(8) // use a full byte
 
+  def exmap[A,B](self: Codec[A])(f: A => String \/ B, g: B => String \/ A): Codec[B] = new Codec[B] {
+     def encode(b: B): String \/ BitVector = g(b) flatMap self.encode
+     def decode(buffer: BitVector): String \/ (BitVector, B) =
+       self.decode(buffer) flatMap { case (rest, a) => f(a).flatMap { b => \/.right((rest, b)) } }
+  }
+
   implicit def tuple2[A:Codec,B: Codec]: Codec[(A,B)] =
     Codec[A] ~ Codec[B]
 
