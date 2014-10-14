@@ -6,6 +6,7 @@ import scala.reflect.runtime.universe.TypeTag
 import scalaz.{\/,-\/,\/-,Monad}
 import scalaz.\/._
 import scalaz.concurrent.Task
+import scalaz.syntax.std.option._
 import scodec.{Codec,codecs => C,Decoder,Encoder}
 import scodec.bits.BitVector
 import Remote._
@@ -63,6 +64,15 @@ package object codecs extends lowerprioritycodecs {
     indexedSeq[A].xmap[SortedSet[A]](
       s => SortedSet(s: _*),
       _.toIndexedSeq)
+
+  private def empty: Codec[Unit] = new Codec[Unit] {
+    override def encode(ign: Unit) = \/.right(BitVector.empty)
+    override def decode(bits: BitVector) = \/.right((bits,()))
+  }
+
+  def optional[A](target: Codec[A]): Codec[Option[A]] =
+    either(empty, target).
+      xmap[Option[A]](_.toOption, _.toRightDisjunction(()))
 
   implicit def list[A:Codec]: Codec[List[A]] =
     indexedSeq[A].xmap[List[A]](
@@ -175,6 +185,8 @@ package object codecs extends lowerprioritycodecs {
       bits => Task.now(bits)
     )
   }
+
+
 
   def requestDecoder(env: Environment): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
     for {
