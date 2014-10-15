@@ -17,7 +17,8 @@ case class Decoders(decoders: Map[String,Decoder[Any]]) {
   def get(k: String): Option[Decoder[Any]] = decoders.get(k)
 
   def pretty =
-    "Decoders.empty\n  " + decoders.keySet.toList.sorted.map(d => s".decoder[$d]").mkString("\n  ")
+    "Decoders.empty\n  " +
+      decoders.keySet.toList.sorted.map(d => s".decoder[$d]").mkString("\n  ")
 
   override def toString =
     pretty
