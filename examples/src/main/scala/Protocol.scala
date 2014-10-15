@@ -2,11 +2,6 @@ package remotely
 package examples
 import scalaz._
 
-object TestProtocol {
-  import remotely.codecs._
-  val P = Protocol.empty.codec[Boolean].specify[Boolean]("foo")
-}
-
 // NB: The GenServer macro needs to receive the FQN of all types, or import them
 // explicitly.
 // The target of the macro needs to be an abstract class.
@@ -23,5 +18,11 @@ class Baz extends Foo {
 
 class Qux extends Bar {
   def bar: Response[Int] = Monad[Response].point(10)
+}
+
+object TestProtocol {
+  // We can get the environment out of a generated protocol:
+  val foo = new Baz
+  val env = foo.environment
 }
 
