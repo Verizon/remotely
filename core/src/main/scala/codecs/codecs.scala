@@ -23,7 +23,7 @@ private[remotely] trait lowerprioritycodecs {
     ))
 }
 
-package object codecs extends lowerprioritycodecs {
+package object codecs extends lowerprioritycodecs with TupleHelpers {
 
   implicit val float = C.float
   implicit val double = C.double
@@ -31,12 +31,6 @@ package object codecs extends lowerprioritycodecs {
   implicit val int64 = C.int64
   implicit val utf8 = C.variableSizeBytes(int32, C.utf8)
   implicit val bool = C.bool(8) // use a full byte
-
-  def exmap[A,B](self: Codec[A])(f: A => String \/ B, g: B => String \/ A): Codec[B] = new Codec[B] {
-     def encode(b: B): String \/ BitVector = g(b) flatMap self.encode
-     def decode(buffer: BitVector): String \/ (BitVector, B) =
-       self.decode(buffer) flatMap { case (rest, a) => f(a).flatMap { b => \/.right((rest, b)) } }
-  }
 
   implicit def tuple2[A:Codec,B: Codec]: Codec[(A,B)] =
     Codec[A] ~ Codec[B]
@@ -240,4 +234,73 @@ package object codecs extends lowerprioritycodecs {
         if (trailing.isEmpty) Task.now(a)
         else Task.fail(new DecodingFailure("trailing bits: " + trailing)) }
     )
+
+  // borrowed from scodec 1.3, lets you exmap to a disjucntion where the left fails the encode/decode
+  def exmap[A,B](self: Codec[A])(f: A => String \/ B, g: B => String \/ A): Codec[B] = new Codec[B] {
+     def encode(b: B): String \/ BitVector = g(b) flatMap self.encode
+     def decode(buffer: BitVector): String \/ (BitVector, B) =
+       self.decode(buffer) flatMap { case (rest, a) => f(a).flatMap { b => \/.right((rest, b)) } }
+  }
+}
+
+trait TupleHelpers {
+  implicit class BedazzledCodec[A](a: Codec[A]) {
+    def ~~[B](b: Codec[B]): Tuple2Codec[A,B] =
+      new Tuple2Codec[A,B](a ~ b)
+  }
+
+  class Tuple2Codec[A,B](ab: Codec[(A,B)]) {
+    def ~~[C](c: Codec[C]): Tuple3Codec[A,B,C] = new Tuple3Codec(ab ~ c)
+
+    def pxmap[X](to: (A,B) => X,
+                 from: X => Option[(A,B)]) = ab.pxmap(to.tupled, from)
+  }
+
+  class Tuple3Codec[A,B,C](abc: Codec[((A,B),C)]) {
+    def ~~[D](d: Codec[D]): Tuple4Codec[A,B,C,D] = new Tuple4Codec(abc ~ d)
+
+    def pxmap[X](to: (A,B,C) => X,
+                 from: X => Option[(A,B,C)]) = abc.pxmap(
+      { case ((a,b),c) => to(a,b,c) },
+      from andThen { _.map(abc => ((abc._1, abc._2), abc._3)) }
+    )
+  }
+
+  class Tuple4Codec[A,B,C,D](abcd: Codec[(((A,B),C),D)]) {
+    def ~~[E](e: Codec[E]): Tuple5Codec[A,B,C,D,E] = new Tuple5Codec(abcd ~ e)
+
+    def pxmap[X](to: (A,B,C,D) => X,
+                 from: X => Option[(A,B,C,D)]) = abcd.pxmap(
+      { case (((a,b),c),d) => to(a,b,c,d) },
+      from andThen { _.map(abcd => (((abcd._1, abcd._2), abcd._3), abcd._4)) }
+    )
+  }
+
+  class Tuple5Codec[A,B,C,D,E](abcde: Codec[((((A,B),C),D),E)]) {
+    def ~~[F](f: Codec[F]): Tuple6Codec[A,B,C,D,E,F] = new Tuple6Codec(abcde ~ f)
+
+    def pxmap[X](to: (A,B,C,D,E) => X,
+                 from: X => Option[(A,B,C,D,E)]) = abcde.pxmap(
+      { case ((((a,b),c),d),e) => to(a,b,c,d,e) },
+      from andThen { _.map(abcde => ((((abcde._1, abcde._2), abcde._3), abcde._4),abcde._5)) }
+    )
+  }
+
+  class Tuple6Codec[A,B,C,D,E,F](abcdef: Codec[(((((A,B),C),D),E),F)]) {
+    def ~~[G](g: Codec[G]): Tuple7Codec[A,B,C,D,E,F,G] = new Tuple7Codec(abcdef ~ g)
+
+    def pxmap[X](to: (A,B,C,D,E,F) => X,
+                 from: X => Option[(A,B,C,D,E,F)]) = abcdef.pxmap(
+      { case (((((a,b),c),d),e),f) => to(a,b,c,d,e,f) },
+      from andThen { _.map(abcdef => (((((abcdef._1, abcdef._2), abcdef._3), abcdef._4),abcdef._5),abcdef._6)) }
+    )
+  }
+
+  class Tuple7Codec[A,B,C,D,E,F,G](abcdefg: Codec[((((((A,B),C),D),E),F),G)]) {
+    def pxmap[X](to: (A,B,C,D,E,F,G) => X,
+                 from: X => Option[(A,B,C,D,E,F,G)]) = abcdefg.pxmap(
+      { case ((((((a,b),c),d),e),f),g) => to(a,b,c,d,e,f,g) },
+      from andThen { _.map(abcdefg => ((((((abcdefg._1, abcdefg._2), abcdefg._3), abcdefg._4),abcdefg._5),abcdefg._6),abcdefg._7)) }
+    )
+  }
 }
