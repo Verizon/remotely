@@ -1,6 +1,6 @@
 # Remotely
 
-[![Build Status](http://jm-media.sc.intel.com:8080/job/remotely/badge/icon)](http://jm-media.sc.intel.com:8080/job/remotely/)
+[![Build Status](https://jenkins.svc.oncue.com:8443/view/Bake/job/WebServices-remotely/badge/icon)](https://jenkins.svc.oncue.com:8443/view/Bake/job/WebServices-remotely/)
 
 A safe, convenient RPC system fo reasonable applications.
 
@@ -8,7 +8,7 @@ A safe, convenient RPC system fo reasonable applications.
 > test:console
 [info] Compiling 2 Scala sources to /projects/remotely/target/scala-2.10/classes...
 [info] Starting scala interpreter...
-[info] 
+[info]
 Welcome to Scala version 2.10.3 (Java HotSpot(TM) 64-Bit Server VM, Java 1.7.0_45).
 Type in expressions to have them evaluated.
 Type :help for more information.
@@ -24,7 +24,7 @@ Let's build up a `remotely.Protocol` with just a single `Int` codec, and the fac
 
 ```Scala
 scala> val facProtocol = Protocol.empty.codec[Int].specify[Int => Int]("fac")
-facProtocol: remotely.Protocol = 
+facProtocol: remotely.Protocol =
 Protocol(
   Codecs(
     Decoders.empty
@@ -43,7 +43,7 @@ We generate the client module from this `Protocol`, then paste it back into the 
 
 ```Scala
 scala> facProtocol.generateClient("FactorialsClient")
-res1: String = 
+res1: String =
 "
 import remotely.Remote
 
@@ -94,7 +94,7 @@ That takes care of the client. Now let's generate the server:
 
 ```Scala
 scala> res0.generateServer("FactorialsServer")
-res4: String = 
+res4: String =
 "
 import remotely.{Codecs,Decoders,Encoders,Environment,Values}
 
@@ -111,7 +111,7 @@ trait FactorialsServer {
   )
 
   def fac: Int => Int
-  
+
   private def populateDeclarations(env: Values): Values = env
     .declare[Int => Int]("fac") { fac }
 }
@@ -141,7 +141,7 @@ trait FactorialsServer {
   )
 
   def fac: Int => Int
-  
+
   private def populateDeclarations(env: Values): Values = env
     .declare[Int => Int]("fac") { fac }
 }
@@ -209,7 +209,7 @@ scala> res10.run
 res11: Int = 40320
 ```
 
-And since `Task` is just a pure value, we can call `run` again to repeat the entire process. 
+And since `Task` is just a pure value, we can call `run` again to repeat the entire process.
 
 ```Scala
 scala> res10.run
@@ -234,7 +234,7 @@ Here are couple examples of these error conditions:
 java.lang.Exception: remotely.Server$Error: [decoding] server does not have deserializers for:
 Float
 List[Float]
- 
+
 java.lang.Exception: remotely.Server$Error: [validation] server does not have referenced values:
 product: List[Int] => Int
 ```
