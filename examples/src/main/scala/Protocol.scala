@@ -20,6 +20,8 @@ class Qux extends Bar {
   def bar: Response[Int] = Monad[Response].point(10)
 }
 
+@GenClient(remotely.Protocol.empty.codec[Boolean].specify[Boolean]("foo").signatures) object FooClient
+
 object TestProtocol {
   // We can get the environment out of a generated protocol:
   val foo = new Baz
