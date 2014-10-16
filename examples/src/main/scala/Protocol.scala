@@ -3,28 +3,23 @@ package examples
 import scalaz._
 
 // NB: The GenServer macro needs to receive the FQN of all types, or import them
-// explicitly.
-// The target of the macro needs to be an abstract class.
-@GenServer(remotely.Protocol.empty.codec[Boolean].specify[Boolean]("foo")) abstract class Foo
+// explicitly. The target of the macro needs to be an abstract class.
+@GenServer(remotely.Protocol.empty.codec[Int].specify[Int => Int]("fac"))
+  abstract class FacServer
 
-class Baz extends Foo {
-  lazy val foo: Response[Boolean] = Monad[Response].point(true)
-}
-
-@GenServer({
-  import remotely._
-  Protocol.empty.codec[Int].specify[Int]("bar")
-}) abstract class Bar
-
-class Qux extends Bar {
-  def bar: Response[Int] = Monad[Response].point(10)
-}
-
-@GenClient(remotely.Protocol.empty.codec[Boolean].specify[Boolean]("foo").signatures) object FooClient
+// The `GenClient` macro needs to receive the FQN of all types, or import them
+// explicitly. The target needs to be an object declaration.
+@GenClient(remotely.Protocol.empty.codec[Int].specify[Int => Int]("fac").signatures)
+  object FacClient
 
 object TestProtocol {
-  // We can get the environment out of a generated protocol:
-  val foo = new Baz
-  val env = foo.environment
+
+  // We can make a server
+  lazy val facServer = new FacServer {
+    val fac = (n: Int) => Response.now { (1 to n).product }
+  }
+
+  // We can get the environment out of a generated server:
+  lazy val env = facServer.environment
 }
 

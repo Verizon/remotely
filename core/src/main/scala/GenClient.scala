@@ -16,6 +16,7 @@ object GenClient {
     val s: Signatures = c.prefix.tree match {
       case q"new $name($sig)" =>
         c.eval(c.Expr[Signatures](c.resetAllAttrs(q"{import remotely.codecs._; $sig}")))
+      case _ => c.abort(c.enclosingPosition, "GenClient must be used as an annotation.")
     }
 
     val signatures = s.signatures.toList.sorted.map { sig =>
@@ -31,6 +32,10 @@ object GenClient {
           ..$body
         }
       """
+      case _ => c.abort(
+        c.enclosingPosition,
+        "GenClient must annotate an object declaration."
+      )
     }
     c.Expr[Any](result)
   }

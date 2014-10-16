@@ -45,7 +45,6 @@ object Remote {
 
   /** Provides the syntax `expr.run(endpoint)`, where `endpoint: Endpoint`. */
   implicit class RunSyntax[A](self: Remote[A]) {
-
     /**
      * Run this `Remote[A]` at the given `Endpoint`. We require a `TypeTag[A]` and
      * `Codec[A]` in order to deserialize the response and check that it has the expected type.
@@ -56,6 +55,10 @@ object Remote {
     /** Call `self.run(at, M).apply(ctx)` to get back a `Task[A]`. */
     def runWithContext(at: Endpoint, ctx: Response.Context, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
       run(at, M).apply(ctx)
+
+    /** Run this with an empty context */
+    def runWithoutContext(at: Endpoint)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
+      runWithContext(at, Response.Context.empty)
   }
   implicit class Ap1Syntax[A,B](self: Remote[A => B]) {
     def apply(a: Remote[A]): Remote[B] =

@@ -39,7 +39,7 @@ Protocol(
 
 (Kind of cute that the `toString` for `Protocol` actually generates valid Scala.)
 
-We generate the client module from this `Protocol`, then paste it back into the REPL to evaluate it. If we were doing this for real, we'd obviously save the result to some file, and possibly add some further documentation to it.
+We can generate the client module source code from this `Protocol`, then paste it back into the REPL to evaluate it.
 
 ```Scala
 scala> facProtocol.generateClient("FactorialsClient")
@@ -69,6 +69,34 @@ import remotely.Remote
 defined module FactorialsClient
 ```
 
+We can also use the `GenClient` macro to generate the client object directly from the protocol's signatures. This is the recommended method of generating clients in your projects. Note that this _does not work in the REPL:_
+
+```Scala
+@GenClient(remotely.Protocol.empty
+  .codec[Int]
+  .specify[Int => Int]("fac").signatures) object FactorialsClient
+```
+
+Important: In a static macro annotation like `@GenClient(p.signatures)`, the protocol `p` must be a _statically_ available object (meaning available at compile time). So we have to either fully specify it inline as above, or we must build it in a project that is compiled separately.
+
+I.e. this does not work:
+
+```Scala
+import remotely._
+val p = Protocol.empty.codec[Int].specify[Int => Int]("fac")
+@GenClient(p.signatures) object FactorialsClient
+```
+
+But this does:
+
+```Scala
+@GenClient({
+  import remotely._
+  val p = Protocol.empty.codec[Int].specify[Int => Int]("fac")
+  p
+}) object FactorialsClient
+```
+
 By default, `Codec`-able primitives aren't promoted to `Remote` values:
 
 ```Scala
@@ -90,7 +118,14 @@ scala> FactorialsClient.fac(8)
 res3: remotely.Remote[Int] = fac(8)
 ```
 
-That takes care of the client. Now let's generate the server:
+That takes care of the client. Now let's generate the server. We can use the `GenServer` macro (recommended for your projects, but macros can't be used in the REPL):
+
+```Scala
+@GenServer(remotely.Protocol.empty.codec[Int].specify[Int => Int]("fac"))
+  abstract class FactorialsServer
+```
+
+We can also generate the source code for the server to try things out in the REPL:
 
 ```Scala
 scala> res0.generateServer("FactorialsServer")
@@ -98,7 +133,7 @@ res4: String =
 "
 import remotely.{Codecs,Decoders,Encoders,Environment,Values}
 
-trait FactorialsServer {
+abstract class FactorialsServer {
   // This interface is generated from a `Protocol`. Do not modify.
   def environment: Environment = Environment(
     Codecs(
@@ -110,7 +145,7 @@ trait FactorialsServer {
     populateDeclarations(Values.empty)
   )
 
-  def fac: Int => Int
+  def fac: Int => Response[Int]
   
   private def populateDeclarations(env: Values): Values = env
     .declare[Int => Int]("fac") { fac }
@@ -118,9 +153,9 @@ trait FactorialsServer {
   "
 ```
 
-Notice that `fac` (the name we specified in the `Protocol`) is abstract. All we have to do is implement this `trait`, we'll be forced to fill in the definition for `fac`, and the rest of the plumbing is done for us, in the `FactorialServer` generated `trait`.
+Notice that `fac` (the name we specified in the `Protocol`) is abstract. All we have to do is implement `FactorialsServer`, we'll be forced to fill in the definition for `fac`, and the rest of the plumbing is done for us in the `FactorialsServer` generated `class`.
 
-Let's evaluate that code we just generated. Again, it would be more realistic to place this generated code in a file.
+Let's evaluate that code we just generated. Again, in a real project you should use the `GenServer` macro instead.
 
 ```Scala
 scala> :pa
@@ -128,7 +163,7 @@ scala> :pa
 
 import remotely.{Codecs,Decoders,Encoders,Environment,Values}
 
-trait FactorialsServer {
+abstract class FactorialsServer {
   // This interface is generated from a `Protocol`. Do not modify.
   def environment: Environment = Environment(
     Codecs(
@@ -140,7 +175,7 @@ trait FactorialsServer {
     populateDeclarations(Values.empty)
   )
 
-  def fac: Int => Int
+  def fac: Int => Response[Int]
   
   private def populateDeclarations(env: Values): Values = env
     .declare[Int => Int]("fac") { fac }
@@ -165,7 +200,9 @@ scala> val theServer = new FactorialsServer {}
        val theServer = new FactorialsServer {}
                            ^
 
-scala> val theServer = new FactorialsServer { def fac = (i: Int) => (1 to i).product }
+scala> val theServer = new FactorialsServer {
+     |   def fac = (i: Int) => Response.now { (1 to i).product) }
+     | }
 theServer: FactorialsServer = $anon$1@6af562c9
 ```
 
@@ -176,7 +213,7 @@ To actually run the server, we can do:
 scala> val addr = new java.net.InetSocketAddress("localhost", 8080)
 addr: java.net.InetSocketAddress = localhost/127.0.0.1:8080
 
-scala> theServer.environment.serve(addr)
+scala> theServer.environment.serve(addr)()
 res6: () => Unit = <function0>
 
 scala> [INFO] [03/19/2014 11:14:31.271] [rpc-server-akka.actor.default-dispatcher-2] [akka://rpc-server/user/$a] server bound to: /127.0.0.1:8080
@@ -198,11 +235,11 @@ import akka.actor._
 scala> implicit val clientPool = ActorSystem("rpc-client")
 clientPool: akka.actor.ActorSystem = akka://rpc-client
 
-scala> res7.run(Endpoint.single(addr))
-res10: scalaz.concurrent.Task[Int] = scalaz.concurrent.Task@33a19e83
+scala> res7.runWithoutContext(Endpoint.single(addr))
+res10: remotely.Response[Int] = remotely.Response$$anon$3@7462823f
 ```
 
-Again, calling `run` on the `Remote[Int]` just converts to a `Task[Int]`. No networking occurs until we actually invoke `run` on that `Task`. When we do call `run` on the `Task`, this will use the [scodec library](https://github.com/scodec/scodec) to serialize the `fac(8)` expression, connect to the server using an `akka.io` client, and asynchronously await the server result. On the server side, the `akka.io`-based server will await requests, decode them to a `Remote` value, evaluate that remote value using the definition for `fac` provided by `theServer`, and send back the response.
+Again, calling `runWithoutContext` on the `Remote[Int]` just converts to a `Task[Int]`. No networking occurs until we actually invoke `run` on that `Task`. When we do call `run` on the `Task`, this will use the [scodec library](https://github.com/scodec/scodec) to serialize the `fac(8)` expression, connect to the server using an `akka.io` client, and asynchronously await the server result. On the server side, the `akka.io`-based server will await requests, decode them to a `Remote` value, evaluate that remote value using the definition for `fac` provided by `theServer`, and send back the response.
 
 ```Scala
 scala> res10.run
@@ -228,7 +265,7 @@ Finally, there are several possible failure modes, and where possible, the serve
 * Server may fail during evaluation. In this case, the stack trace and message are sent back to the client.
 * Server may fail during encoding the response. In this case, the server reports the encoding error message produced by scodec.
 
-Here are couple examples of these error conditions:
+Here are some examples of these error conditions:
 
 ```
 java.lang.Exception: remotely.Server$Error: [decoding] server does not have deserializers for:
