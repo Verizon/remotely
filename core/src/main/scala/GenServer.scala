@@ -22,6 +22,7 @@ object GenServer {
     val p:Protocol = c.prefix.tree match {
       case q"new $name($protocol)" =>
         c.eval(c.Expr[Protocol](c.resetAllAttrs(q"{import remotely.codecs._; $protocol}")))
+      case _ => c.abort(c.enclosingPosition, "GenServer must be used as an annotation.")
     }
 
     def genSig(name: String, typ: c.Tree) =
@@ -72,6 +73,10 @@ object GenServer {
               ..$body
             }
           """
+        case _ => c.abort(
+          c.enclosingPosition,
+          "GenServer must annotate an abstract class declaration."
+        )
       }
     }
     c.Expr[Any](result)
