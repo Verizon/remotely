@@ -43,14 +43,9 @@ case class Signatures(signatures: Set[String]) {
     // NB: this regex is too simplistic to work for types like `A => (B => C)`,
     // but we don't have to worry about these types as a remote function cannot
     // return a function type in its result (as functions cannot be encoded and sent over wire!)
-    val Arrow = "(.*)=>(.*)".r
-    def wrapResponse(typename: String): String = typename match {
-      case Arrow(l,r) => s"$l=> Response[${r.trim}]"
-      case _ => s"Response[$typename]"
-    }
     def emitSignature(s: String): String = {
       val (name, tname) = Signatures.split(s)
-      s"def $name: ${wrapResponse(tname)}"
+      s"def $name: ${Signatures.wrapResponse(tname)}"
     }
     def emitDeclaration(s: String): String = {
       val (name, tname) = Signatures.split(s)
@@ -69,10 +64,16 @@ case class Signatures(signatures: Set[String]) {
 }
 
 object Signatures {
+  val Arrow = "(.*)=>(.*)".r
+  private[remotely] def wrapResponse(typename: String): String = typename match {
+    case Arrow(l,r) => s"$l=> Response[${r.trim}]"
+    case _ => s"Response[$typename]"
+  }
+
   val empty = Signatures(Set())
 
   // converts "sum: List[Int] => Int" to ("sum", "List[Int] => Int")
-  private def split(typedName: String): (String,String) = {
+  private[remotely] def split(typedName: String): (String,String) = {
     val parts = typedName.split(':').toIndexedSeq
     val name = parts.init.mkString(":").trim
     val typename = parts.last.trim

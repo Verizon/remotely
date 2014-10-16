@@ -32,7 +32,7 @@ case class Protocol(codecs: Codecs, signatures: Signatures) {
   |import remotely.{Codecs,Environment,Response,Values}
   |import remotely.codecs._
   |
-  |trait $traitName {
+  |abstract class $traitName {
   |  // This interface is generated from a `Protocol`. Do not modify.
   |  def environment: Environment = Environment(
   |${Signatures.indent("    ")(codecs.pretty)},
