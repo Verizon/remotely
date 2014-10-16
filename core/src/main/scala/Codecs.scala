@@ -8,7 +8,7 @@ case class Codecs(codecs: Map[String,Codec[Any]]) {
     val name = Remote.toTag(implicitly[TypeTag[A]])
     this.copy(codecs = codecs + (name -> Codec[A].asInstanceOf[Codec[Any]]))
   }
-    
+
 
   def ++(c: Codecs): Codecs = Codecs(codecs ++ c.codecs)
 
