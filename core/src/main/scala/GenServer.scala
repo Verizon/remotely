@@ -42,21 +42,16 @@ object GenServer {
     }
 
     val codecs =
-      q"""Codecs(
-        ${ p.decoders.keySet.toList.sorted.foldLeft(q"Decoders.empty":c.Tree)((c, d) =>
-          q"$c.decoder[${Ident(newTypeName(d))}]"
-        )},
-        ${ p.encoders.keySet.toList.sorted.foldLeft(q"Encoders.empty":c.Tree)((c, e) =>
-          q"$c.encoder[${Ident(newTypeName(e))}]"
-        )}
-      )"""
+      q"""${ p.codecs.keySet.toList.sorted.foldLeft(q"Codecs.empty":c.Tree)((c, d) =>
+        q"$c.codec[${Ident(newTypeName(d))}]"
+      )}"""
 
     val result = {
       annottees.map(_.tree).toList match {
         case q"abstract class $name extends ..$parents { ..$body }" :: Nil =>
           q"""
             abstract class $name extends ..$parents {
-              import remotely.{Codecs,Decoders,Encoders,Environment,Response,Values}
+              import remotely.{Codecs,Environment,Response,Values}
               import remotely.codecs._
 
               def environment: Environment = Environment(
