@@ -1,0 +1,33 @@
+/*****************************************************************************/
+/*
+/* OnCue site alterations
+/*
+/*****************************************************************************/
+
+header ol {
+  list-style-type: none;
+  padding-left: 0;
+  margin-left: 0;
+}
+header ol li {
+  width: 100%;
+  /*height:40px;*/
+  margin: 0;
+  padding: 6px 0 6px 0;
+}
+header ol li ol {
+  margin-bottom: 0;
+}
+header ol li ol li {
+  width: 100%;
+  padding-left: 6%;
+}
+section img {
+  border-color: #ccc;
+  border-width: 1px;
+  border-style: solid;
+  padding: 6px;
+}
+.red {
+  color: red;
+}
