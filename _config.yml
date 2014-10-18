@@ -1,6 +1,6 @@
 name: Remotely Documentation
 markdown: redcarpet
 highlighter: pygments
-# baseurl: "/pages/intelmedia/remotely/"
+baseurl: "/pages/intelmedia/remotely/"
 # for local development, switch the above with the below
-baseurl: "/"
+# baseurl: "/"
