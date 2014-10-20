@@ -80,5 +80,10 @@ libraryDependencies += "oncue.svc.remotely" %% "core" % "x.x.+"
 
 ### Protocol Definition
 
+The first thing that *Remotely* needs is to define a "protocol". A protocol is essentially a definition of the runtime contracts this server should enforce on callers. Consider this example:
 
+```
+@GenServer(remotely.Protocol.empty.codec[Int].specify[Int => Int]("fac"))
+  abstract class FacServer
+```
 
