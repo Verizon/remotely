@@ -13,6 +13,8 @@ import codecs._
 @GenClient(remotely.Protocol.empty.codec[Int].specify[Int => Int]("fac").signatures)
   object FacClient
 
+@GenServer(remotely.Protocol.empty.codec[List[Int]]) abstract class Foo
+
 object TestProtocol {
 
   // We can make a server

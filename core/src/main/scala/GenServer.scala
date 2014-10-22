@@ -53,8 +53,8 @@ object GenServer {
 
     // Generates an expression that evaluates to the codecs specified by the protocol.
     val codecs =
-      q"""${ p.codecs.keySet.toList.sorted.foldLeft(q"Codecs.empty":c.Tree)((c, d) =>
-        q"$c.codec[${Ident(newTypeName(d))}]"
+      q"""${ p.codecs.keySet.toList.sorted.foldLeft(q"Codecs.empty":c.Tree)((dec, d) =>
+        q"$dec.codec[${parseType(c)(d)}]"
       )}"""
 
     // Generate the actual abstract class with the environment and method defs generated above.
