@@ -126,6 +126,8 @@ class FactorialServer0 extends FactorialServer {
 
 ```
 
+The `GenServer` macro does require all the FQCN of all the inputs, but provided you organize your project in the manner described earlier in this document, there wont be able problems as the protocol compilation unit will already be total.
+
 In a similar fashion, clients are also very simple. The difference here is that clients are fully complete, and do not require any implementation as the function arguments defined in the protocol are entirely known at compile time.
 
 ```
@@ -140,6 +142,83 @@ object FactorialClient
 
 ``` 
 
+That's all that is needed to define both a client and a server. 
+
+### Putting it Together
+
+With everything defined, you can now make choices about how best to wire all the things together. For this getting started guide we'll focus on a simple implementation, but the detailed docuemtantion on this site covers lots more information on endpoints, circuit breakers, monitoring, TLS configuration etc.
+
+Here's the `main` for the server side:
+
+```
+package oncue.svc.example
+
+import java.net.InetSocketAddress
+import remotely._, codecs._
+
+object Main {
+
+  def main(args: Array[String]): Unit = {
+  
+    val address  = new InetSocketAddress("localhost", 8080)
+    
+    val service = new FactorialServer0
+    
+    val env = service.environment
+
+    val shutdown = env.serve(address)(Monitoring.empty)
+
+  }
+}
+```
+
+This is super straightforward, but lets step through the values one by one. 
+
+* `address`: The network location the server process will bind too on the host machine.
+
+* `service`: An instance of the server implementation (which in turn implements the macro-generated interface based on the protocol)
+
+* `env`: For any given service implementation, an `Environment` can be derived from it. Unlike the protocol implementaiton itself, `Environemnt` is a concrete thing that can be bound and executed at runtime, where as `Protocol` is primarily a compile-time artifact.
+
+* `shutdown`: Upon calling `env.serve(...)` the process will bind to the specified address and yield a `() => Unit` function that can be used to shutdown the process if needed.
+
+The client on the other hand is simmilar:
+
+```
+package oncue.svc.example
+
+import java.net.InetSocketAddress
+import remotely._, codecs._
+
+object Main {
+  import Remote.implicits._
+
+  def main(args: Array[String]): Unit = {
+
+    val address  = new InetSocketAddress("localhost", 8080)
+
+    val system = akka.actor.ActorSystem("rpc-client")
+
+    val endpoint = Endpoint.single(address)(system)
+
+    val f = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
+	
+	// then at the edge of the world
+    f.runWithoutContext(endpoint)
+     .map(println(_))
+     .runAsync(_ => ())
+  }
+}
+
+```
+
+Whilst `address` is the same value from the server, the typical case here of course is that the server and the client are not in the same source file so i've repeated it here for completeness. Let's explore the other values:
+
+* `system`: This is the underlying Akka system used to power the Akka IO networking. This is mandatory and provides the settings nessicary to control the performance of the client (thread pooling, backoff etc)
+
+* `endpoint`: An `Endpoint` is an abstraction over callable service locations. Whilst the `Endpoint` object has a range of combinators, for this simple example we simply construct a fixed, static, single location. More information can be found in the [detailed documentation](http://)
+
+* `f`: Application of the remote function reference. Here we pass in the arguments needed by the remote function, and at compile time you will be forced to ensure that you have a `Codec` for all the arguments supplied, and said arguments must be in scope within that compilation unit. 
 
 
 
