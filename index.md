@@ -83,7 +83,7 @@ libraryDependencies += "oncue.svc.remotely" %% "core" % "x.x.+"
 The first thing that *Remotely* needs is to define a "protocol". A protocol is essentially a definition of the runtime contracts this server should enforce on callers. Consider this example from `rpc-protocol/src/main/scala/protocol.scala`:
 
 ```
-package oncue.svc.yourproj
+package oncue.svc.example
 
 import remotely._, codecs._
 
@@ -110,17 +110,17 @@ More information on defining complex protocols can be found in the XXXXXXXX sect
 *Remotely* makes use of compile-time macros to build out interfaces for server implementations and client objects. Given that your service `Protocol` is defined in the `rpc-protocol` module, our dependant `rpc` module can access that protocol as a total value, enabling us to generate servers and clients. Here's an example:
 
 ```
-package oncue.svc.yourproj
-
-// NB: The GenServer macro needs to receive the FQN of all types, or import them
-// explicitly. The target of the macro needs to be an abstract class.
-@GenServer(oncue.svc.yourproj.protocol.definition) 
-abstract class FactorialServer
+package oncue.svc.example
 
 import remotely._
 
+// NB: The GenServer macro needs to receive the FQN of all types, or import them
+// explicitly. The target of the macro needs to be an abstract class.
+@GenServer(oncue.svc.example.protocol.definition)
+abstract class FactorialServer
+
 class FactorialServer0 extends FactorialServer {
-  val factorial: Int => Int = n => 
+  val factorial: Int => Response[Int] = n =>
     Response.now { (1 to n).product }
 }
 
@@ -129,11 +129,13 @@ class FactorialServer0 extends FactorialServer {
 In a similar fashion, clients are also very simple. The difference here is that clients are fully complete, and do not require any implementation as the function arguments defined in the protocol are entirely known at compile time.
 
 ```
-package oncue.svc.yourproj
+package oncue.svc.example
+
+import remotely._
 
 // The `GenClient` macro needs to receive the FQN of all types, or import them
 // explicitly. The target needs to be an object declaration.
-@GenClient(oncue.svc.yourproj.protocol.definition.signatures) 
+@GenClient(oncue.svc.example.protocol.definition.signatures)
 object FactorialClient
 
 ``` 
