@@ -20,3 +20,4 @@ catapult/
 # vim specific
 *~
 tags
+_site

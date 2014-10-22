@@ -80,10 +80,68 @@ libraryDependencies += "oncue.svc.remotely" %% "core" % "x.x.+"
 
 ### Protocol Definition
 
-The first thing that *Remotely* needs is to define a "protocol". A protocol is essentially a definition of the runtime contracts this server should enforce on callers. Consider this example:
+The first thing that *Remotely* needs is to define a "protocol". A protocol is essentially a definition of the runtime contracts this server should enforce on callers. Consider this example from `rpc-protocol/src/main/scala/protocol.scala`:
 
 ```
-@GenServer(remotely.Protocol.empty.codec[Int].specify[Int => Int]("fac"))
-  abstract class FacServer
+package oncue.svc.yourproj
+
+import remotely._, codecs._
+
+object protocol {
+  val definition = Protocol.empty
+    .codec[Int]
+    .specify[Int => Int]("factorial")
+}
+
 ```
+
+Protocols are the core of the remotely project. They represent the contract between the client and the server, and then define all the plumbing constrains needed to make that service work properly. The protocol object supports the following operations:
+
+* `empty`: create a new, empty protocol as a starting point for building out a service contract.
+
+* `codec`: require a `Codec` for the specified type. If the relevant `Codec` cannot be found, you will either have to import one or define your own accordingly. By default, *Remotely* comes with implementations for `String`, `Int` etc - the vast majority of default types you might need. You can however still define `Codec` implementations for any of your own structures as needed.
+
+* `specify`: define a function that the contract will have to implement. In our example, we want to expose a "factorial" function that will take an `Int` and return an `Int`; this is defined using standard Scala function type definitions. 
+
+More information on defining complex protocols can be found in the XXXXXXXX section.
+
+### Server & Client Definition
+
+*Remotely* makes use of compile-time macros to build out interfaces for server implementations and client objects. Given that your service `Protocol` is defined in the `rpc-protocol` module, our dependant `rpc` module can access that protocol as a total value, enabling us to generate servers and clients. Here's an example:
+
+```
+package oncue.svc.yourproj
+
+// NB: The GenServer macro needs to receive the FQN of all types, or import them
+// explicitly. The target of the macro needs to be an abstract class.
+@GenServer(oncue.svc.yourproj.protocol.definition) 
+abstract class FactorialServer
+
+import remotely._
+
+class FactorialServer0 extends FactorialServer {
+  val factorial: Int => Int = n => 
+    Response.now { (1 to n).product }
+}
+
+```
+
+In a similar fashion, clients are also very simple. The difference here is that clients are fully complete, and do not require any implementation as the function arguments defined in the protocol are entirely known at compile time.
+
+```
+package oncue.svc.yourproj
+
+// The `GenClient` macro needs to receive the FQN of all types, or import them
+// explicitly. The target needs to be an object declaration.
+@GenClient(oncue.svc.yourproj.protocol.definition.signatures) 
+object FactorialClient
+
+``` 
+
+
+
+
+
+
+
 
