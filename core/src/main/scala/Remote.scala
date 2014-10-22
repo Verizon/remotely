@@ -177,7 +177,10 @@ object Remote {
 
   def toTag[A:TypeTag]: String = {
     val tt = typeTag[A]
-    tt.tpe.toString
+    val result = tt.tpe.toString
+    if(result.startsWith("java.lang.")) result.drop(10)
+    else if (result.startsWith("scala.")) result.drop(6)
+    else result
   }
 
   def nameToTag[A:TypeTag](s: String): String =
