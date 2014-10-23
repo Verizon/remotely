@@ -187,6 +187,7 @@ The client on the other hand is simmilar:
 ```
 package oncue.svc.example
 
+import scalaz.concurrent.Task
 import java.net.InetSocketAddress
 import remotely._, codecs._
 
@@ -201,12 +202,12 @@ object Main {
 
     val endpoint = Endpoint.single(address)(system)
 
-    val f = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
+    val f: Remote[Int] = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
 	
-	// then at the edge of the world
-    f.runWithoutContext(endpoint)
-     .map(println(_))
-     .runAsync(_ => ())
+	val task: Task[Int] = f.runWithoutContext(endpoint)
+    
+    // then at the edge of the world, run it and print to the console
+    task.map(println(_)).runAsync(_ => ())
   }
 }
 
@@ -218,8 +219,11 @@ Whilst `address` is the same value from the server, the typical case here of cou
 
 * `endpoint`: An `Endpoint` is an abstraction over callable service locations. Whilst the `Endpoint` object has a range of combinators, for this simple example we simply construct a fixed, static, single location. More information can be found in the [detailed documentation](http://)
 
-* `f`: Application of the remote function reference. Here we pass in the arguments needed by the remote function, and at compile time you will be forced to ensure that you have a `Codec` for all the arguments supplied, and said arguments must be in scope within that compilation unit. 
+* `f`: Application of the remote function reference. Here we pass in the arguments needed by the remote function, and at compile time you will be forced to ensure that you have a `Codec` for all the arguments supplied, and said arguments must be in scope within that compilation unit (i.e. if the remote service uses custom structures you'll need to ensure you import those accordingly). At this point *no request has actually been made over the wire*.
 
+* `task`: In order to do something useful with the `Remote` instance its nessicary to make a choice about what "context" this remote operation will be executed in. Again, this is covered specificly in the [detailed documentation](http://), but for now we shall elect to run without a context, by way of the `runWithoutContext` function. There still has been no network I/O occour; we have simply applied the function operation and transformed it into a scalaz `Task`.
+
+Finally, the function does network I/O to talk to the server when the `Task` is executed (using the `runAsync` method here). You can learn more about the `Task` monad [on this blog post](http://timperrett.com/2014/07/20/scalaz-task-the-missing-documentation/).
 
 
 
