@@ -8,6 +8,8 @@ section: "home"
 
 Remotely is an elegant, reasonable machine communication system for functional programmers. Remotely is fast, lightweight and models network operations as explicit monadic computations.
 
+<a name="rationale"></a>
+
 ## Rationale
 
 Before talking about how to *use* Remotely, its probably worth discussing why it is we felt the need to make this project in the first place. For large distributed service platforms there is typically a large degree of inter-service communication that happens internally before returning control to the caller. In this scenario, several factors become really important: 
@@ -17,6 +19,8 @@ Before talking about how to *use* Remotely, its probably worth discussing why it
 * **Safety**. Something that is distinctly missing from HTTP+JSON services is the ability to know - when moving between revisions of a dependant API - is if the given API is compatible or not with the existing mechanism of calling that service. Typically this kind of meta information ends up being encoded in a version number, or some other out-of-band knowledge. This often results in runtime failures and incompatibility between services unless exceptional care is taken by the service owner not to break their API in any way. Using *Remotely* we build the protocols just like any other compile-time artifact; said artefacts are then published to Nexus and depended upon as build-time contracts. With this base it is then easy to build all runtime dependant services as downstream jobs during the build phase, which gives you a build-time safety check, enabling engineers to get early visibility about compatibility within their service API (incompatibility in an API will result in a build-time failure).
 
 * **Reuse**. In most typed-protocol definitions there is a low degree of reuse because the serialisation code does not compose. An example of this would be Thrift's protocol definitions: the definition contains all structures and values used by the client and server, and the entire world of needed files is generated at build time, even if that exact same structure (e.g tuples) is used by an adjacent service. Within *Remotely* we wanted to avoid this nasty code-generation step and instead rely on highly composable structures with their associated combinators to get the granularity and level of reuse we wanted.
+
+<a name="getting-started"></a>
 
 ## Getting Started
 

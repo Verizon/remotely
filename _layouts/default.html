@@ -26,9 +26,37 @@
         <ol>
           <!-- home -->
           <li><a href="{{ site.baseurl }}">Home</a></li>
-          <li><a href="{{ site.baseurl }}#design">Design</a></li>
-          <li><a href="{{ site.baseurl }}#usage">Getting Started</a></li>
-          <li><a href="{{ site.baseurl }}#migration">Migration Path</a></li>
+          {% if page.section == 'home' %}
+            <li>
+              <ol>
+                <li><a href="{{ site.baseurl }}#rationale">Rationale</a></li>
+                <li><a href="{{ site.baseurl }}#getting-started">Getting Started</a></li>
+              </ol>
+            </li>
+          {% endif %}
+
+          <li><a href="{{ site.baseurl }}manual.html">Manual</a></li>
+          {% if page.section == 'manual' %}
+            <li>
+              <ol>
+                <li><a href="{{ site.baseurl }}manual.html#endpoint">Endpoint</a></li>
+                <li><a href="{{ site.baseurl }}manual.html#endpoint-circuit">Circuit Breakers</a></li>
+                <li><a href="{{ site.baseurl }}manual.html#endpoint-loadbalencing">Load Balencing</a></li>
+              </ol>
+            </li>
+          {% endif %}
+
+
+          <li><a href="{{ site.baseurl }}internals.html">Internals</a></li>
+          {% if page.section == 'internals' %}
+            <li>
+              <ol>
+                <li><a href="{{ site.baseurl }}internals.html#serialization">Serialization</a></li>
+                <li><a href="{{ site.baseurl }}internals.html#networking">Networking</a></li>
+              </ol>
+            </li>
+          {% endif %}
+
 
         <hr />
 

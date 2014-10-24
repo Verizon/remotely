@@ -1,4 +1,4 @@
 name: Remotely Documentation
 markdown: redcarpet
 highlighter: pygments
-baseurl: "/pages/intelmedia/remotely/"
+baseurl: "/"
