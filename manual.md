@@ -104,6 +104,12 @@ Now that you have a `Remote` function and you know how to apply arguments (apply
 
 Using these basic combinators, we can now execute the `Remote` against a given endpoint. In order to do this, you have to elect what "context" the remote call will carry with it. 
 
+<a name="resiliancy"></a>
+
+### Resiliancy
+
+`Endpoint.roundRobin`
+
 <a name="execution-context"></a>
 
 ### Execution Context
@@ -143,22 +149,45 @@ If you elect to use a `Context` or not, the result is the same from the client p
 
 ### Monitoring
 
+It's also worth noting at this point that when running a `Remote` with `runWithContext` or plain `run`, you have the option to pass in a `remotely.Monitoring` instance which will then be used to pass-in sampling information about the requests and responses being serviced by a *Remotely* service. Let's consider the `Monitoring` interface:
 
-// TODO
+```
 
+trait Monitoring { self =>
+  /**
+   * Invoked with the request, the request context,
+   * the set of names referenced by that request,
+   * the result, and how long it took.
+   */
+  def handled[A](
+    ctx: Response.Context,
+    req: Remote[A],
+    references: Iterable[String],
+    result: Throwable \/ A,
+    took: Duration): Unit
 
-<a name="circuit-breakers"></a>
+  /**
+   * Return a new `Monitoring` instance that send statistics
+   * to both `this` and `other`.
+   */
+  def ++(other: Monitoring): Monitoring
 
-### Circuit Breakers
+  /**
+   * Returns a `Monitoring` instance that records at most one
+   * update for `every` elapsed duration.
+   */
+  def sample(every: Duration): Monitoring
+}
+```
 
+As you can see, the interface is incredibly simple, and it serves two primary functions: 
 
-<a name="load-balencing"></a>
+1. To allow logging or tracing information to be dumped to a thrid-party system via the `handled` function, which contains the entire round-trip information.
 
-### Load Balencing
-
-`Endpoint.roundRobin`
-
+1. To provide sampling information about the duration of requests being serviced by this endpoint implementation. 
 
 <a name="responses"></a>
 
-### Responses
+## Responses
+
+When implementing a server...
