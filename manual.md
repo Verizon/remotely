@@ -94,7 +94,7 @@ With this in scope, these functions will be automatically applied. One word of c
 
 ## Endpoints
 
-Now that you have a `Remote` function and you know how to apply arguments (applying the function inside the `Remote` monad), we need to explore the next important primitive in *Remotely*: `Endpoint`. An `Endpoint` models the network locaiton of a specific server on a specific TCP port which can service function calls. Internally, `Endpoint` instances are modeled as a stream of `Endpoint`; doing this allows for a range of flexiblity around circuit breaking and load balencing. Users can either embrace this `Process[Task, Endpoint]` directly, or use some of the convenience functions outlined below:
+Now that you have a `Remote` function and you know how to apply arguments (applying the function inside the `Remote` monad), we need to explore the next important primitive in *Remotely*: `Endpoint`. An `Endpoint` models the network locaiton of a specific server on a specific TCP port which can service function calls. Internally, `Endpoint` instances are modeled as a stream of `Endpoint`; doing this allows for a range of flexiblity around circuit breaking and load balencing. Users can either embrace this `Process[Task, Endpoint.Connection]` directly, or use some of the convenience functions outlined below:
 
 * `Endpoint.empty`: create an empty endpoint, with no reachable locations in the stream.
 
@@ -102,21 +102,39 @@ Now that you have a `Remote` function and you know how to apply arguments (apply
 
 * `Endpoint.singleSSL`: Does the same as `single`, with the addition of using transport layer security (specifically, TLS1.2) 
 
-
-
-
-
-### Circuit Breakers
-
-### Load Balencing
-
+Using these basic combinators, we can now execute the `Remote` against a given endpoint. In order to do this, you have to elect what "context" the remote call will carry with it. 
 
 <a name="execution-context"></a>
 
-## Execution Context
+### Execution Context
 
-TODO CB
+A `Context` is essentially a primitive data type that allows a given function invokation to carry along some metadata. When designing *Remotely*, we envisinged the following use cases:
+
+* *Transitive Request Graphing*: in large systems, it becomes extreamly useful to understand which instances of any given service is actually taking traffic and what the call graph actually is from a given originating caller. In this frame, `Context` comes with a stack of request IDs which are generated on each roundtrip, and if service A calls service B, the caller of A will recive a stack of IDs that detnote the call all the way to B. 
+
+* *Experimentation*: 
+
+
+With these basic functions defined, we can build some higher level logic to gain resiliance and scability features which we cover in the next few sections. 
 
 
 
-## Responses
+
+<a name="circuit-breakers"></a>
+
+### Circuit Breakers
+
+
+<a name="load-balencing"></a>
+
+### Load Balencing
+
+`Endpoint.roundRobin`
+
+
+
+
+
+<a name="responses"></a>
+
+### Responses
