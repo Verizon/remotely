@@ -110,14 +110,41 @@ Using these basic combinators, we can now execute the `Remote` against a given e
 
 A `Context` is essentially a primitive data type that allows a given function invokation to carry along some metadata. When designing *Remotely*, we envisinged the following use cases:
 
-* *Transitive Request Graphing*: in large systems, it becomes extreamly useful to understand which instances of any given service is actually taking traffic and what the call graph actually is from a given originating caller. In this frame, `Context` comes with a stack of request IDs which are generated on each roundtrip, and if service A calls service B, the caller of A will recive a stack of IDs that detnote the call all the way to B. 
+* *Transitive Request Graphing*: in large systems, it becomes extreamly useful to understand which instances of any given service is actually taking traffic and what the call graph actually is from a given originating caller. In this frame, `Context` comes with a stack of request IDs which are generated on each roundtrip, and if service A calls service B, the caller of A will recive a stack of IDs that detnote the call all the way to B. Needless to say, this is incredibly useful for tracing, monitoring and debugging request graphs. 
 
-* *Experimentation*: 
+* *Experimentation*: The `Context` supports an arbitrary `Map[String,String]` of data that can be propagated along with the request for the purposes of experimentation (for example, an A/B testing token).
+
+Given any `Remote` function that you have applied, you can opt to execute it against an `Endpoint` with or without a context. Consider the following examples:
+
+```
+import remotely._, codecs._, Response.Context
+
+val address  = new InetSocketAddress("localhost", 8080)
+
+val endpoint = Endpoint.single(address)(system)
+
+val f: Remote[Int] = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
+
+/******** without a context ********/
+
+val t1: Task[Int] = f.runWithoutContext(endpoint)
+
+/******** with a context ********/
+
+val ctx = Context.empty.entries("foo" -> "bar")
+
+val t2: Task[Int] = f.runWithContext(endpoint, ctx)
+
+```
+
+If you elect to use a `Context` or not, the result is the same from the client perspecitve - contexts are simply a runtime value that can be propagated for use by the server or not.
+
+<a name="monitoring"></a>
+
+### Monitoring
 
 
-With these basic functions defined, we can build some higher level logic to gain resiliance and scability features which we cover in the next few sections. 
-
-
+// TODO
 
 
 <a name="circuit-breakers"></a>
@@ -130,9 +157,6 @@ With these basic functions defined, we can build some higher level logic to gain
 ### Load Balencing
 
 `Endpoint.roundRobin`
-
-
-
 
 
 <a name="responses"></a>
