@@ -139,7 +139,7 @@ object Endpoint {
       import context.system
 
       override def preStart() =
-        IO(Tcp)(context.system) ! Tcp.Connect(host)
+        IO(Tcp)(context.system) ! Tcp.Connect(host, options = Tcp.SO.KeepAlive(on = true) :: Nil)
 
       // PC: This seemingly does nothing - I'd expect child actors to report errors here,
       // but they don't for some reason
@@ -157,12 +157,14 @@ object Endpoint {
           context stop self
         case c @ Tcp.Connected(remote, local) =>
           val connection = sender
-          val core = context.system.actorOf(Props(new Actor with ActorLogging { def receive = {
-           case Tcp.Received(data) => src.enqueueOne(ByteVector(data.toArray)).run
-            case Tcp.Aborted => src.fail(new Exception("connection aborted")).run; normal = true
-            case Tcp.ErrorClosed(msg) => src.fail(new Exception("I/O error: " + msg)).run; normal = true
-            case _ : Tcp.ConnectionClosed => src.close.run; normal = true; context stop self
-          }}))
+          val core = context.system.actorOf(Props(new Actor with ActorLogging { 
+            def receive = {
+              case Tcp.Received(data) => src.enqueueOne(ByteVector(data.toArray)).run
+              case Tcp.Aborted => src.fail(new Exception("connection aborted")).run; normal = true
+              case Tcp.ErrorClosed(msg) => src.fail(new Exception("I/O error: " + msg)).run; normal = true
+              case _ : Tcp.ConnectionClosed => src.close.run; normal = true; context stop self
+            }
+          }))
 
           val (writeBytes, pipeline) = createEngine.map { engine =>
             val sslEngine = engine()
@@ -198,8 +200,8 @@ object Endpoint {
     queue
   }
 
-  def streamExchange(exch: Exchange[ByteVector,ByteVector]): Process[Task,ByteVector] => Process[Task,ByteVector] =
-    bytes => bytes.to(exch.write).drain ++ exch.read
+  // def streamExchange(exch: Exchange[ByteVector,ByteVector]): Process[Task,ByteVector] => Process[Task,ByteVector] =
+  //   bytes => bytes.to(exch.write).drain ++ exch.read
 
   def connect(host: InetSocketAddress): Process[Task, Exchange[ByteVector, ByteVector]] =
     Process.eval(Task.delay(new Socket(host.getAddress, host.getPort))).map { socket =>
