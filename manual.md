@@ -108,7 +108,20 @@ Using these basic combinators, we can now execute the `Remote` against a given e
 
 ### Resiliancy
 
-`Endpoint.roundRobin`
+In addition to the simpler functions outlined above, we have also built in some resilience functions around `Endpoint` to make working with large systems more practical. One of the most important resiliance functions on `Endpoint` is `circuitBroken`. This adds a [circuit breaker](http://martinfowler.com/bliki/CircuitBreaker.html) to the endpoint. Consider the following usage example:
+
+```
+// ADD EXAMPLE HERE
+```
+
+The followig are the primary functions of interest on the `Endpoint` object:
+
+* `Endpoint.roundRobin`: Given a set of `Endpoint`, *Remotely* can execute client-side load balencing when selecting a back-end to invoke over the network. Whilst the default is a simple round-robin, *Remotely* is plugable enough such that you could implement a much more sophisticated distribution algorithem without too much difficulty at all.
+
+* `Endpoint.failoverChain`
+
+* `Endpoint.uber`
+
 
 <a name="execution-context"></a>
 
