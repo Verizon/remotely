@@ -18,7 +18,7 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress, ssl: Option[() =>
 
   override def preStart = {
     log.debug("server attempting to bind to: " + addr)
-    IO(Tcp) ! Tcp.Bind(self, addr)
+    IO(Tcp) ! Tcp.Bind(self, addr, options = Tcp.SO.KeepAlive(on = true) :: Nil)
   }
 
   override def postStop = {
