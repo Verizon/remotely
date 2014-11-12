@@ -4,6 +4,7 @@ import java.net.InetSocketAddress
 import org.scalacheck._
 import Prop._
 import scalaz.concurrent.Task
+import transport.akka._
 
 object RemoteSpec extends Properties("Remote") {
   import codecs._
@@ -23,7 +24,8 @@ object RemoteSpec extends Properties("Remote") {
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
   val addr = new InetSocketAddress("localhost", 8080)
   val server = env.serve(addr)(Monitoring.empty)
-  val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
+  val akkaTrans = AkkaTransport.single(clientPool,addr)
+  val loc: Endpoint = Endpoint.single(akkaTrans)
 
   val sum = Remote.ref[List[Int] => Int]("sum")
   val sumD = Remote.ref[List[Double] => Double]("sum")
@@ -114,6 +116,7 @@ object RemoteSpec extends Properties("Remote") {
   // NB: this property should always appear last, so it runs after all properties have run
   property("cleanup") = lazily {
     server()
+    akkaTrans.pool.close()
     clientPool.shutdown()
     true
   }

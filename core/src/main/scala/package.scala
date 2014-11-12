@@ -2,7 +2,7 @@
 package object remotely {
   import scala.concurrent.duration._
   import scala.reflect.runtime.universe.TypeTag
-  import scalaz.stream.Process
+  import scalaz.stream.{Process,Process1}
   import scalaz.concurrent.Task
   import scalaz.\/.{left,right}
   import scalaz.Monoid
@@ -32,13 +32,13 @@ package object remotely {
       )}
     Task.delay { System.nanoTime } flatMap { start =>
       for {
-        conn <- e.get
+//        conn <- e.get
         reqBits <- codecs.encodeRequest(r).apply(ctx)
         respBytes <- reportErrors(start) {
-          val reqBytestream = Process.emit(reqBits.toByteVector)//.pipe(Handler.enframe)
-          fullyRead(conn(reqBytestream).pipe(Process.await1[ByteVector]/*Handler.deframe*/)) // we assume the server response is a framed stream
+          val reqBytestream = Process.emit(reqBits).pipe(enframe)
+          fullyRead(e(reqBytestream).pipe(Process.await1[BitVector]))
         }
-        resp <- reportErrors(start) { codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes.toBitVector)) }
+        resp <- reportErrors(start) { codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes)) }
         result <- resp.fold(
           { e =>
             val ex = ServerException(e)
@@ -59,6 +59,12 @@ package object remotely {
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)
 
-  private[remotely] def fullyRead(s: Process[Task,ByteVector]): Task[ByteVector] =
+  private[remotely] def fullyRead(s: Process[Task,BitVector]): Task[BitVector] =
     s.runFoldMap(identity)
+
+  private[remotely] def enframe: Process1[BitVector,BitVector] = {
+    Process.await1[BitVector].map { bs =>
+      codecs.int32.encodeValid(bs.size.toInt) ++ bs
+    } fby Process.emit(codecs.int32.encodeValid(0))
+  }
 }

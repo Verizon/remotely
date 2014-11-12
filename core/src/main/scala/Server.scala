@@ -20,11 +20,13 @@ object Server {
    * use the `monitoring` argument if you wish to observe
    * these failures.
    */
-  def handle(env: Environment)(request: BitVector)(monitoring: Monitoring): Task[BitVector] =
+  def handle(env: Environment)(request: BitVector)(monitoring: Monitoring): Task[BitVector] = {
+
     Task.delay(System.nanoTime).flatMap { startNanos => Task.suspend {
       // decode the request from the environment
-      val (trailing, (respEncoder,ctx,r)) =
-        codecs.requestDecoder(env).decode(request)
+                                           val (trailing, (respEncoder,ctx,r)) =
+
+                                           codecs.requestDecoder(env).decode(request)
               .fold(e => throw new Error(e), identity)
       val expected = Remote.refs(r)
       val unknown = (expected -- env.values.keySet).toList
@@ -57,7 +59,8 @@ object Server {
     }}.attempt.flatMap { _.fold(
       e => toTask(codecs.responseEncoder(codecs.utf8).encode(left(formatThrowable(e)))),
       bits => Task.now(bits)
-    )}
+                        )}
+  }
 
   val P = Process
 

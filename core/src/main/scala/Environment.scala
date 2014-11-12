@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 import javax.net.ssl.SSLEngine
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
-import scodec.bits.{ByteVector}
+import scodec.bits.{BitVector}
 import scalaz.stream.Process
 
 /**
@@ -29,9 +29,9 @@ case class Environment(codecs: Codecs, values: Values) {
   def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
     this.copy(codecs = codecs.codec[A])
 
-  /** Add the given codecs to this `Environment`, keeping existing codecs. */
-  def codecs(c: Codecs): Environment =
-    Environment(codecs ++ c, values)
+//  /** Add the given codecs to this `Environment`, keeping existing codecs. */
+//  def codecs(c: Codecs): Environment =
+//    Environment(codecs ++ c, values)
 
   /**
    * Modify the values inside this `Environment`, using the given function `f`.
@@ -48,9 +48,9 @@ case class Environment(codecs: Codecs, values: Values) {
     server.Handler { bytes =>
       // we assume the input is a framed stream, and encode the response(s)
       // as a framed stream as well
-      bytes pipe Process.await1[ByteVector] /*server.Handler.deframe*/ evalMap { bs =>
-        Server.handle(this)(bs.toBitVector)(monitoring).map(_.toByteVector)
-      } /*pipe server.Handler.enframe*/
+      bytes pipe Process.await1[BitVector] /*server.Handler.deframe*/ evalMap { bs =>
+        Server.handle(this)(bs)(monitoring)
+      } pipe enframe
     }
 
   /** Start an RPC server on the given port. */

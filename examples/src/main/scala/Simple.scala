@@ -45,6 +45,7 @@ object SimpleMain extends App {
 
   import Simple.{env,addr,sum}
   import Remote.implicits._
+  import transport.akka._
 
   println(env)
 
@@ -55,7 +56,7 @@ object SimpleMain extends App {
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
 
   val expr: Remote[Int] = sum(List(0,1,2,3,4))
-  val loc: Endpoint = Endpoint.single(addr) // takes ActorSystem implicitly
+  val loc: Endpoint = Endpoint.single(AkkaTransport.single(clientPool,addr)) // takes ActorSystem implicitly
   val result: Task[Int] = expr.runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
   // running a couple times just to see the latency improve for subsequent reqs

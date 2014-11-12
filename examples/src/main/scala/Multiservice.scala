@@ -5,6 +5,7 @@ import akka.actor._
 import codecs._
 import Remote.implicits._
 import scalaz.concurrent.Task
+import transport.akka._
 
 /**
  * This is a complete example of one service calling another service.
@@ -37,10 +38,11 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr1 = new java.net.InetSocketAddress("localhost", 8080)
+  val transport = AkkaTransport.single(clientPool, addr1)
   val stopA = env1.serve(addr1)(Monitoring.consoleLogger("[service-a]"))
 
   // And expose an `Endpoint` for making requests to this service
-  val serviceA: Endpoint = Endpoint.single(addr1)
+  val serviceA: Endpoint = Endpoint.single(transport)
 
   // Define a service exposing an `average` function, which calls `serviceA`.
   val env2 = Environment.empty
@@ -84,7 +86,7 @@ object Multiservice extends App {
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8081)
   val stopB = env2.serve(addr2)(Monitoring.consoleLogger("[service-b]"))
-  val serviceB: Endpoint = Endpoint.single(addr2)
+  val serviceB: Endpoint = Endpoint.single(AkkaTransport.single(clientPool, addr2))
 
   try {
     val ctx = Response.Context.empty ++ List("flux-capacitor" -> "great SCOTT!")

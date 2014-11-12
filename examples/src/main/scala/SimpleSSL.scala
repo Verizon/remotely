@@ -3,6 +3,7 @@ package examples
 
 import java.net.InetSocketAddress
 import scalaz.concurrent.Task
+import transport.akka._
 
 import codecs._
 
@@ -36,7 +37,7 @@ object SimpleSSL extends App {
 
   try {
     val expr: Remote[Int] = sum(List(0,1,2,3,4))
-    val loc: Endpoint = Endpoint.singleSSL(tls.client(clientSslProvider))(addr) // takes ActorSystem implicitly
+    val loc: Endpoint = Endpoint.single(AkkaTransport.singleSSL(tls.client(clientSslProvider))(clientPool,addr))
     val result: Task[Int] = expr.runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
     // running a couple times just to see the latency improve for subsequent reqs

@@ -246,61 +246,180 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
 trait TupleHelpers {
   implicit class BedazzledCodec[A](a: Codec[A]) {
     def ~~[B](b: Codec[B]): Tuple2Codec[A,B] =
-      new Tuple2Codec[A,B](a ~ b)
+      new Tuple2Codec[A,B](a, b)
   }
 
-  class Tuple2Codec[A,B](ab: Codec[(A,B)]) {
-    def ~~[C](c: Codec[C]): Tuple3Codec[A,B,C] = new Tuple3Codec(ab ~ c)
+  class Tuple2Codec[A,B](A: Codec[A], B: Codec[B]) extends Codec[(A,B)] {
+    def ~~[C](C: Codec[C]): Tuple3Codec[A,B,C] = new Tuple3Codec(A,B,C)
 
-    def pxmap[X](to: (A,B) => X,
-                 from: X => Option[(A,B)]) = ab.pxmap(to.tupled, from)
+    override def decode(bits: BitVector): String \/ (BitVector, (A,B)) = {
+      for {
+        aa <- A.decode(bits).leftMap("tuple2-1 from ${bits.size} bits -- " + _)
+                      (bits1,a) = aa
+        bb <- B.decode(bits1).leftMap("tuple2-2 from ${bits1.size} bits -- " + _)
+      } yield(bb._1, (a,bb._2))
+
+    }
+
+    override def encode(ab: (A,B)): String \/ BitVector =
+      for {
+        bits <- A.encode(ab._1)
+        bits2 <- B.encode(ab._2)
+      } yield bits ++ bits2
+
+    def pxmap[X](to: (A,B) => X, from: X => Option[(A,B)]): Codec[X] = this.pxmap(to.tupled, from)
   }
 
-  class Tuple3Codec[A,B,C](abc: Codec[((A,B),C)]) {
-    def ~~[D](d: Codec[D]): Tuple4Codec[A,B,C,D] = new Tuple4Codec(abc ~ d)
+  class Tuple3Codec[A,B,C](A: Codec[A], B: Codec[B], C: Codec[C]) extends Codec[(A,B,C)] {
+    def ~~[D](D: Codec[D]): Tuple4Codec[A,B,C,D] = new Tuple4Codec(A,B,C,D)
 
-    def pxmap[X](to: (A,B,C) => X,
-                 from: X => Option[(A,B,C)]) = abc.pxmap(
-      { case ((a,b),c) => to(a,b,c) },
-      from andThen { _.map(abc => ((abc._1, abc._2), abc._3)) }
-    )
+    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C)) = {
+      val x = for {
+        aa <- A.decode(bits)
+                      (bits1,a) = aa
+        bb <- B.decode(bits1)
+                      (bits2,b) = bb
+        cc <- C.decode(bits2)
+      } yield(cc._1, (a,b,cc._2))
+      x.leftMap(s"tuple3 from ${bits.size} bits -- " + _)
+    }
+
+    override def encode(abc: (A,B,C)): String \/ BitVector =
+      for {
+        bits <- A.encode(abc._1)
+        bits2 <- B.encode(abc._2)
+        bits3 <- C.encode(abc._3)
+      } yield bits ++ bits2 ++ bits3
+
+
+    def pxmap[X](to: (A,B,C) => X, from: X => Option[(A,B,C)]): Codec[X] = this.pxmap(to.tupled, from)
   }
 
-  class Tuple4Codec[A,B,C,D](abcd: Codec[(((A,B),C),D)]) {
-    def ~~[E](e: Codec[E]): Tuple5Codec[A,B,C,D,E] = new Tuple5Codec(abcd ~ e)
+  class Tuple4Codec[A,B,C,D](A: Codec[A], B: Codec[B], C: Codec[C], D: Codec[D]) extends Codec[(A,B,C,D)] {
+    def ~~[E](E: Codec[E]): Tuple5Codec[A,B,C,D,E] = new Tuple5Codec(A,B,C,D,E)
 
-    def pxmap[X](to: (A,B,C,D) => X,
-                 from: X => Option[(A,B,C,D)]) = abcd.pxmap(
-      { case (((a,b),c),d) => to(a,b,c,d) },
-      from andThen { _.map(abcd => (((abcd._1, abcd._2), abcd._3), abcd._4)) }
-    )
+    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C,D)) = {
+      val x = for {
+        aa <- A.decode(bits)
+                      (bits1,a) = aa
+        bb <- B.decode(bits1)
+                      (bits2,b) = bb
+        cc <- C.decode(bits2)
+                      (bits3,c) = cc
+        dd <- D.decode(bits3)
+      } yield (dd._1, (a,b,c,dd._2))
+
+      x.leftMap(s"tuple4 from ${bits.size} bits -- " + _)
+    }
+    override def encode(abcd: (A,B,C,D)): String \/ BitVector =
+      for {
+        bits <- A.encode(abcd._1)
+        bits2 <- B.encode(abcd._2)
+        bits3 <- C.encode(abcd._3)
+        bits4 <- D.encode(abcd._4)
+      } yield bits ++ bits2 ++ bits3 ++ bits4
+
+
+    def pxmap[X](to: (A,B,C,D) => X, from: X => Option[(A,B,C,D)]): Codec[X] = this.pxmap(to.tupled,from)
   }
 
-  class Tuple5Codec[A,B,C,D,E](abcde: Codec[((((A,B),C),D),E)]) {
-    def ~~[F](f: Codec[F]): Tuple6Codec[A,B,C,D,E,F] = new Tuple6Codec(abcde ~ f)
+  class Tuple5Codec[A,B,C,D,E](A: Codec[A], B: Codec[B], C: Codec[C], D: Codec[D], E: Codec[E]) extends Codec[(A,B,C,D,E)] {
+    def ~~[F](F: Codec[F]): Tuple6Codec[A,B,C,D,E,F] = new Tuple6Codec(A,B,C,D,E,F)
 
-    def pxmap[X](to: (A,B,C,D,E) => X,
-                 from: X => Option[(A,B,C,D,E)]) = abcde.pxmap(
-      { case ((((a,b),c),d),e) => to(a,b,c,d,e) },
-      from andThen { _.map(abcde => ((((abcde._1, abcde._2), abcde._3), abcde._4),abcde._5)) }
-    )
+    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C,D,E)) = {
+      val x = for {
+        aa <- A.decode(bits)
+                      (bits1,a) = aa
+        bb <- B.decode(bits1)
+                      (bits2,b) = bb
+        cc <- C.decode(bits2)
+                      (bits3,c) = cc
+        dd <- D.decode(bits3)
+                      (bits4,d) = dd
+        ee <- E.decode(bits4)
+      } yield (ee._1, (a,b,c,d,ee._2))
+      x.leftMap(s"tuple4 from ${bits.size} bits -- " + _)
+    }
+
+
+    override def encode(abcde: (A,B,C,D,E)): String \/ BitVector =
+      for {
+        bits <- A.encode(abcde._1)
+        bits2 <- B.encode(abcde._2)
+        bits3 <- C.encode(abcde._3)
+        bits4 <- D.encode(abcde._4)
+        bits5 <- E.encode(abcde._5)
+      } yield bits ++ bits2 ++ bits3 ++ bits4 ++ bits5
+
+    def pxmap[X](to: (A,B,C,D,E) => X, from: X => Option[(A,B,C,D,E)]): Codec[X] = this.pxmap(to.tupled,from)
+
   }
 
-  class Tuple6Codec[A,B,C,D,E,F](abcdef: Codec[(((((A,B),C),D),E),F)]) {
-    def ~~[G](g: Codec[G]): Tuple7Codec[A,B,C,D,E,F,G] = new Tuple7Codec(abcdef ~ g)
+  class Tuple6Codec[A,B,C,D,E,F](A: Codec[A], B: Codec[B], C: Codec[C], D: Codec[D], E: Codec[E], F: Codec[F]) extends Codec[(A,B,C,D,E,F)] {
+    def ~~[G](G: Codec[G]): Tuple7Codec[A,B,C,D,E,F,G] = new Tuple7Codec(A,B,C,D,E,F,G)
 
-    def pxmap[X](to: (A,B,C,D,E,F) => X,
-                 from: X => Option[(A,B,C,D,E,F)]) = abcdef.pxmap(
-      { case (((((a,b),c),d),e),f) => to(a,b,c,d,e,f) },
-      from andThen { _.map(abcdef => (((((abcdef._1, abcdef._2), abcdef._3), abcdef._4),abcdef._5),abcdef._6)) }
-    )
+    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C,D,E,F)) = {
+      val x = for {
+        aa <- A.decode(bits)
+                      (bits1,a) = aa
+        bb <- B.decode(bits1)
+                      (bits2,b) = bb
+        cc <- C.decode(bits2)
+                      (bits3,c) = cc
+        dd <- D.decode(bits3)
+                      (bits4,d) = dd
+        ee <- E.decode(bits4)
+                      (bits5,e) = ee
+        ff <- F.decode(bits5)
+      } yield (ff._1, (a,b,c,d,e,ff._2))
+      x.leftMap(s"tuple3 from ${bits.size} bits -- " + _)
+    }
+
+    override def encode(abcdef: (A,B,C,D,E,F)): String \/ BitVector =
+      for {
+        bits <- A.encode(abcdef._1)
+        bits2 <- B.encode(abcdef._2)
+        bits3 <- C.encode(abcdef._3)
+        bits4 <- D.encode(abcdef._4)
+        bits5 <- E.encode(abcdef._5)
+        bits6 <- F.encode(abcdef._6)
+      } yield bits ++ bits2 ++ bits3 ++ bits4 ++ bits5 ++ bits6
+
+
+    def pxmap[X](to: (A,B,C,D,E,F) => X, from: X => Option[(A,B,C,D,E,F)]): Codec[X] = this.pxmap(to.tupled,from)
   }
 
-  class Tuple7Codec[A,B,C,D,E,F,G](abcdefg: Codec[((((((A,B),C),D),E),F),G)]) {
-    def pxmap[X](to: (A,B,C,D,E,F,G) => X,
-                 from: X => Option[(A,B,C,D,E,F,G)]) = abcdefg.pxmap(
-      { case ((((((a,b),c),d),e),f),g) => to(a,b,c,d,e,f,g) },
-      from andThen { _.map(abcdefg => ((((((abcdefg._1, abcdefg._2), abcdefg._3), abcdefg._4),abcdefg._5),abcdefg._6),abcdefg._7)) }
-    )
+  class Tuple7Codec[A,B,C,D,E,F,G](A: Codec[A], B: Codec[B], C: Codec[C], D: Codec[D], E: Codec[E], F: Codec[F], G: Codec[G]) extends Codec[(A,B,C,D,E,F,G)] {
+    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C,D,E,F,G)) = {
+      val x = for {
+        aa <- A.decode(bits)
+                      (bits1,a) = aa
+        bb <- B.decode(bits1)
+                      (bits2,b) = bb
+        cc <- C.decode(bits2)
+                      (bits3,c) = cc
+        dd <- D.decode(bits3)
+                      (bits4,d) = dd
+        ee <- E.decode(bits4)
+                      (bits5,e) = ee
+        ff <- F.decode(bits5)
+                      (bits6,f) = ff
+        gg <- G.decode(bits6)
+      } yield (gg._1, (a,b,c,d,e,f,gg._2))
+      x.leftMap(s"tuple3 from ${bits.size} bits -- " + _)
+    }
+
+    override def encode(abcdefg: (A,B,C,D,E,F,G)): String \/ BitVector =
+      for {
+        bits <- A.encode(abcdefg._1)
+        bits2 <- B.encode(abcdefg._2)
+        bits3 <- C.encode(abcdefg._3)
+        bits4 <- D.encode(abcdefg._4)
+        bits5 <- E.encode(abcdefg._5)
+        bits6 <- F.encode(abcdefg._6)
+        bits7 <- G.encode(abcdefg._7)
+      } yield bits ++ bits2 ++ bits3 ++ bits4 ++ bits5 ++ bits6 ++ bits7
+
+    def pxmap[X](to: (A,B,C,D,E,F,G) => X, from: X => Option[(A,B,C,D,E,F,G)]): Codec[X] = this.pxmap(to.tupled,from)
   }
 }
