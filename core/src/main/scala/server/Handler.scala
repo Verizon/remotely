@@ -1,5 +1,6 @@
 package remotely.server
 
+import scala.concurrent.duration.FiniteDuration
 import scalaz.concurrent.Strategy
 import scalaz.stream.Cause
 import scalaz.stream.{async,Process,Process1}
@@ -28,8 +29,8 @@ trait Handler extends (Process[Task,BitVector] => Process[Task,BitVector]) {
    * Build an `Actor` for this handler. The actor responds to the following
    * messages: `akka.io.Tcp.Received` and `akka.io.Tcp.ConnectionClosed`.
    */
-  def actor(system: ActorSystem)(conn: => ActorRef): ActorRef = {
-    system.actorOf(Props(classOf[ServerActor], conn, this))
+  def actor(system: ActorSystem)(idleTimeout: FiniteDuration, conn: => ActorRef): ActorRef = {
+    system.actorOf(Props(classOf[ServerActor], conn, idleTimeout, this))
   }
 }
 
@@ -48,7 +49,7 @@ trait Handler extends (Process[Task,BitVector] => Process[Task,BitVector]) {
   *          +-------------------------------+
   **/
 
-class ServerActor(val connection: ActorRef, handler: Process[Task,BitVector] => Process[Task,BitVector]) extends Actor with EndpointActor with ActorLogging {
+class ServerActor(val connection: ActorRef, val idleTimeout: FiniteDuration, handler: Process[Task,BitVector] => Process[Task,BitVector]) extends Actor with EndpointActor with ActorLogging {
   import context._
 
   var queue: Process[Task,BitVector] = null

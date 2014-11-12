@@ -26,8 +26,11 @@ import scala.language.postfixOps
 case class ServerConnection(writeBytes: BitVector => Unit, connection: ActorRef)
 
 object AkkaConnectionPool {
-  def default(system: ActorSystem, hosts: Process[Task,InetSocketAddress]): ObjectPool[Future[ServerConnection]] = 
-    PoolUtils.erodingPool(new GenericObjectPool[Future[ServerConnection]](new AkkaConnectionPool(system, hosts, None, 5 seconds)))
+  def default(system: ActorSystem, hosts: Process[Task,InetSocketAddress]): ObjectPool[Future[ServerConnection]] = {
+    val pool = new GenericObjectPool[Future[ServerConnection]](new AkkaConnectionPool(system, hosts, None, 5 seconds))
+    pool.setTestOnBorrow(true)
+    PoolUtils.erodingPool(pool)
+  }
 
 
   def defaultSSL(system: ActorSystem, hosts: Process[Task,InetSocketAddress], createEngine: () => SSLEngine): ObjectPool[Future[ServerConnection]] =
@@ -44,7 +47,7 @@ class AkkaConnectionPool(system: ActorSystem,
   implicit val to = Timeout(timeout)
 
   override def create: Future[ServerConnection] = {
-    val connector = system.actorOf(Props(classOf[Connector],hosts.once.runLast.run.get, createEngine))
+    val connector = system.actorOf(Props(classOf[Connector],hosts.once.runLast.run.get, timeout, createEngine))
 
     for {
       maybeC <- (connector ? Connector.Ohai).mapTo[Connector.Result]
@@ -57,10 +60,12 @@ class AkkaConnectionPool(system: ActorSystem,
     p.getObject foreach (_.connection ! Disconnect)
 
   override def validateObject(fc: PooledObject[Future[ServerConnection]]): Boolean = {
-    Await.result(for {
+    val r = Await.result(for {
                    c <- fc.getObject
-                   v <- (c.connection ? IsValid).mapTo[Boolean]
+                   v <- try { (c.connection ? IsValid).mapTo[Boolean] } catch { case e: Throwable => Future.successful(false) }
                  } yield v, timeout)
+
+    r
   }
 
   override def wrap(c: Future[ServerConnection]): PooledObject[Future[ServerConnection]] = new DefaultPooledObject(c)
@@ -81,9 +86,9 @@ case object Disconnect
 /**
   * An actor which handles the server side of a TCP connection,
   * 
-  * States:
+  * States:                         size == 0                                      Tcp.Receive
   *          +---------------------------------------------------------+    +---------------------------+
-  *          |                        size == 0                        |    |                           |
+  *          |                                                         |    |                           |
   *          v                                                         |    v                           |
   *  +--------------+  Associate  +---------------+  Tcp.Receive   +------------+  > 0    ------------+ |
   *  | Disconnected | ----------> | awaitingFrame | -------------> | remaining? | ------> | receiving |-+
@@ -92,7 +97,7 @@ case object Disconnect
   *                                       |             == 0              |
   *                                       +-------------------------------+
   **/
-class ClientConnection(val connection: ActorRef) extends Actor with EndpointActor with ActorLogging {
+class ClientConnection(val connection: ActorRef, val idleTimeout: FiniteDuration) extends Actor with EndpointActor with ActorLogging {
   import context._
 
   override protected def close(): Unit = {
@@ -122,7 +127,7 @@ object Connector {
   *  connection if you tell me who you are with "Ohai" I pinky promise
   *  to respond with a Connector.Result
   */
-class Connector(host: InetSocketAddress, createEngine: Option[() => SSLEngine]) extends Actor with ActorLogging {
+class Connector(host: InetSocketAddress, idleTimeout: FiniteDuration, createEngine: Option[() => SSLEngine]) extends Actor with ActorLogging {
   import context.system
   import Connector._
 
@@ -145,7 +150,7 @@ class Connector(host: InetSocketAddress, createEngine: Option[() => SSLEngine]) 
     // Underlying connection needs to `keepOpenOnPeerClosed` if using SSL
     // NB: the client does not close the connection; the server closes the
     // connection when it is finished writing (or in the event of an error)
-    connection ! Tcp.Register(pipeline, keepOpenOnPeerClosed = true)
+    connection ! Tcp.Register(pipeline/*, keepOpenOnPeerClosed = true*/)
     (writeBytes, pipeline)
   }
 
@@ -179,7 +184,7 @@ class Connector(host: InetSocketAddress, createEngine: Option[() => SSLEngine]) 
       maybeFulfill
 
     case c @ Tcp.Connected(remoteAddr, localAddr) =>
-      val core = context.actorOf(Props(classOf[ClientConnection], sender))
+      val core = context.actorOf(Props(classOf[ClientConnection], sender, idleTimeout))
       result = \/-(createConnection(sender, core))
       maybeFulfill
 

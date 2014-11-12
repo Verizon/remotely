@@ -5,6 +5,7 @@ import akka.io.{BackpressureBuffer,IO,Tcp,SslTlsSupport,TcpPipelineHandler}
 import akka.util.ByteString
 import java.net.InetSocketAddress
 import javax.net.ssl.SSLEngine
+import scala.concurrent.duration.FiniteDuration
 import scalaz.concurrent.Task
 import scalaz.stream.{async,Process}
 
@@ -12,7 +13,7 @@ import scalaz.stream.{async,Process}
  * Create a server on the given `InetSockeAddress`, using `handler` for processing
  * each request, and using `ssl` to optionally
  */
-class HandlerServer(handler: Handler, addr: InetSocketAddress, ssl: Option[() => SSLEngine] = None) extends Actor with ActorLogging {
+class HandlerServer(idleTimeout: FiniteDuration,handler: Handler, addr: InetSocketAddress, ssl: Option[() => SSLEngine] = None) extends Actor with ActorLogging {
 
   import context.system
 
@@ -44,11 +45,11 @@ class HandlerServer(handler: Handler, addr: InetSocketAddress, ssl: Option[() =>
           context.actorOf(TcpPipelineHandler.props(
             init,
             connection,
-            handler.actor(context.system)(sslConnection))) // tie the knot, give the handler actor a reference to
+            handler.actor(context.system)(idleTimeout, sslConnection))) // tie the knot, give the handler actor a reference to
                                                            // overall connection actor, which does SSL
         sslConnection
-      } getOrElse { handler.actor(context.system)(connection) }
-      connection ! Tcp.Register(pipeline, keepOpenOnPeerClosed = true)
+      } getOrElse { handler.actor(context.system)(idleTimeout, connection) }
+      connection ! Tcp.Register(pipeline/*, keepOpenOnPeerClosed = true*/)
   }
 }
 

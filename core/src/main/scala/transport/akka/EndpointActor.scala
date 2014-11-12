@@ -1,20 +1,33 @@
 package remotely
 package transport.akka
 
+import akka.actor.Cancellable
 import akka.actor.{Actor,ActorLogging,ActorRef}
 import akka.io.Tcp
+import scala.concurrent.duration.FiniteDuration
 import scalaz.stream.async
 import scodec.bits.BitVector
+
+case object IdleTimeout
 
 trait EndpointActor {
   self: Actor with ActorLogging =>
 
   import context._
 
+  val idleTimeout: FiniteDuration
   val connection: ActorRef
+  var cancelTimeout: Cancellable = null
+
   var valid: Boolean = true
   var remaining: Long = 0
   var fromRemote: async.mutable.Queue[BitVector] = null
+
+  def resetTimeout(): Unit = {
+    if(cancelTimeout != null)
+      cancelTimeout.cancel()
+    cancelTimeout = system.scheduler.scheduleOnce(idleTimeout, self.self, IdleTimeout)
+  }
 
   protected def fail(error: String): Unit = {
     log.error(s"connection failure. cause: $error")
@@ -25,6 +38,7 @@ trait EndpointActor {
     }
 
     connection ! Tcp.Close
+    context stop self.self
   }
 
   protected def close(): Unit = {
@@ -50,6 +64,8 @@ trait EndpointActor {
     case _ : Tcp.ConnectionClosed =>
       if(remaining > 0) fail("didn't receive a complete stream")
       else close()
+
+    case IdleTimeout => fail("connection timed out")
   }
 
   /**
@@ -58,6 +74,7 @@ trait EndpointActor {
     */
   def awaitingFrame0: Receive = {
     case Tcp.Received(data) =>
+      resetTimeout()
       frameBits(BitVector(data.toArray))
   } 
 
@@ -88,6 +105,7 @@ trait EndpointActor {
     */
   def receiving0: Receive = {
     case Tcp.Received(data) =>
+      resetTimeout()
       writeRemaining(BitVector(data.toArray))
   } 
 
