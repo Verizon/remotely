@@ -180,8 +180,6 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
     )
   }
 
-
-
   def requestDecoder(env: Environment): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
     for {
       responseTag <- utf8

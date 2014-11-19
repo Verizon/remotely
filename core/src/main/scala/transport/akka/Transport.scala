@@ -4,7 +4,9 @@ package akka
 
 import org.apache.commons.pool2.ObjectPool
 import scalaz.concurrent.Task
-import scalaz.stream.{Process,Process1}
+import scalaz.stream.{Process,Process1, Cause}
+import Cause.End
+import Process.Halt
 import scodec.bits.BitVector
 import _root_.akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, OneForOneStrategy, Props}
 import _root_.akka.pattern.ask
@@ -29,11 +31,16 @@ import scalaz.syntax.traverse._
 
 class AkkaTransport(system: ActorSystem, val pool: ObjectPool[Future[ServerConnection]]) extends Endpoint.Transport {
   import system.dispatcher
-  def apply(toServer: Process[Task,BitVector]): Process[Task, BitVector] = {
-    val x = resource(Task.delay(pool.borrowObject))(conn => Task.delay(pool.returnObject(conn))){ server =>
-      Task.delay(hookUpConnection(server,toServer))
+  def apply(toServer: Process[Task, BitVector]): Process[Task, BitVector] = {
+    val c = pool.borrowObject
+    hookUpConnection(c, toServer).onHalt {
+      case Cause.End =>
+        pool.invalidateObject(c)
+        Halt(Cause.End)
+      case cause =>
+        pool.returnObject(c)
+        Halt(cause)
     }
-    x.flatMap(identity)
   }
 
   def serverTask(server: Future[ServerConnection]): Task[ServerConnection] = {

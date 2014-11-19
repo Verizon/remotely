@@ -93,7 +93,7 @@ trait EndpointActor {
       fromRemote.enqueueOne(bits).run
       if(bits.size == remaining) {
         remaining = 0
-        close()
+        logBecome("awaitingFrame", awaitingFrame)
       } else {
         remaining -= bits.size
         logBecome("receiving",receiving)

@@ -28,7 +28,7 @@ case class ServerConnection(writeBytes: BitVector => Unit, connection: ActorRef)
 object AkkaConnectionPool {
   def default(system: ActorSystem, hosts: Process[Task,InetSocketAddress]): ObjectPool[Future[ServerConnection]] = {
     val pool = new GenericObjectPool[Future[ServerConnection]](new AkkaConnectionPool(system, hosts, None, 5 seconds))
-    pool.setTestOnBorrow(true)
+//    pool.setTestOnReturn(true)
     PoolUtils.erodingPool(pool)
   }
 
@@ -62,7 +62,7 @@ class AkkaConnectionPool(system: ActorSystem,
   override def validateObject(fc: PooledObject[Future[ServerConnection]]): Boolean = {
     val r = Await.result(for {
                    c <- fc.getObject
-                   v <- try { (c.connection ? IsValid).mapTo[Boolean] } catch { case e: Throwable => Future.successful(false) }
+                   v <- try { (c.connection ? IsValid).mapTo[Boolean] } catch { case e: Throwable => e.printStackTrace; Future.successful(false) }
                  } yield v, timeout)
 
     r

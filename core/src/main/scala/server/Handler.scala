@@ -57,10 +57,17 @@ class ServerActor(val connection: ActorRef, val idleTimeout: FiniteDuration, han
   def newQueue(): Unit = {
     fromRemote = async.unboundedQueue[BitVector](Strategy.Sequential)
     queue = fromRemote.dequeue
+    var read = 0L
+    val queue2 = queue.map { bv =>
+      read += bv.size
+      bv
+    }
 
-    val write: Task[Unit] = handler(queue).evalMap { b =>
+    var written = 0L
+    val write: Task[Unit] = handler(queue2).evalMap { b =>
       Task.delay {
         if (valid) {
+          written += b.size
           connection ! Tcp.Write(ByteString(b.bytes.toArray))
         } else {
           log.error("attempt to write from an invalid connection")
@@ -75,12 +82,11 @@ class ServerActor(val connection: ActorRef, val idleTimeout: FiniteDuration, han
         connection ! Tcp.Close
       }
       if (valid) {
-        log.debug("done writing, (not) closing connection")
-        log.debug("server initiating connection close: " + connection)
+        log.debug(s"read $read bits, then wrote $written bits")
       }
       else {
         connection ! Tcp.Close
-        log.info("client initiated connection close")
+        log.debug("client initiated connection close")
         context stop self
       }
     }
@@ -88,6 +94,7 @@ class ServerActor(val connection: ActorRef, val idleTimeout: FiniteDuration, han
 
   override protected def fail(error: String) = {
     queue = null
+    log.error(s"FAILING because $error")
     super.fail(error)
     context stop self
   }
