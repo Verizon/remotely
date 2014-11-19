@@ -1,5 +1,3 @@
-import oncue.build._
-
 organization in Global := "oncue.svc.remotely"
 
 scalaVersion in Global := "2.10.4"
@@ -14,6 +12,3 @@ lazy val paradiseVersion = "2.0.1"
 
 lazy val examples = project.dependsOn(core)
 
-OnCue.baseSettings
-
-Publishing.ignore
