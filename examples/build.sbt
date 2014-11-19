@@ -1,6 +1,4 @@
 
-import oncue.build._
-
 scalacOptions ++= Seq(
   "-language:existentials",
   "-language:postfixOps"
@@ -8,4 +6,10 @@ scalacOptions ++= Seq(
 
 name := "examples"
 
-Publishing.ignore
+lazy val paradiseVersion = "2.0.1"
+
+addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full)
+
+libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-reflect" %_)
+
+libraryDependencies += ("org.scalamacros" %% "quasiquotes" % paradiseVersion)
