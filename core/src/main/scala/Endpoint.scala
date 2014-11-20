@@ -21,7 +21,7 @@ import scalaz.stream.merge._
  * A 'logical' endpoint for some service, represented
  * by a possibly rotating stream of `Connection`s.
  */
-trait Endpoint {
+trait Endpoint extends Handler {
   def apply(in: Process[Task,BitVector]): Process[Task,BitVector]
 
 /*
@@ -49,18 +49,9 @@ object Endpoint {
     def apply(in: Process[Task,BitVector]) = Process.fail(new Exception("no available connections"))
   }
 
-  def single(transport: Endpoint.Transport): Endpoint = new Endpoint {
+  def single(transport: Handler): Endpoint = new Endpoint {
     def apply(in: Process[Task,BitVector]): Process[Task,BitVector] = transport(in)
   }
-
-  /**
-    * A Connection is modelled as a function from BitVectors to
-    * BitVectors, that is, if you give me a stream of Bytes to send
-    * to the server, I'll give you back a stream of bytes which are
-    * returned from the server
-    */
-  type Transport = Process[Task,BitVector] => Process[Task, BitVector]
-
 }
 
 

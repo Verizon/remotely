@@ -34,7 +34,7 @@ package object remotely {
       for {
         reqBits <- codecs.encodeRequest(r).apply(ctx)
         respBytes <- reportErrors(start) {
-          val reqBytestream = Process.emit(reqBits).pipe(enframe)
+          val reqBytestream = Process.emit(reqBits)
           fullyRead(e(reqBytestream).pipe(Process.await1[BitVector]))
         }
         resp <- reportErrors(start) { codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes)) }
@@ -61,9 +61,10 @@ package object remotely {
   private[remotely] def fullyRead(s: Process[Task,BitVector]): Task[BitVector] =
     s.runFoldMap(identity)
 
-  private[remotely] def enframe: Process1[BitVector,BitVector] = {
+  private[remotely] def enframe: Process1[BitVector,ByteVector] = {
     Process.await1[BitVector].map { bs =>
-      codecs.int32.encodeValid(bs.size.toInt) ++ bs
-    } fby Process.emit(codecs.int32.encodeValid(0))
+      val bytes = bs.bytes
+      codecs.int32.encodeValid(bytes.size).bytes ++ bytes
+    } fby Process.emit(codecs.int32.encodeValid(0).bytes)
   }
 }

@@ -29,7 +29,7 @@ import scodec.bits.BitVector
 import scalaz.{-\/,\/,\/-}
 import scalaz.syntax.traverse._
 
-class AkkaTransport(system: ActorSystem, val pool: ObjectPool[Future[ServerConnection]]) extends Endpoint.Transport {
+class AkkaTransport(system: ActorSystem, val pool: ObjectPool[Future[ServerConnection]]) extends Handler {
   import system.dispatcher
   def apply(toServer: Process[Task, BitVector]): Process[Task, BitVector] = {
     val c = pool.borrowObject

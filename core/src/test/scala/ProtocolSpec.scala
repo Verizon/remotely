@@ -5,33 +5,29 @@ import org.scalatest.{FlatSpec,Matchers,BeforeAndAfterAll}
 import codecs._, Response.Context
 import akka.actor.ActorSystem
 import codecs._
-import transport.akka._
+import transport.netty._
 
-class ProtocolSpec extends FlatSpec
-  with Matchers
-  with BeforeAndAfterAll
-{
-  lazy val system = ActorSystem("test-client")
+class ProtocolSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   val addr = new java.net.InetSocketAddress("localhost", 9000)
   val server = new TestServer
   val shutdown: () => Unit = server.environment.serveNetty(addr)(Monitoring.empty)
 
-
-  val endpoint = Endpoint.single(AkkaTransport.single(system,addr))
+  val endpoint = Endpoint.single(NettyTransport.single(addr))
 
   it should "foo" in {
     import remotely.Remote.implicits._
+    println("a")
     val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+    println("b")
     val lst: List[Int] = Client.foo(9).runWithContext(endpoint, Context.empty).run
+    println("c")
   }
 
   override def afterAll(){
     Thread.sleep(500)
     shutdown()
-    system.shutdown()
   }
 }
-
 
 trait TestServerBase {
 

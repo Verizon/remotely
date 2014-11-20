@@ -50,7 +50,7 @@ case class Environment(codecs: Codecs, values: Values) {
       // as a framed stream as well
       bytes pipe Process.await1[BitVector] /*server.Handler.deframe*/ evalMap { bs =>
         Server.handle(this)(bs)(monitoring)
-      } pipe enframe
+      }
     }
 
   def serveNetty(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =

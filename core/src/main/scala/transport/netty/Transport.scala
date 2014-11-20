@@ -1,15 +1,11 @@
 package remotely
 package transport.netty
 
-import java.util.concurrent.Executors
-import org.jboss.netty.bootstrap.ServerBootstrap
 import org.jboss.netty.buffer.ChannelBuffer
 import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.channel._
 import org.jboss.netty.channel.socket.SocketChannel
-import org.jboss.netty.channel.socket.nio.{NioServerSocketChannel, NioServerSocketChannelFactory}
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannel
-import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import org.apache.commons.pool2.ObjectPool
 import org.jboss.netty.handler.codec.frame.FrameDecoder
@@ -18,41 +14,6 @@ import scalaz.concurrent.Task
 import scalaz.stream.{Process,async}
 import scodec.bits.BitVector
 
-class NettyServer(handler: Handler) {
-
-  val cf: ChannelFactory = new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
-                                                             Executors.newCachedThreadPool())
-  /**
-    * Attaches our handlers to a channel
-    */
-  class ChannelInitialize extends ChannelPipelineFactory {
-    override def getPipeline: ChannelPipeline = {
-      Channels.pipeline(new Deframe(), new DeframedHandler(handler), new Enframe())
-    }
-  }
-    
-  def bootstrap: ServerBootstrap =  {
-    val b: ServerBootstrap = new ServerBootstrap(cf)
-    b.setPipelineFactory(new ChannelInitialize)
-    b.setOption("child.keepAlive", true)
-
-    b
-  }
-  def shutdown(): Unit = {
-    cf.releaseExternalResources()
-  }
-}
-object NettyServer {
-  def start(addr: InetSocketAddress, handler: Handler) = {
-    val server = new NettyServer(handler)
-    val b = server.bootstrap
-    // Bind and start to accept incoming connections.
-    b.bind(addr)
-
-    () => server.shutdown()
-  }
-
-}
 
 /** 
   * set of messages passed from FrameDecoder to DeframedHandler
@@ -78,7 +39,7 @@ class Deframe extends FrameDecoder {
   var remaining: Option[Int] = None
 
   override protected def decode(ctx: ChannelHandlerContext, // this is our network connection
-                                out: Channel,           // this is where we emit to the next layer above
+                                out: Channel,          
                                 in: ChannelBuffer  // this is our input
                                ): Object =  { 
     remaining match {
@@ -99,14 +60,43 @@ class Deframe extends FrameDecoder {
       case Some(rem) =>
         // we are waiting for at least rem more bytes, as that is what
         // is outstanding in the current frame
+        if(in.readableBytes() < rem) {
+          null
+        } else {
+          val bytes = ByteBuffer.allocate(rem)
+          in.readBytes(bytes)
+          val bytearray = bytes.array()
+          remaining = None
+          val bits = BitVector.view(bytearray)
+          Bits(bits)
+        }
+    }
+  }
+}
 
-        val toRead: Int = rem min in.readableBytes() 
-        val bytes = ByteBuffer.allocate(toRead)
-        in.readBytes(bytes)
-        val newRem = rem - toRead
-        if(newRem == 0) remaining = None
-        else remaining = Some(newRem)
-        Bits(BitVector(bytes))
+class ClientDeframedHandler(queue: async.mutable.Queue[BitVector]) extends SimpleChannelUpstreamHandler {
+  // there has been an error
+  private def fail(message: String, ctx: ChannelHandlerContext): Unit = {
+    queue.fail(new Throwable(message)).runAsync(Function.const(()))
+    val _ = ctx.getChannel.close() // should this be disconnect? is there a difference
+  }
+
+  // we've seen the end of the input, close the queue writing to the input stream
+  private def close(): Unit = {
+    queue.close.runAsync(Function.const(()))
+  }
+
+  override def exceptionCaught(ctx: ChannelHandlerContext, ee: ExceptionEvent): Unit = {
+    ee.getCause.printStackTrace()
+    fail(ee.getCause().getMessage, ctx)
+  }
+
+  override def messageReceived(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
+  me.getMessage().asInstanceOf[Deframed] match {
+      case Bits(bv) =>
+        queue.enqueueOne(bv).runAsync(Function.const(()))
+    case EOS =>
+      close()
     }
   }
 }
@@ -118,7 +108,7 @@ class Deframe extends FrameDecoder {
   * every time we see a boundary, we close one stream, open a new
   * one, and setup a new outgoing stream back to the client.
   */
-class DeframedHandler(handler: Process[Task, BitVector] => Process[Task,BitVector]) extends SimpleChannelUpstreamHandler {
+class ServerDeframedHandler(handler: Process[Task, BitVector] => Process[Task,BitVector]) extends SimpleChannelUpstreamHandler {
 
   var queue: Option[async.mutable.Queue[BitVector]] = None
 
@@ -139,7 +129,8 @@ class DeframedHandler(handler: Process[Task, BitVector] => Process[Task,BitVecto
       val queue = Some(queue1)
       val stream = queue1.dequeue
 
-      val write: Task[Unit] = handler(stream).evalMap { b =>
+      val write: Task[Unit] = (handler(stream) pipe enframe).evalMap { b =>
+
         Task.delay {
           Channels.write(ctx,me.getFuture(), ChannelBuffers.wrappedBuffer(b.toByteBuffer))
         }
@@ -155,6 +146,10 @@ class DeframedHandler(handler: Process[Task, BitVector] => Process[Task,BitVecto
     case Some(q) => q
   }
 
+  override def exceptionCaught(ctx: ChannelHandlerContext, ee: ExceptionEvent): Unit = {
+    ee.getCause.printStackTrace()
+    fail(ee.getCause().getMessage, ctx)
+  }
 
   // there has been an error
   private def fail(message: String, ctx: ChannelHandlerContext): Unit = {
@@ -169,17 +164,19 @@ class DeframedHandler(handler: Process[Task, BitVector] => Process[Task,BitVecto
   }
 
   override def messageReceived(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
-  me.getMessage().asInstanceOf[Deframed] match {
+    me.getMessage().asInstanceOf[Deframed] match {
       case Bits(bv) =>
+//        println(s"received (${bv.size}): " + bv.bytes.toArray.map("%02x".format(_)).mkString)
         val queue = ensureQueue(ctx, me)
         queue.enqueueOne(bv).runAsync(Function.const(()))
 
-      case EOS =>
-        close()
+    case EOS =>
+      close()
     }
   }
 }
 
+/*
 /**
   * output handler which gets a stream of BitVectors and enframes them
   */
@@ -190,3 +187,4 @@ class Enframe extends SimpleChannelDownstreamHandler {
     val _ = ctx.getChannel().write(bv.toByteBuffer)
   }
 }
+ */
