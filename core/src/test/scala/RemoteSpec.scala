@@ -23,7 +23,7 @@ object RemoteSpec extends Properties("Remote") {
 
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
   val addr = new InetSocketAddress("localhost", 8080)
-  val server = env.serve(addr)(Monitoring.empty)
+  val server = env.serveNetty(addr)(Monitoring.empty)
   val akkaTrans = AkkaTransport.single(clientPool,addr)
   val loc: Endpoint = Endpoint.single(akkaTrans)
 

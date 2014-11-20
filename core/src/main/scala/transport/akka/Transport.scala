@@ -35,10 +35,10 @@ class AkkaTransport(system: ActorSystem, val pool: ObjectPool[Future[ServerConne
     val c = pool.borrowObject
     hookUpConnection(c, toServer).onHalt {
       case Cause.End =>
-        pool.invalidateObject(c)
+        pool.returnObject(c)
         Halt(Cause.End)
       case cause =>
-        pool.returnObject(c)
+        pool.invalidateObject(c)
         Halt(cause)
     }
   }

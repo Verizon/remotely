@@ -45,8 +45,7 @@ case class Environment(codecs: Codecs, values: Values) {
   def values(v: Values): Environment =
     this.populate(_ => v)
 
-  private def serverHandler(monitoring: Monitoring): server.Handler =
-    server.Handler { bytes =>
+  private def serverHandler(monitoring: Monitoring): Handler = Handler { bytes =>
       // we assume the input is a framed stream, and encode the response(s)
       // as a framed stream as well
       bytes pipe Process.await1[BitVector] /*server.Handler.deframe*/ evalMap { bs =>
@@ -54,14 +53,18 @@ case class Environment(codecs: Codecs, values: Values) {
       } pipe enframe
     }
 
+  def serveNetty(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =
+    transport.netty.NettyServer.start(addr, serverHandler(monitoring))
+
+
   /** Start an RPC server on the given port. */
-  def serve(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =
-    server.start("rpc-server")(5.seconds, serverHandler(monitoring), addr, None)
+  def serveAkka(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =
+    transport.akka.HandlerServer.start("rpc-server")(5.seconds, serverHandler(monitoring), addr, None)
 
   /** Start an RPC server on the given port using an `SSLEngine` provider. */
-  def serveSSL(addr: InetSocketAddress, ssl: () => SSLEngine)(
+  def serveAkkaSSL(addr: InetSocketAddress, ssl: () => SSLEngine)(
       monitoring: Monitoring = Monitoring.empty): () => Unit =
-    server.start("ssl-rpc-server")(5.seconds, serverHandler(monitoring), addr, Some(ssl))
+    transport.akka.HandlerServer.start("ssl-rpc-server")(5.seconds, serverHandler(monitoring), addr, Some(ssl))
 
   /** Generate the Scala code for the client access to this `Environment`. */
   def generateClient(moduleName: String, pkg: String): String =

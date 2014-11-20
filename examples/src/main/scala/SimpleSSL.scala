@@ -30,7 +30,7 @@ object SimpleSSL extends App {
   val clientSslProvider = tls.enableCiphers(tls.ciphers.rsa: _*)(tls.fromContext(clientCtx))
 
   // create a server for this environment
-  val server = env.serveSSL(addr, tls.server(serverSslProvider))(Monitoring.consoleLogger("[server]"))
+  val server = env.serveAkkaSSL(addr, tls.server(serverSslProvider))(Monitoring.consoleLogger("[server]"))
 
   // to actually run a remote expression, we need an endpoint
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")

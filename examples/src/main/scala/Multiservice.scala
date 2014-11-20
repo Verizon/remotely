@@ -39,7 +39,7 @@ object Multiservice extends App {
   // Serve these functions
   val addr1 = new java.net.InetSocketAddress("localhost", 8080)
   val transport = AkkaTransport.single(clientPool, addr1)
-  val stopA = env1.serve(addr1)(Monitoring.consoleLogger("[service-a]"))
+  val stopA = env1.serveAkka(addr1)(Monitoring.consoleLogger("[service-a]"))
 
   // And expose an `Endpoint` for making requests to this service
   val serviceA: Endpoint = Endpoint.single(transport)
@@ -85,7 +85,7 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8081)
-  val stopB = env2.serve(addr2)(Monitoring.consoleLogger("[service-b]"))
+  val stopB = env2.serveAkka(addr2)(Monitoring.consoleLogger("[service-b]"))
   val serviceB: Endpoint = Endpoint.single(AkkaTransport.single(clientPool, addr2))
 
   try {

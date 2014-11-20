@@ -8,7 +8,7 @@ package object remotely {
   import scalaz.Monoid
   import scodec.bits.{BitVector,ByteVector}
   import scodec.Decoder
-  import remotely.server.Handler
+
 
   /**
    * Evaluate the given remote expression at the

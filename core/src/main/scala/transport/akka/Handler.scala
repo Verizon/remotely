@@ -1,4 +1,5 @@
-package remotely.server
+package remotely
+package transport.akka
 
 import scala.concurrent.duration.FiniteDuration
 import scalaz.concurrent.Strategy
@@ -10,29 +11,6 @@ import scodec.codecs
 import akka.util.ByteString
 import akka.actor.{Actor,ActorRef,ActorLogging,ActorSystem,Props}
 import akka.io.Tcp
-import remotely.transport.akka.EndpointActor
-
-/**
- * Represents the logic of a connection handler, a function
- * from a stream of bytes to a stream of bytes, which will
- * be sent back to the client. The connection will be closed
- * when the returned stream terminates.
- *
- * NB: This type cannot represent certain kinds of 'coroutine'
- * client/server interactions, where the server awaits a response
- * to a particular packet sent before continuing.
- */
-trait Handler extends (Process[Task,BitVector] => Process[Task,BitVector]) {
-  def apply(source: Process[Task,BitVector]): Process[Task,BitVector]
-
-  /**
-   * Build an `Actor` for this handler. The actor responds to the following
-   * messages: `akka.io.Tcp.Received` and `akka.io.Tcp.ConnectionClosed`.
-   */
-  def actor(system: ActorSystem)(idleTimeout: FiniteDuration, conn: => ActorRef): ActorRef = {
-    system.actorOf(Props(classOf[ServerActor], conn, idleTimeout, this))
-  }
-}
 
 /**
   * An actor which handles the server side of a TCP connection,
@@ -49,22 +27,23 @@ trait Handler extends (Process[Task,BitVector] => Process[Task,BitVector]) {
   *          +-------------------------------+
   **/
 
-class ServerActor(val connection: ActorRef, val idleTimeout: FiniteDuration, handler: Process[Task,BitVector] => Process[Task,BitVector]) extends Actor with EndpointActor with ActorLogging {
+class ServerActor(val connection: ActorRef, val idleTimeout: FiniteDuration, handler: Handler) extends Actor with EndpointActor with ActorLogging {
   import context._
 
-  var queue: Process[Task,BitVector] = null
+  var stream: Option[Process[Task,BitVector]] = None
 
   def newQueue(): Unit = {
     fromRemote = async.unboundedQueue[BitVector](Strategy.Sequential)
-    queue = fromRemote.dequeue
+    val stream1 = fromRemote.dequeue
+    stream = Option(stream1)
     var read = 0L
-    val queue2 = queue.map { bv =>
+    val stream2 = stream1.map { bv =>
       read += bv.size
       bv
     }
 
     var written = 0L
-    val write: Task[Unit] = handler(queue2).evalMap { b =>
+    val write: Task[Unit] = handler(stream2).evalMap { b =>
       Task.delay {
         if (valid) {
           written += b.size
@@ -93,14 +72,15 @@ class ServerActor(val connection: ActorRef, val idleTimeout: FiniteDuration, han
   }
 
   override protected def fail(error: String) = {
-    queue = null
+    stream = None
     log.error(s"FAILING because $error")
     super.fail(error)
     context stop self
   }
 
   override protected def close() = {
-    queue = null
+    stream = None
+    logBecome("awaitingFrame", awaitingFrame)
     super.close()
   }
 
@@ -127,13 +107,4 @@ class ServerActor(val connection: ActorRef, val idleTimeout: FiniteDuration, han
   }
 
   def receive = awaitingFrame
-}
-
-object Handler {
-
-  /** Create a handler from a function from input to output stream. */
-  def apply(f: Process[Task,BitVector] => Process[Task,BitVector]): Handler =
-    new Handler {
-      def apply(source: Process[Task,BitVector]) = f(source)
-    }
 }

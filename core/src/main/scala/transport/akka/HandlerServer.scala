@@ -1,4 +1,5 @@
-package remotely.server
+package remotely
+package transport.akka
 
 import akka.actor.{Actor,ActorLogging,ActorRef,ActorSystem,Props}
 import akka.io.{BackpressureBuffer,IO,Tcp,SslTlsSupport,TcpPipelineHandler}
@@ -8,6 +9,28 @@ import javax.net.ssl.SSLEngine
 import scala.concurrent.duration.FiniteDuration
 import scalaz.concurrent.Task
 import scalaz.stream.{async,Process}
+
+object HandlerServer {
+
+  /**
+    * Build an `Actor` for this handler. The actor responds to the following
+    * messages: `akka.io.Tcp.Received` and `akka.io.Tcp.ConnectionClosed`.
+    */
+  def actor(system: ActorSystem, handler: Handler)(idleTimeout: FiniteDuration, conn: => ActorRef): ActorRef = {
+    system.actorOf(Props(classOf[ServerActor], conn, idleTimeout, handler))
+  }
+
+  /**
+   * Start a server at the given address, using the `Handler`
+   * for processing each request. Returns a thunk that can be used
+   * to terminate the server.
+   */
+  def start(name: String)(idleTimeout: FiniteDuration, h: Handler, addr: InetSocketAddress, ssl: Option[() => SSLEngine] = None): () => Unit = {
+    val system = ActorSystem(name)
+    val actor = system.actorOf(Props(new HandlerServer(idleTimeout,h, addr, ssl)))
+                              () => { system.shutdown() }
+  }
+}
 
 /**
  * Create a server on the given `InetSockeAddress`, using `handler` for processing
@@ -45,10 +68,10 @@ class HandlerServer(idleTimeout: FiniteDuration,handler: Handler, addr: InetSock
           context.actorOf(TcpPipelineHandler.props(
             init,
             connection,
-            handler.actor(context.system)(idleTimeout, sslConnection))) // tie the knot, give the handler actor a reference to
+            HandlerServer.actor(context.system,handler)(idleTimeout, sslConnection))) // tie the knot, give the handler actor a reference to
                                                            // overall connection actor, which does SSL
         sslConnection
-      } getOrElse { handler.actor(context.system)(idleTimeout, connection) }
+      } getOrElse { HandlerServer.actor(context.system, handler)(idleTimeout, connection) }
       connection ! Tcp.Register(pipeline/*, keepOpenOnPeerClosed = true*/)
   }
 }

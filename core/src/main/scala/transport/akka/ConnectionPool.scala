@@ -28,7 +28,7 @@ case class ServerConnection(writeBytes: BitVector => Unit, connection: ActorRef)
 object AkkaConnectionPool {
   def default(system: ActorSystem, hosts: Process[Task,InetSocketAddress]): ObjectPool[Future[ServerConnection]] = {
     val pool = new GenericObjectPool[Future[ServerConnection]](new AkkaConnectionPool(system, hosts, None, 5 seconds))
-//    pool.setTestOnReturn(true)
+    pool.setTestOnReturn(true)
     PoolUtils.erodingPool(pool)
   }
 

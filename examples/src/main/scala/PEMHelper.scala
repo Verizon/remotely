@@ -7,7 +7,7 @@ import java.security.{KeyFactory, PrivateKey}
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.cert.{ Certificate, CertificateFactory }
 import java.io.{ FileInputStream, InputStream, ByteArrayInputStream }
-import io.Source
+import scala.io.Source
 import java.util.NoSuchElementException
 
 case class PemIterator(pemPath: String, tag: String) extends Iterator[Array[Byte]] {

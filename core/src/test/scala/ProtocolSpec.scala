@@ -14,7 +14,7 @@ class ProtocolSpec extends FlatSpec
   lazy val system = ActorSystem("test-client")
   val addr = new java.net.InetSocketAddress("localhost", 9000)
   val server = new TestServer
-  val shutdown: () => Unit = server.environment.serve(addr)(Monitoring.empty)
+  val shutdown: () => Unit = server.environment.serveNetty(addr)(Monitoring.empty)
 
 
   val endpoint = Endpoint.single(AkkaTransport.single(system,addr))

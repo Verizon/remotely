@@ -8,7 +8,6 @@ import scalaz.stream.{merge,nio,Process}
 import scalaz.concurrent.Task
 import scodec.bits.{BitVector,ByteVector}
 import scodec.Encoder
-import remotely.server.Handler
 
 object Server {
 
