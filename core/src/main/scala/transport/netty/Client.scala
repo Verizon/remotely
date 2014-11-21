@@ -13,6 +13,7 @@ import org.jboss.netty.bootstrap.ClientBootstrap
 import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.channel._
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
+import scalaz.stream.Cause
 import scalaz.{-\/,\/-}
 import scalaz.stream.{async,Process}
 import scalaz.concurrent.Task
@@ -66,7 +67,16 @@ class NettyTransport(val pool: ObjectPool[Channel]) extends Handler {
     val c = pool.borrowObject
     val fromServer = async.unboundedQueue[BitVector]
     c.getPipeline().addLast("clientDeframe", new ClientDeframedHandler(fromServer))
-    Process.await((toServer pipe enframe).evalMap(write(c)).run)(server => fromServer.dequeue)
+    val writeBytes: Task[Unit] = (toServer pipe enframe).evalMap(write(c)).run
+    val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
+      case Cause.End =>
+        pool.invalidateObject(c)
+        Process.Halt(Cause.End)
+      case cause =>
+        pool.returnObject(c)
+        Process.Halt(cause)
+    }
+    result
   }
 }
 

@@ -63,6 +63,7 @@ class Deframe extends FrameDecoder {
         if(in.readableBytes() < rem) {
           null
         } else {
+          // STU don't need a bytebuffer
           val bytes = ByteBuffer.allocate(rem)
           in.readBytes(bytes)
           val bytearray = bytes.array()
