@@ -1,11 +1,10 @@
 package remotely
 package examples
 
-import akka.actor._
 import codecs._
 import Remote.implicits._
 import scalaz.concurrent.Task
-import transport.akka._
+import transport.netty._
 
 /**
  * This is a complete example of one service calling another service.
@@ -14,8 +13,6 @@ import transport.akka._
  * and pushed onto the trace stack for each nested remote request.
  */
 object Multiservice extends App {
-
-  implicit val clientPool = ActorSystem("rpc-client")
 
   // Define a service exposing `sum` and `length` functions for `List[Double]`
   val env1 = Environment.empty
@@ -38,7 +35,7 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr1 = new java.net.InetSocketAddress("localhost", 8080)
-  val transport = AkkaTransport.single(clientPool, addr1)
+  val transport = NettyTransport.single(addr1)
   val stopA = env1.serveAkka(addr1)(Monitoring.consoleLogger("[service-a]"))
 
   // And expose an `Endpoint` for making requests to this service
@@ -86,7 +83,7 @@ object Multiservice extends App {
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8081)
   val stopB = env2.serveAkka(addr2)(Monitoring.consoleLogger("[service-b]"))
-  val serviceB: Endpoint = Endpoint.single(AkkaTransport.single(clientPool, addr2))
+  val serviceB: Endpoint = Endpoint.single(NettyTransport.single(addr2))
 
   try {
     val ctx = Response.Context.empty ++ List("flux-capacitor" -> "great SCOTT!")
@@ -109,6 +106,6 @@ object Multiservice extends App {
   finally {
     stopA()
     stopB()
-    clientPool.shutdown
+    transport.shutdown()
   }
 }

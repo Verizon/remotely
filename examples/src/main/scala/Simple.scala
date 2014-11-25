@@ -2,6 +2,8 @@ package remotely
 package examples
 
 import java.net.InetSocketAddress
+import java.util.concurrent.Executors
+import remotely.transport.netty.NettyTransport
 import scalaz.concurrent.Task
 import codecs._
 
@@ -42,31 +44,23 @@ object Simple {
 }
 
 object SimpleMain extends App {
-
   import Simple.{env,addr,sum}
   import Remote.implicits._
-  import transport.akka._
 
   println(env)
 
   // create a server for this environment
-  val server = env.serveAkka(addr)(Monitoring.consoleLogger("[server]"))
+  val server = env.serveNetty(addr, Executors.newCachedThreadPool)(Monitoring.consoleLogger("[server]"))
 
-  // to actually run a remote expression, we need an endpoint
-  implicit val clientPool = akka.actor.ActorSystem("rpc-client")
-
+  val transport = NettyTransport.single(addr)
   val expr: Remote[Int] = sum(List(0,1,2,3,4))
-  val loc: Endpoint = Endpoint.single(AkkaTransport.single(clientPool,addr)) // takes ActorSystem implicitly
+  val loc: Endpoint = Endpoint.single(transport) // takes ActorSystem implicitly
   val result: Task[Int] = expr.runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
   // running a couple times just to see the latency improve for subsequent reqs
   try println { result.run; result.run; result.run }
   finally {
-    // hack to allow asynchronous actor shutdown messages to propagate,
-    // without this, we get some dead letter logging
-    // I'm sure there's a better way to do this
-    Thread.sleep(1000)
+    transport.shutdown()
     server()
-    clientPool.shutdown()
   }
 }

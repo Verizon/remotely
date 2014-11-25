@@ -37,10 +37,12 @@ object NettyServer {
     val server = new NettyServer(handler, threadPool)
     val b = server.bootstrap
     // Bind and start to accept incoming connections.
-    b.bind(addr)
+    val channel = b.bind(addr)
 
-    () => server.shutdown()
+    () => {
+      channel.close().awaitUninterruptibly()
+      server.shutdown()
+    }
   }
-
 }
 
