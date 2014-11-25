@@ -1,16 +1,11 @@
 package remotely
 
-import akka.actor.{Actor,ActorRef,ActorLogging,ActorSystem,OneForOneStrategy,Props,SupervisorStrategy}
-import akka.io.{BackpressureBuffer,IO,Tcp,SslTlsSupport,TcpPipelineHandler}
-import akka.util.ByteString
 import java.net.{InetSocketAddress,Socket,URL}
 import javax.net.ssl.SSLEngine
-import scalaz.concurrent.Strategy
 import scalaz.std.anyVal._
 import scalaz.concurrent.Task
 import scalaz.syntax.functor._
 import scalaz.stream.{async,Channel,Exchange,io,Process,nio,Process1, process1, Sink}
-import scalaz.stream.async.mutable.Queue
 import scodec.bits.{BitVector}
 import scala.concurrent.duration._
 import scalaz._

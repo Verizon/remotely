@@ -7,6 +7,7 @@ import scodec.{Codec,Decoder,Encoder}
 import scodec.bits.{BitVector}
 import scalaz.stream.Process
 import scala.concurrent.duration.DurationInt
+import java.util.concurrent.ExecutorService
 
 /**
  * A collection of codecs and values, which can be populated
@@ -53,8 +54,8 @@ case class Environment(codecs: Codecs, values: Values) {
       }
     }
 
-  def serveNetty(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =
-    transport.netty.NettyServer.start(addr, serverHandler(monitoring))
+  def serveNetty(addr: InetSocketAddress, threadPool: ExecutorService)(monitoring: Monitoring = Monitoring.empty): () => Unit =
+    transport.netty.NettyServer.start(addr, serverHandler(monitoring), threadPool)
 
 
   /** Start an RPC server on the given port. */

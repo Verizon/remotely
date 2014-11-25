@@ -13,6 +13,7 @@ import scalaz.-\/
 import scalaz.concurrent.Task
 import scalaz.stream.{Process,async}
 import scodec.bits.BitVector
+import java.util.concurrent.ExecutorService
 
 
 /** 
@@ -63,12 +64,10 @@ class Deframe extends FrameDecoder {
         if(in.readableBytes() < rem) {
           null
         } else {
-          // STU don't need a bytebuffer
-          val bytes = ByteBuffer.allocate(rem)
+          val bytes = new Array[Byte](rem)
           in.readBytes(bytes)
-          val bytearray = bytes.array()
           remaining = None
-          val bits = BitVector.view(bytearray)
+          val bits = BitVector.view(bytes)
           Bits(bits)
         }
     }
@@ -95,7 +94,11 @@ class ClientDeframedHandler(queue: async.mutable.Queue[BitVector]) extends Simpl
   override def messageReceived(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
   me.getMessage().asInstanceOf[Deframed] match {
       case Bits(bv) =>
-        queue.enqueueOne(bv).runAsync(Function.const(()))
+      if(bv.size < 1 ) {
+        println("ZERO BV")
+        Thread.dumpStack
+      } else
+      queue.enqueueOne(bv).runAsync(Function.const(()))
     case EOS =>
       close()
     }
@@ -109,7 +112,7 @@ class ClientDeframedHandler(queue: async.mutable.Queue[BitVector]) extends Simpl
   * every time we see a boundary, we close one stream, open a new
   * one, and setup a new outgoing stream back to the client.
   */
-class ServerDeframedHandler(handler: Process[Task, BitVector] => Process[Task,BitVector]) extends SimpleChannelUpstreamHandler {
+class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) extends SimpleChannelUpstreamHandler {
 
   var queue: Option[async.mutable.Queue[BitVector]] = None
 
@@ -126,7 +129,7 @@ class ServerDeframedHandler(handler: Process[Task, BitVector] => Process[Task,Bi
   //
   private def ensureQueue(ctx: ChannelHandlerContext, me: MessageEvent): async.mutable.Queue[BitVector] = queue match {
     case None =>
-      val queue1 = async.unboundedQueue[BitVector]
+      val queue1 = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.Executor(threadPool))
       val queue = Some(queue1)
       val stream = queue1.dequeue
 
@@ -168,8 +171,13 @@ class ServerDeframedHandler(handler: Process[Task, BitVector] => Process[Task,Bi
     me.getMessage().asInstanceOf[Deframed] match {
       case Bits(bv) =>
 //        println(s"received (${bv.size}): " + bv.bytes.toArray.map("%02x".format(_)).mkString)
+      if(bv.size < 1 ) {
+        println("ZERO BV")
+        Thread.dumpStack
+      } else {
         val queue = ensureQueue(ctx, me)
         queue.enqueueOne(bv).runAsync(Function.const(()))
+      }
 
     case EOS =>
       close()

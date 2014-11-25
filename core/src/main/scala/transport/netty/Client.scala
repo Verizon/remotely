@@ -21,9 +21,8 @@ import scodec.bits.BitVector
 import scodec.bits.ByteVector
 
 object NettyConnectionPool {
-  def default(hosts: Process[Task,InetSocketAddress]): ObjectPool[Channel] = {
-    val pool = new GenericObjectPool[Channel](new NettyConnectionPool(hosts))
-    PoolUtils.erodingPool(pool)
+  def default(hosts: Process[Task,InetSocketAddress]): GenericObjectPool[Channel] = {
+    new GenericObjectPool[Channel](new NettyConnectionPool(hosts))
   }
 }
 
@@ -60,23 +59,29 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePo
   }
 }
 
-class NettyTransport(val pool: ObjectPool[Channel]) extends Handler {
+class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
   import NettyTransport._
 
   def apply(toServer: Process[Task, BitVector]): Process[Task, BitVector] = {
-    val c = pool.borrowObject
-    val fromServer = async.unboundedQueue[BitVector]
+    val c = pool.borrowObject()
+    val fromServer = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.DefaultStrategy)
     c.getPipeline().addLast("clientDeframe", new ClientDeframedHandler(fromServer))
     val writeBytes: Task[Unit] = (toServer pipe enframe).evalMap(write(c)).run
     val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
       case Cause.End =>
-        pool.invalidateObject(c)
+        pool.returnObject(c)
         Process.Halt(Cause.End)
       case cause =>
-        pool.returnObject(c)
+        pool.invalidateObject(c)
         Process.Halt(cause)
     }
     result
+  }
+
+  def shutdown(): Unit = {
+    pool.clear()
+    pool.close()
+    pool.getFactory().asInstanceOf[NettyConnectionPool].cf.releaseExternalResources()
   }
 }
 

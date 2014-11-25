@@ -17,9 +17,9 @@ private[remotely] trait lowerprioritycodecs {
   // and there are a few places where we ask for an implicit `Encoder[A]`,
   // we make this implicit lower priority to avoid ambiguous implicits.
   implicit def seq[A:Codec]: Codec[Seq[A]] = C.variableSizeBytes(C.int32,
-    C.repeated(Codec[A]).xmap[Seq[A]](
+    C.vector(Codec[A]).xmap[Seq[A]](
       a => a,
-      _.toIndexedSeq
+      _.toVector
     ))
 }
 
@@ -74,7 +74,7 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
       _.toIndexedSeq)
 
   implicit def indexedSeq[A:Codec]: Codec[IndexedSeq[A]] =
-    C.variableSizeBytes(int32, C.repeated(Codec[A]))
+    C.variableSizeBytes(int32, C.vector(Codec[A]).xmap(a => a, _.toVector))
 
   implicit def map[K:Codec,V:Codec]: Codec[Map[K,V]] =
     indexedSeq[(K,V)].xmap[Map[K,V]](
@@ -134,7 +134,7 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
    * with an error.
    */
   def remoteDecoder(env: Codecs): Decoder[Remote[Any]] = {
-    lazy val go = remoteDecoder(env)
+    def go = remoteDecoder(env)
     C.uint8.flatMap {
       case 0 =>
         utf8.flatMap { fmt =>

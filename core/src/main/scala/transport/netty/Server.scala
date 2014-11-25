@@ -6,17 +6,18 @@ import org.jboss.netty.channel._
 import org.jboss.netty.channel.socket.nio.{NioServerSocketChannel, NioServerSocketChannelFactory}
 import org.jboss.netty.bootstrap.ServerBootstrap
 import java.net.InetSocketAddress
+import java.util.concurrent.ExecutorService
 
-class NettyServer(handler: Handler) {
+class NettyServer(handler: Handler, threadPool: ExecutorService) {
 
-  val cf: ChannelFactory = new NioServerSocketChannelFactory(Executors.newCachedThreadPool(),
-                                                             Executors.newCachedThreadPool())
+  val cf: ChannelFactory = new NioServerSocketChannelFactory(Executors.newFixedThreadPool(2),
+                                                             Executors.newFixedThreadPool(4))
   /**
     * Attaches our handlers to a channel
     */
   class ChannelInitialize extends ChannelPipelineFactory {
     override def getPipeline: ChannelPipeline = {
-      Channels.pipeline(new Deframe(), new ServerDeframedHandler(handler))
+      Channels.pipeline(new Deframe(), new ServerDeframedHandler(handler, threadPool))
     }
   }
     
@@ -32,8 +33,8 @@ class NettyServer(handler: Handler) {
   }
 }
 object NettyServer {
-  def start(addr: InetSocketAddress, handler: Handler) = {
-    val server = new NettyServer(handler)
+  def start(addr: InetSocketAddress, handler: Handler, threadPool: ExecutorService) = {
+    val server = new NettyServer(handler, threadPool)
     val b = server.bootstrap
     // Bind and start to accept incoming connections.
     b.bind(addr)
