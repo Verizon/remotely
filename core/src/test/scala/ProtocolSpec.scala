@@ -21,7 +21,6 @@ import collection.immutable.SortedSet
 import java.util.concurrent.Executors
 import org.scalatest.{FlatSpec,Matchers,BeforeAndAfterAll}
 import codecs._, Response.Context
-import akka.actor.ActorSystem
 import codecs._
 import transport.netty._
 

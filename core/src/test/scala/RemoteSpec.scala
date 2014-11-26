@@ -39,7 +39,6 @@ object RemoteSpec extends Properties("Remote") {
       .declare("add1", (d: List[Int]) => Response.now(d.map(_ + 1):List[Int]))
     }
 
-  implicit val clientPool = akka.actor.ActorSystem("rpc-client")
   val addr = new InetSocketAddress("localhost", 8080)
   val server = env.serveNetty(addr, Executors.newCachedThreadPool)(Monitoring.empty)
   val nettyTrans = NettyTransport.single(addr)
@@ -135,7 +134,6 @@ object RemoteSpec extends Properties("Remote") {
   property("cleanup") = lazily {
     server()
     nettyTrans.pool.close()
-    clientPool.shutdown()
     true
   }
 
