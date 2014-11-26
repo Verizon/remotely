@@ -73,30 +73,6 @@ case class Environment(codecs: Codecs, values: Values) {
 
   def serveNetty(addr: InetSocketAddress, threadPool: ExecutorService)(monitoring: Monitoring = Monitoring.empty): () => Unit =
     transport.netty.NettyServer.start(addr, serverHandler(monitoring), threadPool)
-
-
-  /** Start an RPC server on the given port. */
-  def serveAkka(addr: InetSocketAddress)(monitoring: Monitoring = Monitoring.empty): () => Unit =
-    transport.akka.HandlerServer.start("rpc-server")(5.seconds, serverHandler(monitoring), addr, None)
-
-  /** Start an RPC server on the given port using an `SSLEngine` provider. */
-  def serveAkkaSSL(addr: InetSocketAddress, ssl: () => SSLEngine)(
-      monitoring: Monitoring = Monitoring.empty): () => Unit =
-    transport.akka.HandlerServer.start("ssl-rpc-server")(5.seconds, serverHandler(monitoring), addr, Some(ssl))
-
-  /** Generate the Scala code for the client access to this `Environment`. */
-  def generateClient(moduleName: String, pkg: String): String =
-    Signatures(values.keySet).generateClient(moduleName, pkg)
-
-  override def toString = {
-    s"""Environment {
-    |  ${values.keySet.toList.sorted.mkString("\n  ")}
-    |
-    |  codecs:
-    |    ${codecs.keySet.toList.sorted.mkString("\n    ")}
-    |}
-    """.stripMargin
-  }
 }
 
 object Environment {

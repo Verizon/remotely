@@ -18,10 +18,11 @@
 package remotely
 
 import java.net.InetSocketAddress
+import java.util.concurrent.Executors
 import org.scalacheck._
 import Prop._
 import scalaz.concurrent.Task
-import transport.akka._
+import transport.netty._
 
 object RemoteSpec extends Properties("Remote") {
   import codecs._
@@ -40,9 +41,9 @@ object RemoteSpec extends Properties("Remote") {
 
   implicit val clientPool = akka.actor.ActorSystem("rpc-client")
   val addr = new InetSocketAddress("localhost", 8080)
-  val server = env.serveNetty(addr)(Monitoring.empty)
-  val akkaTrans = AkkaTransport.single(clientPool,addr)
-  val loc: Endpoint = Endpoint.single(akkaTrans)
+  val server = env.serveNetty(addr, Executors.newCachedThreadPool)(Monitoring.empty)
+  val nettyTrans = NettyTransport.single(addr)
+  val loc: Endpoint = Endpoint.single(nettyTrans)
 
   val sum = Remote.ref[List[Int] => Int]("sum")
   val sumD = Remote.ref[List[Double] => Double]("sum")
@@ -133,7 +134,7 @@ object RemoteSpec extends Properties("Remote") {
   // NB: this property should always appear last, so it runs after all properties have run
   property("cleanup") = lazily {
     server()
-    akkaTrans.pool.close()
+    nettyTrans.pool.close()
     clientPool.shutdown()
     true
   }

@@ -1,6 +1,6 @@
 name := "core"
 
-lazy val paradiseVersion = "2.0.1"
+resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
 
 scalacOptions ++= Seq(
   "-Ywarn-value-discard",
@@ -9,12 +9,16 @@ scalacOptions ++= Seq(
   "-language:postfixOps"
 )
 
+libraryDependencies += "org.scalaz.stream" %% "scalaz-stream" % "0.6a"
+
 libraryDependencies ++= Seq(
-  "org.scalaz.stream"  %% "scalaz-stream" % "0.5",
   "org.typelevel"      %% "scodec-core"   % "1.5.0",
+  "org.scalaz"         %% "scalaz-core"   % "7.1.0",
   "org.apache.commons" % "commons-pool2"  % "2.2",
   "io.netty"           % "netty"          % "3.6.6.Final"
 )
+
+lazy val paradiseVersion = "2.0.1"
 
 addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full)
 

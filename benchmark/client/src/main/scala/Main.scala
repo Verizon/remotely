@@ -17,8 +17,6 @@ import remotely.transport.netty._
 import scodec.Codec
 import remotely.example.benchmark.protocol._
 
-@GenClient(remotely.example.benchmark.protocol.definition.signatures) object BenchmarkClient
-
 case class Result(success: Int,
                    failure: Int,
                    successTime: Long,
@@ -133,8 +131,8 @@ object BenchmarkClientMain extends TestData with transformations {
     val end = System.currentTimeMillis + (duration * 1000)
 
     val testers = (1 to num).toList.map{ _ =>
-//      new Test(results, BenchmarkClient.identityBig(toBigW(bigIn)).runWithoutContext(endpoint))
-      new Test(results, BenchmarkClient.identityMedium(toMediumW(medIn)).runWithoutContext(endpoint))
+      new Test(results, server.BenchmarkClient.identityBig(toBigW(bigIn)).runWithoutContext(endpoint))
+//      new Test(results, BenchmarkClient.identityMedium(toMediumW(medIn)).runWithoutContext(endpoint))
 //      new Test(results, BenchmarkClient.identityLarge(toLargeW(largeIn)).runWithoutContext(endpoint))
     }
     val threads = testers.map(new Thread(_))

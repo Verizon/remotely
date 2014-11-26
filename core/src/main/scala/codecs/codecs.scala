@@ -27,6 +27,7 @@ import scalaz.syntax.std.option._
 import scodec.{Codec,codecs => C,Decoder,Encoder}
 import scodec.bits.BitVector
 import Remote._
+import scodec.Err
 
 private[remotely] trait lowerprioritycodecs {
 
@@ -41,7 +42,6 @@ private[remotely] trait lowerprioritycodecs {
 }
 
 package object codecs extends lowerprioritycodecs with TupleHelpers {
-
   implicit val float = C.float
   implicit val double = C.double
   implicit val int32 = C.int32
@@ -60,8 +60,8 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
 
   implicit def byteArray: Codec[Array[Byte]] = {
     val B = new Codec[Array[Byte]] {
-      def encode(b: Array[Byte]): String \/ BitVector = right(BitVector(b))
-      def decode(b: BitVector): String \/ (BitVector, Array[Byte]) = right(BitVector.empty -> b.toByteArray)
+      def encode(b: Array[Byte]): Err \/ BitVector = right(BitVector(b))
+      def decode(b: BitVector): Err \/ (BitVector, Array[Byte]) = right(BitVector.empty -> b.toByteArray)
     }
     C.variableSizeBytes(int32, B)
   }
@@ -105,9 +105,8 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
       _.toIndexedSeq
     )
 
-  import scalaz.\/._
-  implicit class PlusSyntax(e: String \/ BitVector) {
-    def <+>(r: => String \/ BitVector): String \/ BitVector =
+  implicit class PlusSyntax(e: Err \/ BitVector) {
+    def <+>(r: => Err \/ BitVector): Err \/ BitVector =
       e.flatMap(bv => r.map(bv ++ _))
   }
 
@@ -120,17 +119,17 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
     header <- map[String,String]
     stackS <- list[String]
     stack <- try succeed(stackS.map(Response.ID.fromString))
-             catch { case e: IllegalArgumentException => fail(s"[decoding] error decoding ID in tracing stack: ${e.getMessage}") }
+             catch { case e: IllegalArgumentException => fail(Err(s"[decoding] error decoding ID in tracing stack: ${e.getMessage}")) }
   } yield Response.Context(header, stack)
 
-  def remoteEncode[A](r: Remote[A]): String \/ BitVector =
+  def remoteEncode[A](r: Remote[A]): Err \/ BitVector =
     r match {
       case Local(a,e,t) => C.uint8.encode(0) <+> // tag byte
         utf8.encode(t) <+>
         e.asInstanceOf[Option[Encoder[A]]].map(_.encode(a))
-          .getOrElse(left("cannot encode Local value with undefined encoder"))
+          .getOrElse(left(Err("cannot encode Local value with undefined encoder")))
       case Async(a,e,t) =>
-        left("cannot encode Async constructor; call Remote.localize first")
+        left(Err("cannot encode Async constructor; call Remote.localize first"))
       case Ref(t) => C.uint8.encode(1) <+>
         utf8.encode(t)
       case Ap1(f,a) => C.uint8.encode(2) <+>
@@ -156,7 +155,7 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
       case 0 =>
         utf8.flatMap { fmt =>
                     env.codecs.get(fmt) match {
-                      case None => fail(s"[decoding] unknown format type: $fmt")
+                      case None => fail(Err(s"[decoding] unknown format type: $fmt"))
                       case Some(dec) => dec.map { a => Local(a,None,fmt) }
                     }
                   }
@@ -170,7 +169,7 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
                   Ap3(f.asInstanceOf[Remote[(Any,Any,Any) => Any]],a,b,c))
       case 5 => E.apply5(go,go,go,go,go)((f,a,b,c,d) =>
                   Ap4(f.asInstanceOf[Remote[(Any,Any,Any,Any) => Any]],a,b,c,d))
-      case t => fail(s"[decoding] unknown tag byte: $t")
+      case t => fail(Err(s"[decoding] unknown tag byte: $t"))
     }
   }
 
@@ -207,11 +206,11 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
         if (unknown.isEmpty) remoteDecoder(env.codecs)
         else {
           val unknownMsg = unknown.mkString("\n")
-          fail(s"[decoding] server does not have deserializers for:\n$unknownMsg")
+          fail(Err(s"[decoding] server does not have deserializers for:\n$unknownMsg"))
         }
       }
       responseDec <- env.codecs.get(responseTag) match {
-        case None => fail(s"[decoding] server does not have response serializer for: $responseTag")
+        case None => fail(Err(s"[decoding] server does not have response serializer for: $responseTag"))
         case Some(a) => succeed(a)
       }
     } yield (responseDec, ctx, r)
@@ -223,13 +222,13 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
     case true => Decoder[A].map(right)
   }
 
-  def responseEncoder[A:Encoder] = new Encoder[String \/ A] {
-    def encode(a: String \/ A): String \/ BitVector =
-      a.fold(s => bool.encode(false) <+> utf8.encode(s),
+  def responseEncoder[A:Encoder] = new Encoder[Err \/ A] {
+    def encode(a: Err \/ A): Err \/ BitVector =
+      a.fold(s => bool.encode(false) <+> utf8.encode(s.messageWithContext),
              a => bool.encode(true) <+> Encoder[A].encode(a))
   }
 
-  def fail[A](msg: String): Decoder[A] =
+  def fail[A](msg: Err): Decoder[A] =
     new Decoder[A] { def decode(bits: BitVector) = left(msg) }.asInstanceOf[Decoder[A]]
 
   def succeed[A](a: A): Decoder[A] = C.provide(a)
@@ -237,25 +236,18 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
   def decodeTask[A:Decoder](bits: BitVector): Task[A] =
     liftDecode(Decoder[A].decode(bits))
 
-  def liftEncode(result: String \/ BitVector): Task[BitVector] =
+  def liftEncode(result: Err \/ BitVector): Task[BitVector] =
     result.fold(
       e => Task.fail(new EncodingFailure(e)),
       bits => Task.now(bits)
     )
-  def liftDecode[A](result: String \/ (BitVector,A)): Task[A] =
+  def liftDecode[A](result: Err \/ (BitVector,A)): Task[A] =
     result.fold(
       e => Task.fail(new DecodingFailure(e)),
       { case (trailing,a) =>
         if (trailing.isEmpty) Task.now(a)
-        else Task.fail(new DecodingFailure("trailing bits: " + trailing)) }
+        else Task.fail(new DecodingFailure(Err("trailing bits: " + trailing))) }
     )
-
-  // borrowed from scodec 1.3, lets you exmap to a disjucntion where the left fails the encode/decode
-  def exmap[A,B](self: Codec[A])(f: A => String \/ B, g: B => String \/ A): Codec[B] = new Codec[B] {
-     def encode(b: B): String \/ BitVector = g(b) flatMap self.encode
-     def decode(buffer: BitVector): String \/ (BitVector, B) =
-       self.decode(buffer) flatMap { case (rest, a) => f(a).flatMap { b => \/.right((rest, b)) } }
-  }
 }
 
 trait TupleHelpers {
@@ -267,16 +259,16 @@ trait TupleHelpers {
   class Tuple2Codec[A,B](A: Codec[A], B: Codec[B]) extends Codec[(A,B)] {
     def ~~[C](C: Codec[C]): Tuple3Codec[A,B,C] = new Tuple3Codec(A,B,C)
 
-    override def decode(bits: BitVector): String \/ (BitVector, (A,B)) = {
+    override def decode(bits: BitVector): Err \/ (BitVector, (A,B)) = {
       for {
-        aa <- A.decode(bits).leftMap("tuple2-1 from ${bits.size} bits -- " + _)
+        aa <- A.decode(bits).leftMap(e => Err("tuple2-1 from ${bits.size} bits -- " + e.messageWithContext))
                       (bits1,a) = aa
-        bb <- B.decode(bits1).leftMap("tuple2-2 from ${bits1.size} bits -- " + _)
+        bb <- B.decode(bits1).leftMap(e => Err("tuple2-2 from ${bits1.size} bits -- " + e.messageWithContext))
       } yield(bb._1, (a,bb._2))
 
     }
 
-    override def encode(ab: (A,B)): String \/ BitVector =
+    override def encode(ab: (A,B)): Err \/ BitVector =
       for {
         bits <- A.encode(ab._1)
         bits2 <- B.encode(ab._2)
@@ -288,7 +280,7 @@ trait TupleHelpers {
   class Tuple3Codec[A,B,C](A: Codec[A], B: Codec[B], C: Codec[C]) extends Codec[(A,B,C)] {
     def ~~[D](D: Codec[D]): Tuple4Codec[A,B,C,D] = new Tuple4Codec(A,B,C,D)
 
-    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C)) = {
+    override def decode(bits: BitVector): Err \/ (BitVector, (A,B,C)) = {
       val x = for {
         aa <- A.decode(bits)
                       (bits1,a) = aa
@@ -296,10 +288,10 @@ trait TupleHelpers {
                       (bits2,b) = bb
         cc <- C.decode(bits2)
       } yield(cc._1, (a,b,cc._2))
-      x.leftMap(s"tuple3 from ${bits.size} bits -- " + _)
+      x.leftMap(e => Err(s"tuple3 from ${bits.size} bits -- " + e.messageWithContext))
     }
 
-    override def encode(abc: (A,B,C)): String \/ BitVector =
+    override def encode(abc: (A,B,C)): Err \/ BitVector =
       for {
         bits <- A.encode(abc._1)
         bits2 <- B.encode(abc._2)
@@ -313,7 +305,7 @@ trait TupleHelpers {
   class Tuple4Codec[A,B,C,D](A: Codec[A], B: Codec[B], C: Codec[C], D: Codec[D]) extends Codec[(A,B,C,D)] {
     def ~~[E](E: Codec[E]): Tuple5Codec[A,B,C,D,E] = new Tuple5Codec(A,B,C,D,E)
 
-    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C,D)) = {
+    override def decode(bits: BitVector): Err \/ (BitVector, (A,B,C,D)) = {
       val x = for {
         aa <- A.decode(bits)
                       (bits1,a) = aa
@@ -324,9 +316,9 @@ trait TupleHelpers {
         dd <- D.decode(bits3)
       } yield (dd._1, (a,b,c,dd._2))
 
-      x.leftMap(s"tuple4 from ${bits.size} bits -- " + _)
+      x.leftMap(e => Err(s"tuple4 from ${bits.size} bits -- " + e.messageWithContext))
     }
-    override def encode(abcd: (A,B,C,D)): String \/ BitVector =
+    override def encode(abcd: (A,B,C,D)): Err \/ BitVector =
       for {
         bits <- A.encode(abcd._1)
         bits2 <- B.encode(abcd._2)
@@ -341,7 +333,7 @@ trait TupleHelpers {
   class Tuple5Codec[A,B,C,D,E](A: Codec[A], B: Codec[B], C: Codec[C], D: Codec[D], E: Codec[E]) extends Codec[(A,B,C,D,E)] {
     def ~~[F](F: Codec[F]): Tuple6Codec[A,B,C,D,E,F] = new Tuple6Codec(A,B,C,D,E,F)
 
-    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C,D,E)) = {
+    override def decode(bits: BitVector): Err \/ (BitVector, (A,B,C,D,E)) = {
       val x = for {
         aa <- A.decode(bits)
                       (bits1,a) = aa
@@ -353,11 +345,11 @@ trait TupleHelpers {
                       (bits4,d) = dd
         ee <- E.decode(bits4)
       } yield (ee._1, (a,b,c,d,ee._2))
-      x.leftMap(s"tuple4 from ${bits.size} bits -- " + _)
+      x.leftMap(e => Err(s"tuple4 from ${bits.size} bits -- " + e.messageWithContext))
     }
 
 
-    override def encode(abcde: (A,B,C,D,E)): String \/ BitVector =
+    override def encode(abcde: (A,B,C,D,E)): Err \/ BitVector =
       for {
         bits <- A.encode(abcde._1)
         bits2 <- B.encode(abcde._2)
@@ -373,7 +365,7 @@ trait TupleHelpers {
   class Tuple6Codec[A,B,C,D,E,F](A: Codec[A], B: Codec[B], C: Codec[C], D: Codec[D], E: Codec[E], F: Codec[F]) extends Codec[(A,B,C,D,E,F)] {
     def ~~[G](G: Codec[G]): Tuple7Codec[A,B,C,D,E,F,G] = new Tuple7Codec(A,B,C,D,E,F,G)
 
-    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C,D,E,F)) = {
+    override def decode(bits: BitVector): Err \/ (BitVector, (A,B,C,D,E,F)) = {
       val x = for {
         aa <- A.decode(bits)
                       (bits1,a) = aa
@@ -387,10 +379,10 @@ trait TupleHelpers {
                       (bits5,e) = ee
         ff <- F.decode(bits5)
       } yield (ff._1, (a,b,c,d,e,ff._2))
-      x.leftMap(s"tuple3 from ${bits.size} bits -- " + _)
+      x.leftMap(e => Err(s"tuple3 from ${bits.size} bits -- " + e.messageWithContext))
     }
 
-    override def encode(abcdef: (A,B,C,D,E,F)): String \/ BitVector =
+    override def encode(abcdef: (A,B,C,D,E,F)): Err \/ BitVector =
       for {
         bits <- A.encode(abcdef._1)
         bits2 <- B.encode(abcdef._2)
@@ -405,7 +397,7 @@ trait TupleHelpers {
   }
 
   class Tuple7Codec[A,B,C,D,E,F,G](A: Codec[A], B: Codec[B], C: Codec[C], D: Codec[D], E: Codec[E], F: Codec[F], G: Codec[G]) extends Codec[(A,B,C,D,E,F,G)] {
-    override def decode(bits: BitVector): String \/ (BitVector, (A,B,C,D,E,F,G)) = {
+    override def decode(bits: BitVector): Err \/ (BitVector, (A,B,C,D,E,F,G)) = {
       val x = for {
         aa <- A.decode(bits)
                       (bits1,a) = aa
@@ -421,10 +413,10 @@ trait TupleHelpers {
                       (bits6,f) = ff
         gg <- G.decode(bits6)
       } yield (gg._1, (a,b,c,d,e,f,gg._2))
-      x.leftMap(s"tuple3 from ${bits.size} bits -- " + _)
+      x.leftMap(e => Err(s"tuple3 from ${bits.size} bits -- " + e.messageWithContext))
     }
 
-    override def encode(abcdefg: (A,B,C,D,E,F,G)): String \/ BitVector =
+    override def encode(abcdefg: (A,B,C,D,E,F,G)): scodec.Err \/ BitVector =
       for {
         bits <- A.encode(abcdefg._1)
         bits2 <- B.encode(abcdefg._2)

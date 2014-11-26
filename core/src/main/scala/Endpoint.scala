@@ -35,26 +35,19 @@ import scalaz.stream.merge._
  */
 trait Endpoint extends Handler {
   def apply(in: Process[Task,BitVector]): Process[Task,BitVector]
+/*
 
-/*
-  def get: Task[Connection] = connections.once.runLast.flatMap {
-    case None => Task.fail(new Exception("No available connections"))
-    case Some(a) => Task.now(a)
-  }
- */
-/*
   /**
-   * Adds a circuit-breaker to this endpoint that "opens" (fails fast) after
-   * `maxErrors` consecutive failures, and attempts a connection again
-   * when `timeout` has passed.
-   */
+    * Adds a circuit-breaker to this endpoint that "opens" (fails fast) after
+    * `maxErrors` consecutive failures, and attempts a connection again
+    * when `timeout` has passed.
+    */
   def circuitBroken(timeout: Duration, maxErrors: Int): Task[Endpoint] =
     CircuitBreaker(timeout, maxErrors).map { cb =>
       Endpoint(connections.map(c => bs => c(bs).translate(cb.transform)))
     }
  */
 }
-
 object Endpoint {
 
   def empty: Endpoint = new Endpoint {

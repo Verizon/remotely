@@ -18,6 +18,7 @@
 package remotely
 
 import collection.immutable.SortedSet
+import java.util.concurrent.Executors
 import org.scalatest.{FlatSpec,Matchers,BeforeAndAfterAll}
 import codecs._, Response.Context
 import akka.actor.ActorSystem
@@ -27,7 +28,7 @@ import transport.netty._
 class ProtocolSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   val addr = new java.net.InetSocketAddress("localhost", 9000)
   val server = new TestServer
-  val shutdown: () => Unit = server.environment.serveNetty(addr)(Monitoring.empty)
+  val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newCachedThreadPool)(Monitoring.empty)
 
   val endpoint = Endpoint.single(NettyTransport.single(addr))
 

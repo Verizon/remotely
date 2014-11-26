@@ -20,9 +20,11 @@ package examples
 
 import java.net.InetSocketAddress
 import scalaz.concurrent.Task
-import transport.akka._
+import transport.netty._
 
 import codecs._
+
+/* stew: commenting this out until we have an SSL tranport
 
 object SimpleSSL extends App {
 
@@ -47,14 +49,11 @@ object SimpleSSL extends App {
   val clientSslProvider = tls.enableCiphers(tls.ciphers.rsa: _*)(tls.fromContext(clientCtx))
 
   // create a server for this environment
-  val server = env.serveAkkaSSL(addr, tls.server(serverSslProvider))(Monitoring.consoleLogger("[server]"))
-
-  // to actually run a remote expression, we need an endpoint
-  implicit val clientPool = akka.actor.ActorSystem("rpc-client")
+  val server = env.serveNettySSL(addr, tls.server(serverSslProvider))(Monitoring.consoleLogger("[server]"))
 
   try {
     val expr: Remote[Int] = sum(List(0,1,2,3,4))
-    val loc: Endpoint = Endpoint.single(AkkaTransport.singleSSL(tls.client(clientSslProvider))(clientPool,addr))
+    val loc: Endpoint = Endpoint.single(NettyTransport.singleSSL(tls.client(clientSslProvider))(clientPool,addr))
     val result: Task[Int] = expr.runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
     // running a couple times just to see the latency improve for subsequent reqs
@@ -67,7 +66,8 @@ object SimpleSSL extends App {
     println("shutting down...")
     Thread.sleep(1000)
     server()
-    clientPool.shutdown()
     println("..done shutting down")
   }
 }
+
+*/

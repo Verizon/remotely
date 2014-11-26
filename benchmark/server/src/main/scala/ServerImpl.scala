@@ -20,7 +20,7 @@ object Main {
     val addr = new java.net.InetSocketAddress("localhost", port)
     val server = new BenchmarkServerImpl
     val threadPool = Executors.newFixedThreadPool(Integer.parseInt(argv(1)), new ThreadFactory {
-                                                        override def newThread(r: Runnable): Thread = new Thread(r, "frank - " + threadNo.incrementAndGet())
+                                                        override def newThread(r: Runnable): Thread = new Thread(r, "remotely - " + threadNo.incrementAndGet())
                                                       })
     val shutdown: () => Unit = server.environment.serveNetty(addr, threadPool)(Monitoring.empty)
   }
