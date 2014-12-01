@@ -17,4 +17,6 @@
 
 package remotely.codecs
 
-class EncodingFailure(msg: String) extends Exception(msg)
+import scodec.Err
+
+class EncodingFailure(err: Err) extends Exception(err.messageWithContext)

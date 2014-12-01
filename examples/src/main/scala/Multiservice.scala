@@ -18,10 +18,11 @@
 package remotely
 package examples
 
-import akka.actor._
 import codecs._
 import Remote.implicits._
+import java.util.concurrent.Executors
 import scalaz.concurrent.Task
+import transport.netty._
 
 /**
  * This is a complete example of one service calling another service.
@@ -30,8 +31,6 @@ import scalaz.concurrent.Task
  * and pushed onto the trace stack for each nested remote request.
  */
 object Multiservice extends App {
-
-  implicit val clientPool = ActorSystem("rpc-client")
 
   // Define a service exposing `sum` and `length` functions for `List[Double]`
   val env1 = Environment.empty
@@ -54,10 +53,11 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr1 = new java.net.InetSocketAddress("localhost", 8080)
-  val stopA = env1.serve(addr1)(Monitoring.consoleLogger("[service-a]"))
+  val transport = NettyTransport.single(addr1)
+  val stopA = env1.serveNetty(addr1, Executors.newCachedThreadPool)(Monitoring.consoleLogger("[service-a]"))
 
   // And expose an `Endpoint` for making requests to this service
-  val serviceA: Endpoint = Endpoint.single(addr1)
+  val serviceA: Endpoint = Endpoint.single(transport)
 
   // Define a service exposing an `average` function, which calls `serviceA`.
   val env2 = Environment.empty
@@ -100,8 +100,8 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8081)
-  val stopB = env2.serve(addr2)(Monitoring.consoleLogger("[service-b]"))
-  val serviceB: Endpoint = Endpoint.single(addr2)
+  val stopB = env2.serveNetty(addr2, Executors.newCachedThreadPool)(Monitoring.consoleLogger("[service-b]"))
+  val serviceB: Endpoint = Endpoint.single(NettyTransport.single(addr2))
 
   try {
     val ctx = Response.Context.empty ++ List("flux-capacitor" -> "great SCOTT!")
@@ -124,6 +124,6 @@ object Multiservice extends App {
   finally {
     stopA()
     stopB()
-    clientPool.shutdown
+    transport.shutdown()
   }
 }
