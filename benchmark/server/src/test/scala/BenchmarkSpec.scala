@@ -17,9 +17,10 @@ import protocol._
 
 class BenchmarkServerSpec extends FlatSpec
     with Matchers
+    with BeforeAndAfterAll
     with transformations {
 
-  val addr = new java.net.InetSocketAddress("localhost", 9000)
+  val addr = new java.net.InetSocketAddress("localhost", 9001)
   val server = new BenchmarkServerImpl
   val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newFixedThreadPool(8))(Monitoring.consoleLogger())
 
@@ -27,6 +28,11 @@ class BenchmarkServerSpec extends FlatSpec
 
   import remotely.Remote.implicits._
   import remotely.codecs._
+
+  override def afterAll(){
+    Thread.sleep(500)
+    shutdown()
+  }
 
   behavior of "identityBig"
   it should "work" in {
