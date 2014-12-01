@@ -30,6 +30,7 @@ package object remotely {
   import scalaz.std.anyVal._
   import scalaz.std.tuple._
 
+  type Handler = Process[Task,BitVector] => Process[Task,BitVector]
 
   /**
    * Evaluate the given remote expression at the
@@ -54,10 +55,11 @@ package object remotely {
                                                       
     Task.delay { System.nanoTime } flatMap { start =>
       for {
+        conn <- e.get
         reqBits <- codecs.encodeRequest(r).apply(ctx)
         respBytes <- reportErrors(start) {
           val reqBytestream = Process.emit(reqBits)
-          val bytes = fullyRead(e(reqBytestream)/*.pipe(Process.await1[BitVector])*/)
+          val bytes = fullyRead(conn(reqBytestream)/*.pipe(Process.await1[BitVector])*/)
           bytes
         }
         resp <- {

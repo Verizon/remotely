@@ -31,11 +31,14 @@ import scalaz.stream.merge._
 
 /**
  * A 'logical' endpoint for some service, represented
- * by a possibly rotating stream of `Connection`s.
+ * by a possibly rotating stream of `Transport`s.
  */
-trait Endpoint extends Handler {
-  def apply(in: Process[Task,BitVector]): Process[Task,BitVector]
-/*
+case class Endpoint(connections: Process[Task,Handler]) {
+  def get: Task[Handler] = connections.once.runLast.flatMap {
+    case None => Task.fail(new Exception("No available connections"))
+    case Some(a) => Task.now(a)
+  }
+
 
   /**
     * Adds a circuit-breaker to this endpoint that "opens" (fails fast) after
@@ -44,19 +47,88 @@ trait Endpoint extends Handler {
     */
   def circuitBroken(timeout: Duration, maxErrors: Int): Task[Endpoint] =
     CircuitBreaker(timeout, maxErrors).map { cb =>
-      Endpoint(connections.map(c => bs => c(bs).translate(cb.transform)))
+      Endpoint(connections.map(c => (bs: Process[Task,BitVector]) => c(bs).translate(cb.transform)))
     }
- */
+
 }
 object Endpoint {
+  def empty: Endpoint = Endpoint(Process.halt)
+  def single(transport: Handler): Endpoint = Endpoint(Process.constant(transport))
 
-  def empty: Endpoint = new Endpoint {
-    def apply(in: Process[Task,BitVector]) = Process.fail(new Exception("no available connections"))
+  /**
+    * If a connection in an endpoint fails, then attempt the same call to the next
+    * endpoint, but only if `timeout` has not passed AND we didn't fail in a
+    * "committed state", i.e. we haven't received any bytes.
+    */
+  def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint =
+    Endpoint(transpose(es.map(_.connections)).flatMap { cs =>
+               cs.reduce((c1, c2) => bs => c1(bs) match {
+                           case w@Await(a, k) =>
+                             await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
+                                                      case (d, -\/(e)) =>
+                                                        if (timeout - d > 0.milliseconds) c2(bs)
+                                                        else eval(Task.fail(new Exception(s"Failover chain timed out after $timeout")))
+                                                      case (d, \/-(x)) => k(\/-(x)).run
+                                                    })
+                           case x => x
+                         })
+             })
+
+  /**
+    * An endpoint backed by a (static) pool of other endpoints.
+    * Each endpoint has its own circuit-breaker, and fails over to all the others
+    * on failure.
+    */
+  def uber(maxWait: Duration,
+           circuitOpenTime: Duration,
+           maxErrors: Int,
+           es: Process[Task, Endpoint]): Endpoint =
+    Endpoint(mergeN(permutations(es).map(ps =>
+                      failoverChain(maxWait, ps.evalMap(p => p.circuitBroken(circuitOpenTime, maxErrors))).connections)))
+
+  /**
+    * Produce a stream of all the permutations of the given stream.
+    */
+  def permutations[A](p: Process[Task, A]): Process[Task, Process[Task, A]] = {
+    val xs = iterate(0)(_ + 1) zip p
+    for {
+      b <- eval(isEmpty(xs))
+      r <- if (b) emit(xs) else for {
+        x <- xs
+        ps <- permutations(xs |> delete { case (i, v) => i == x._1 })
+      } yield emit(x) ++ ps
+    } yield r.map(_._2)
   }
 
-  def single(transport: Handler): Endpoint = new Endpoint {
-    def apply(in: Process[Task,BitVector]): Process[Task,BitVector] = transport(in)
+  /** Skips the first element that matches the predicate. */
+  def delete[I](f: I => Boolean): Process1[I,I] = {
+    def go(s: Boolean): Process1[I,I] =
+      await1[I] flatMap (i => if (s && f(i)) go(false) else emit(i) ++ go(s))
+    go(true)
   }
+
+  /**
+    * Transpose a process of processes to emit all their first elements, then all their second
+    * elements, and so on.
+    */
+  def transpose[F[_]:Monad: Catchable, A](as: Process[F, Process[F, A]]): Process[F, Process[F, A]] =
+    emit(as.flatMap(_.take(1))) ++ eval(isEmpty(as.flatMap(_.drop(1)))).flatMap(b =>
+      if(b) halt else transpose(as.map(_.drop(1))))
+
+  /**
+    * Returns true if the given process never emits.
+    */
+  def isEmpty[F[_]: Monad: Catchable, O](p: Process[F, O]): F[Boolean] = ((p as false) |> Process.await1).runLast.map(_.getOrElse(true))
+
+
+  def time[A](task: Task[A]): Task[(Duration, A)] = for {
+    t1 <- Task(System.currentTimeMillis)
+    a  <- task
+    t2 <- Task(System.currentTimeMillis)
+    t3 <- Task(t2 - t1)
+  } yield (t3.milliseconds, a)
+
+
 }
 
 

@@ -4,6 +4,8 @@ import scalaz.stream.Process
 import scalaz.concurrent.Task
 import scodec.bits.BitVector
 
+/*
+
 /**
   * Represents the logic of a connection handler, a function
   * from a stream of bytes to a stream of bytes, which will
@@ -16,7 +18,6 @@ import scodec.bits.BitVector
   */
 trait Handler extends (Process[Task,BitVector] => Process[Task,BitVector]) {
   def apply(source: Process[Task,BitVector]): Process[Task,BitVector]
-
 }
 
 object Handler {
@@ -24,3 +25,5 @@ object Handler {
     def apply(source: Process[Task,BitVector]) = handle(source)
   }
 }
+
+ */

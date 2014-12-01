@@ -63,7 +63,7 @@ case class Environment(codecs: Codecs, values: Values) {
   def values(v: Values): Environment =
     this.populate(_ => v)
 
-  private def serverHandler(monitoring: Monitoring): Handler = Handler { bytes =>
+  private def serverHandler(monitoring: Monitoring): Handler = { bytes =>
       // we assume the input is a framed stream, and encode the response(s)
       // as a framed stream as well
       bytes pipe Process.await1[BitVector] /*server.Handler.deframe*/ evalMap { bs =>
