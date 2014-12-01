@@ -89,7 +89,7 @@ object Endpoint {
   /**
     * Produce a stream of all the permutations of the given stream.
     */
-  def permutations[A](p: Process[Task, A]): Process[Task, Process[Task, A]] = {
+  private def permutations[A](p: Process[Task, A]): Process[Task, Process[Task, A]] = {
     val xs = iterate(0)(_ + 1) zip p
     for {
       b <- eval(isEmpty(xs))
@@ -101,7 +101,7 @@ object Endpoint {
   }
 
   /** Skips the first element that matches the predicate. */
-  def delete[I](f: I => Boolean): Process1[I,I] = {
+  private def delete[I](f: I => Boolean): Process1[I,I] = {
     def go(s: Boolean): Process1[I,I] =
       await1[I] flatMap (i => if (s && f(i)) go(false) else emit(i) ++ go(s))
     go(true)
@@ -111,17 +111,16 @@ object Endpoint {
     * Transpose a process of processes to emit all their first elements, then all their second
     * elements, and so on.
     */
-  def transpose[F[_]:Monad: Catchable, A](as: Process[F, Process[F, A]]): Process[F, Process[F, A]] =
+  private def transpose[F[_]:Monad: Catchable, A](as: Process[F, Process[F, A]]): Process[F, Process[F, A]] =
     emit(as.flatMap(_.take(1))) ++ eval(isEmpty(as.flatMap(_.drop(1)))).flatMap(b =>
       if(b) halt else transpose(as.map(_.drop(1))))
 
   /**
     * Returns true if the given process never emits.
     */
-  def isEmpty[F[_]: Monad: Catchable, O](p: Process[F, O]): F[Boolean] = ((p as false) |> Process.await1).runLast.map(_.getOrElse(true))
+  private def isEmpty[F[_]: Monad: Catchable, O](p: Process[F, O]): F[Boolean] = ((p as false) |> Process.await1).runLast.map(_.getOrElse(true))
 
-
-  def time[A](task: Task[A]): Task[(Duration, A)] = for {
+  private def time[A](task: Task[A]): Task[(Duration, A)] = for {
     t1 <- Task(System.currentTimeMillis)
     a  <- task
     t2 <- Task(System.currentTimeMillis)
