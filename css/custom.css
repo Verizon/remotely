@@ -43,3 +43,17 @@ section img {
 .red {
   color: red;
 }
+
+.msg {
+  font-style: italic;
+  border-radius: 5px;
+  -moz-border-radius: 5px;
+}
+.warn {
+  background-color: #F5EEA2;
+  border: 1px solid #F7D386;
+}
+.msg p {
+  padding: 10px;
+  margin: 0;
+}
