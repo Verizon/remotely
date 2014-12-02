@@ -6,7 +6,6 @@
     <title>{{ site.name }} - {{ page.title }}</title>
 
     <link rel="stylesheet" href="{{ site.baseurl }}css/styles.css">
-    <link rel="stylesheet" href="{{ site.baseurl }}css/pygment_trac.css">
     <link rel="stylesheet" href="{{ site.baseurl }}css/custom.css">
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
     <!--[if lt IE 9]>
@@ -19,16 +18,23 @@
       <header>
         <h1>Remotely</h1>
         <p>Last updated on <em>{{ site.time | date: '%B %d, %Y' }}</em></p>
-        <p class="view"><a href="https://github.svc.oncue.com/intelmedia/remotely">View the source on Github
-        <br/><small>intelmedia/remotely</small></a></p>
+        <p class="view"><a href="https://github.com/oncue/remotely">View the source on Github
+        <br/><small>oncue/remotely</small></a></p>
+
+        <ul>
+          <li><a href="https://github.com/oncue/remotely/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/oncue/remotely/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/oncue/remotely">View On <strong>GitHub</strong></a></li>
+        </ul>
+
         <hr />
 
-        <ol>
+        <ol id="top">
           <!-- home -->
           <li><a href="{{ site.baseurl }}">Home</a></li>
           {% if page.section == 'home' %}
             <li>
-              <ol>
+              <ol class="menu">
                 <li><a href="{{ site.baseurl }}#rationale">Rationale</a></li>
                 <li><a href="{{ site.baseurl }}#getting-started">Getting Started</a></li>
               </ol>
@@ -38,7 +44,7 @@
           <li><a href="{{ site.baseurl }}manual.html">Manual</a></li>
           {% if page.section == 'manual' %}
             <li>
-              <ol>
+              <ol class="menu">
                 <li><a href="{{ site.baseurl }}manual.html#codecs">Codecs</a></li>
                 <li><a href="{{ site.baseurl }}manual.html#references">Remotes</a></li>
                 <li><a href="{{ site.baseurl }}manual.html#endpoint">Endpoints</a></li>
@@ -54,12 +60,15 @@
           <li><a href="{{ site.baseurl }}internals.html">Internals</a></li>
           {% if page.section == 'internals' %}
             <li>
-              <ol>
+              <ol class="menu">
                 <li><a href="{{ site.baseurl }}internals.html#serialization">Serialization</a></li>
                 <li><a href="{{ site.baseurl }}internals.html#networking">Networking</a></li>
               </ol>
             </li>
           {% endif %}
+        </ol>
+
+
 
 
         <hr />
@@ -69,7 +78,7 @@
         {{ content }}
       </section>
       <footer>
-        <p>This project is maintained by <a href="http://github-media.sc.intel.com/arch">Arch Team</a></p>
+        <p>This project is maintained by <a href="http://github.com/oncue">OnCue OSS</a></p>
         <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
       </footer>
     </div>

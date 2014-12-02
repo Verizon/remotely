@@ -5,22 +5,34 @@
 /*****************************************************************************/
 
 header ol {
-  list-style-type: none;
-  padding-left: 0;
-  margin-left: 0;
+  padding: 0 0 0 20px !important;
+  margin: 0 !important;
+  width: 270px !important;
+  height: auto;
+  overflow: visible;
+  list-style: none;
+  padding-bottom: 20px;
 }
 header ol li {
-  width: 100%;
-  /*height:40px;*/
+  padding: 0;
   margin: 0;
-  padding: 6px 0 6px 0;
+  clear: left;
+  border:0;
 }
-header ol li ol {
-  margin-bottom: 0;
+header #top > li {
+  margin-left: -20px;
 }
-header ol li ol li {
-  width: 100%;
-  padding-left: 6%;
+header ol li {
+  display: block;
+  padding: 5px 0 5px 0;
+}
+header ol li, header ol {
+  width: auto;
+  white-space: nowrap !important;
+  height: auto;
+}
+hr {
+  clear: both;
 }
 section img {
   border-color: #ccc;
