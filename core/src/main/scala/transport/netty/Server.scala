@@ -34,7 +34,7 @@ class NettyServer(handler: Handler, threadPool: ExecutorService) {
     */
   class ChannelInitialize extends ChannelPipelineFactory {
     override def getPipeline: ChannelPipeline = {
-      Channels.pipeline(new Deframe(), new ServerDeframedHandler(handler, threadPool))
+      Channels.pipeline(new Deframe(), new Enframe(), new ServerDeframedHandler(handler, threadPool))
     }
   }
     

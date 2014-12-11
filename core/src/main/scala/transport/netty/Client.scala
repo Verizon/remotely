@@ -51,7 +51,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePo
   def createTask: Task[Channel] = Task.delay {
     val bootstrap = new ClientBootstrap(cf)
     bootstrap.setOption("keepAlive", true)
-    bootstrap.setPipeline(Channels.pipeline(new Deframe()))
+    bootstrap.setPipeline(Channels.pipeline(new Deframe(), new Enframe()))
     bootstrap.connect(hosts.once.runLast.run.get)
   } flatMap { fut =>
     Task.async { cb =>
@@ -83,7 +83,8 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
     val c = pool.borrowObject()
     val fromServer = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.DefaultStrategy)
     c.getPipeline().addLast("clientDeframe", new ClientDeframedHandler(fromServer))
-    val writeBytes: Task[Unit] = (toServer pipe enframe).evalMap(write(c)).run
+    val toFrame = toServer.map(Bits(_)) fby Process.emit(EOS)
+    val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run
     val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
       case Cause.End =>
         pool.returnObject(c)
@@ -103,8 +104,8 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
 }
 
 object NettyTransport {
-  def write(c: Channel)(bv: ByteVector): Task[Unit] = {
-    val cf = c.write(ChannelBuffers.wrappedBuffer(bv.toByteBuffer))
+  def write(c: Channel)(frame: Framed): Task[Unit] = {
+    val cf = c.write(frame)
     Task.async { cb =>
       cf.addListener(new ChannelFutureListener {
                        def operationComplete(cf: ChannelFuture): Unit =

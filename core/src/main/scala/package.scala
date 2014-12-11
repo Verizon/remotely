@@ -97,10 +97,12 @@ package object remotely {
 
   private[remotely] def fullyRead(s: Process[Task,BitVector]): Task[BitVector] = s.runFoldMap(x => x)
 
+/*
   private[remotely] def enframe: Process1[BitVector,ByteVector] = {
     Process.await1[BitVector].map { bs =>
       val bytes = bs.bytes
       codecs.int32.encodeValid(bytes.size).bytes ++ bytes
     }.fby(Process.emit(codecs.int32.encodeValid(0).bytes))
   }
+ */
 }
