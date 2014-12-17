@@ -26,11 +26,13 @@ import org.jboss.netty.channel.socket.nio.NioServerSocketChannel
 import java.nio.ByteBuffer
 import org.apache.commons.pool2.ObjectPool
 import org.jboss.netty.handler.codec.frame.FrameDecoder
-import scalaz.-\/
+import scalaz.{-\/,\/,\/-}
 import scalaz.concurrent.Task
 import scalaz.stream.{Process,async}
+import scodec.Err
 import scodec.bits.BitVector
 import java.util.concurrent.ExecutorService
+import scodec.bits.ByteVector
 
 ///////////////////////////////////////////////////////////////////////////
 // A Netty based transport for remotely.
@@ -162,11 +164,7 @@ class ClientDeframedHandler(queue: async.mutable.Queue[BitVector]) extends Simpl
 
   override def messageReceived(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
   me.getMessage().asInstanceOf[Framed] match {
-      case Bits(bv) =>
-      if(bv.size < 1 ) {
-        println("ZERO BV")
-        Thread.dumpStack
-      } else
+    case Bits(bv) =>
       queue.enqueueOne(bv).runAsync(Function.const(()))
     case EOS =>
       close()
@@ -239,15 +237,8 @@ class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) exten
   override def messageReceived(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
     me.getMessage().asInstanceOf[Framed] match {
       case Bits(bv) =>
-//        println(s"received (${bv.size}): " + bv.bytes.toArray.map("%02x".format(_)).mkString)
-      if(bv.size < 1 ) {
-        println("ZERO BV")
-        Thread.dumpStack
-      } else {
         val queue = ensureQueue(ctx, me)
         queue.enqueueOne(bv).runAsync(Function.const(()))
-      }
-
     case EOS =>
       close()
     }
@@ -257,7 +248,7 @@ class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) exten
 /**
   * output handler which gets a stream of BitVectors and enframes them
   */
-class Enframe extends SimpleChannelDownstreamHandler {
+object Enframe extends SimpleChannelDownstreamHandler {
   override def writeRequested(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
     me.getMessage match {
       case Bits(bv) => 

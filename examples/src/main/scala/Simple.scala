@@ -67,7 +67,7 @@ object SimpleMain extends App {
   println(env)
 
   // create a server for this environment
-  val server = env.serveNetty(addr, Executors.newCachedThreadPool)(Monitoring.consoleLogger("[server]"))
+  val server = env.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.consoleLogger("[server]"))
 
   val transport = NettyTransport.single(addr)
   val expr: Remote[Int] = sum(List(0,1,2,3,4))

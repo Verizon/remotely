@@ -19,30 +19,56 @@ package remotely
 package transport.netty 
 
 import java.util.concurrent.Executors
+import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.channel._
+import org.jboss.netty.channel.socket.ServerSocketChannel
 import org.jboss.netty.channel.socket.nio.{NioServerSocketChannel, NioServerSocketChannelFactory}
 import org.jboss.netty.bootstrap.ServerBootstrap
 import java.net.InetSocketAddress
 import java.util.concurrent.ExecutorService
 
-class NettyServer(handler: Handler, threadPool: ExecutorService) {
+class NettyServer(handler: Handler, threadPool: ExecutorService, capabilities: Capabilities) {
 
   val cf: ChannelFactory = new NioServerSocketChannelFactory(Executors.newFixedThreadPool(2),
                                                              Executors.newFixedThreadPool(4))
   /**
     * Attaches our handlers to a channel
     */
-  class ChannelInitialize extends ChannelPipelineFactory {
+  class PipelineInitialize extends ChannelPipelineFactory {
     override def getPipeline: ChannelPipeline = {
-      Channels.pipeline(new Deframe(), new Enframe(), new ServerDeframedHandler(handler, threadPool))
+      Channels.pipeline(ChannelInitialize)
     }
   }
-    
+
+  /**
+    * Sends our capabilities
+    */ 
+  object ChannelInitialize extends SimpleChannelUpstreamHandler {
+
+    override def channelConnected(ctx: ChannelHandlerContext,
+                                  e: ChannelStateEvent): Unit = {
+      super.channelConnected(ctx,e)
+      val encoded = Capabilities.capabilitiesCodec.encodeValid(capabilities)
+      val fut = ctx.getChannel().write(ChannelBuffers.copiedBuffer(encoded.toByteBuffer))
+      fut.addListener(new ChannelFutureListener {
+                        def operationComplete(cf: ChannelFuture): Unit = {
+                          if(cf.isSuccess) {
+                            val p = ctx.getPipeline()
+                            p.removeFirst()
+                            p.addLast("deframe", new Deframe())
+                            p.addLast("enframe", Enframe)
+                            p.addLast("deframed handler", new ServerDeframedHandler(handler, threadPool) )
+                          } 
+                        }
+                      })
+    }
+  }
+
   def bootstrap: ServerBootstrap =  {
     val b: ServerBootstrap = new ServerBootstrap(cf)
-    b.setPipelineFactory(new ChannelInitialize)
+//    b.setParentHandler(ChannelInitialize)
+    b.setPipelineFactory(new PipelineInitialize)
     b.setOption("child.keepAlive", true)
-
     b
   }
   def shutdown(): Unit = {
@@ -50,8 +76,8 @@ class NettyServer(handler: Handler, threadPool: ExecutorService) {
   }
 }
 object NettyServer {
-  def start(addr: InetSocketAddress, handler: Handler, threadPool: ExecutorService) = {
-    val server = new NettyServer(handler, threadPool)
+  def start(addr: InetSocketAddress, handler: Handler, threadPool: ExecutorService, capabilities: Capabilities) = {
+    val server = new NettyServer(handler, threadPool, capabilities)
     val b = server.bootstrap
     // Bind and start to accept incoming connections.
     val channel = b.bind(addr)

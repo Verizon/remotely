@@ -71,8 +71,8 @@ case class Environment(codecs: Codecs, values: Values) {
       }
     }
 
-  def serveNetty(addr: InetSocketAddress, threadPool: ExecutorService)(monitoring: Monitoring = Monitoring.empty): () => Unit =
-    transport.netty.NettyServer.start(addr, serverHandler(monitoring), threadPool)
+  def serveNetty(addr: InetSocketAddress, threadPool: ExecutorService, monitoring: Monitoring = Monitoring.empty, capabilities: Capabilities = Capabilities.default): () => Unit =
+    transport.netty.NettyServer.start(addr, serverHandler(monitoring), threadPool, capabilities)
 }
 
 object Environment {

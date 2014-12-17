@@ -6,7 +6,11 @@ resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
 scalacOptions ++= Seq(
   "-Ywarn-value-discard",
   "-Xlint",
+  "-deprecation",
+  "-feature",
   "-language:existentials",
+  "-language:higherKinds",
+  "-language:implicitConversions",
   "-language:postfixOps"
 )
 

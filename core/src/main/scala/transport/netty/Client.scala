@@ -19,62 +19,16 @@ package remotely
 package transport.netty
 
 import java.net.InetSocketAddress
-import java.util.concurrent.Executors
-import org.apache.commons.pool2.BasePooledObjectFactory
-import org.apache.commons.pool2.ObjectPool
-import org.apache.commons.pool2.PoolUtils
-import org.apache.commons.pool2.PooledObject
-import org.apache.commons.pool2.impl.DefaultPooledObject
 import org.apache.commons.pool2.impl.GenericObjectPool
 import org.jboss.netty.bootstrap.ClientBootstrap
+import org.jboss.netty.buffer.ChannelBuffer
 import org.jboss.netty.buffer.ChannelBuffers
-import org.jboss.netty.channel._
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
+import org.jboss.netty.channel.{Channel,ChannelFuture,ChannelHandlerContext,ChannelFutureListener}
 import scalaz.stream.Cause
-import scalaz.{-\/,\/-}
+import scalaz.{-\/,\/,\/-}
 import scalaz.stream.{async,Process}
 import scalaz.concurrent.Task
 import scodec.bits.BitVector
-import scodec.bits.ByteVector
-
-object NettyConnectionPool {
-  def default(hosts: Process[Task,InetSocketAddress]): GenericObjectPool[Channel] = {
-    new GenericObjectPool[Channel](new NettyConnectionPool(hosts))
-  }
-}
-
-class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePooledObjectFactory[Channel] {
-  val cf: ChannelFactory = new NioClientSocketChannelFactory(
-    Executors.newCachedThreadPool(),
-    Executors.newCachedThreadPool())
-
-  def createTask: Task[Channel] = Task.delay {
-    val bootstrap = new ClientBootstrap(cf)
-    bootstrap.setOption("keepAlive", true)
-    bootstrap.setPipeline(Channels.pipeline(new Deframe(), new Enframe()))
-    bootstrap.connect(hosts.once.runLast.run.get)
-  } flatMap { fut =>
-    Task.async { cb =>
-      fut.addListener(new ChannelFutureListener {
-                        def operationComplete(cf: ChannelFuture): Unit = {
-                          if(cf.isSuccess) {
-                            cb(\/-(cf.getChannel))
-                          } else {
-                            cb(-\/(cf.getCause()))
-                          }
-                        }
-                      })
-    }
-  }
-
-  override def create: Channel = createTask.run
-
-  override def wrap(c: Channel): PooledObject[Channel] = new DefaultPooledObject(c)
-
-  override def passivateObject(c: PooledObject[Channel]): Unit = {
-    val _ = c.getObject().getPipeline().remove(classOf[ClientDeframedHandler])
-  }
-}
 
 class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
   import NettyTransport._
@@ -102,6 +56,7 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
     pool.getFactory().asInstanceOf[NettyConnectionPool].cf.releaseExternalResources()
   }
 }
+
 
 object NettyTransport {
   def write(c: Channel)(frame: Framed): Task[Unit] = {

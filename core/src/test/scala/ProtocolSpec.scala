@@ -20,14 +20,14 @@ package remotely
 import collection.immutable.SortedSet
 import java.util.concurrent.Executors
 import org.scalatest.{FlatSpec,Matchers,BeforeAndAfterAll}
-import codecs._, Response.Context
 import codecs._
+import Response.Context
 import transport.netty._
 
 class ProtocolSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
-  val addr = new java.net.InetSocketAddress("localhost", 9000)
+  val addr = new java.net.InetSocketAddress("localhost", 9002)
   val server = new TestServer
-  val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newCachedThreadPool)(Monitoring.empty)
+  val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.empty)
 
   val endpoint = Endpoint.single(NettyTransport.single(addr))
 

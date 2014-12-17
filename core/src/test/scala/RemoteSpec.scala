@@ -40,7 +40,7 @@ object RemoteSpec extends Properties("Remote") {
     }
 
   val addr = new InetSocketAddress("localhost", 8080)
-  val server = env.serveNetty(addr, Executors.newCachedThreadPool)(Monitoring.empty)
+  val server = env.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.empty)
   val nettyTrans = NettyTransport.single(addr)
   val loc: Endpoint = Endpoint.single(nettyTrans)
 

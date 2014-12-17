@@ -22,7 +22,7 @@ class BenchmarkServerSpec extends FlatSpec
 
   val addr = new java.net.InetSocketAddress("localhost", 9001)
   val server = new BenchmarkServerImpl
-  val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newFixedThreadPool(8))(Monitoring.consoleLogger())
+  val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newFixedThreadPool(8), Monitoring.consoleLogger())
 
   val endpoint = Endpoint.single(NettyTransport.single(addr))
 

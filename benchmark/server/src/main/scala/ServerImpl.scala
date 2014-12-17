@@ -22,6 +22,6 @@ object Main {
     val threadPool = Executors.newFixedThreadPool(Integer.parseInt(argv(1)), new ThreadFactory {
                                                         override def newThread(r: Runnable): Thread = new Thread(r, "remotely - " + threadNo.incrementAndGet())
                                                       })
-    val shutdown: () => Unit = server.environment.serveNetty(addr, threadPool)(Monitoring.empty)
+    val shutdown: () => Unit = server.environment.serveNetty(addr, threadPool,Monitoring.empty)
   }
 }
