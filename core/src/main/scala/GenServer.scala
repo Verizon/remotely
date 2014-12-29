@@ -86,7 +86,7 @@ object GenServer {
     val result = {
       annottees.map(_.tree).toList match {
         case q"abstract class $name extends ..$parents { ..$body }" :: Nil =>
-          val r = q"""
+          q"""
             abstract class $name extends ..$parents {
               import remotely.{Codecs,Environment,Response,Values}
               import remotely.codecs._
@@ -110,8 +110,7 @@ object GenServer {
               ..$body
             }
           """
-          println("rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr: " + r)
-          r
+
         case _ => c.abort(
           c.enclosingPosition,
           "GenServer must annotate an abstract class declaration."

@@ -43,27 +43,21 @@ object GenClient {
     }
 
     // Generate the val-defs that get inserted into the object declaration
-    println("STUuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu " + s.signatures.toList)
-
     val signatures = s.signatures.toList.map { sig =>
       val (name, typ) = Signatures.split(sig.tag)
       c.parse(s"""val $name = Remote.ref[$typ]("$name")""")
     }
 
-//    val describe = c.parse(s"""val describe = Remote.ref[List[Signature]]("describe")""")
-
     // Generate the actual client object, with the signature val-defs generated above
     val result = annottees.map(_.tree).toList match {
       case q"object $name extends ..$parents { ..$body }" :: Nil =>
-        val r = q"""
+        q"""
         object $name extends ..$parents {
           import remotely.Remote
           ..$signatures
           ..$body
         }
       """
-        println("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee " + r)
-        r
       case _ => c.abort(
         c.enclosingPosition,
         "GenClient must annotate an object declaration."
