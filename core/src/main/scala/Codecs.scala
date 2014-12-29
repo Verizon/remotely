@@ -41,5 +41,5 @@ case class Codecs(codecs: Map[String,Codec[Any]]) {
 
 object Codecs {
 
-  val empty = Codecs(Map.empty)
+  val empty = Codecs(Map("List[remotely.Signature]" -> codecs.list(Signature.signatureCodec).asInstanceOf[Codec[Any]]))
 }

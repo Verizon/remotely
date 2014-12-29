@@ -47,7 +47,7 @@ object Server {
       val expected = Remote.refs(r)
       val unknown = (expected -- env.values.keySet).toList
       if (unknown.nonEmpty) // fail fast if the Environment doesn't know about some referenced values
-        fail(s"[validation] server does not have referenced values:\n${unknown.mkString('\n'.toString)}")
+        fail(s"[validation] server values: <" + env.values.keySet + "> does not have referenced values:\n${unknown.mkString('\n'.toString)}")
       else if (trailing.nonEmpty) // also fail fast if the request has trailing bits (usually a codec error)
         fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
       else // we are good to try executing the request

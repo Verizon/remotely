@@ -298,7 +298,6 @@ trait TupleHelpers {
         bits3 <- C.encode(abc._3)
       } yield bits ++ bits2 ++ bits3
 
-
     def pxmap[X](to: (A,B,C) => X, from: X => Option[(A,B,C)]): Codec[X] = this.pxmap(to.tupled, from)
   }
 

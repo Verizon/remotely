@@ -48,10 +48,6 @@ case class Environment(codecs: Codecs, values: Values) {
   def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
     this.copy(codecs = codecs.codec[A])
 
-//  /** Add the given codecs to this `Environment`, keeping existing codecs. */
-//  def codecs(c: Codecs): Environment =
-//    Environment(codecs ++ c, values)
-
   /**
    * Modify the values inside this `Environment`, using the given function `f`.
    * Example: `Environment.empty.populate { _.declare("x")(Task.now(42)) }`.

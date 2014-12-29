@@ -4,13 +4,17 @@ scalaVersion in Global := "2.10.4"
 
 resolvers += Resolver.sonatypeRepo("releases")
 
-lazy val remotely = project.in(file(".")).aggregate(core, examples, `benchmark-server`, `benchmark-client`)
+lazy val remotely = project.in(file(".")).aggregate(core, examples, `benchmark-server`, `benchmark-client`, test)
 
 lazy val core = project
 
 lazy val paradiseVersion = "2.0.1"
 
-lazy val examples = project.dependsOn(core)
+lazy val examples = project dependsOn core
+
+lazy val test = project dependsOn core
+
+lazy val `test-server` = project dependsOn test
 
 lazy val `benchmark-protocol` = project.in(file("benchmark/protocol")).dependsOn(core)
 
