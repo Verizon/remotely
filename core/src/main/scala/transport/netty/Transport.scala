@@ -43,16 +43,16 @@ import scodec.bits.ByteVector
 //
 // Client Outbound Pipeline
 //
-//               +---------+   
+//               +---------+
 // [ Network ] ← | Enframe | ←  Client request
-//               +---------+   
+//               +---------+
 //
 // Server Inbound Pipeline
-//                
-//               +---------+   +-----------------------+ 
+//
+//               +---------+   +-----------------------+
 // [ Network ] → | Deframe | → | ServerDeframedHandler |
-//               +---------+   +-----------------------+                     
-//                                                                           
+//               +---------+   +-----------------------+
+//
 // Deframe - decodes the framing in order to find message boundaries
 //
 // ServerDeframedHandler - accepts full messages from Deframe, for
@@ -61,9 +61,9 @@ import scodec.bits.ByteVector
 //
 // Server Outbound Pipeline
 //
-//               +---------+   
-// [ Network ] ← | Enframe | ←  ServerDeframedHandler
-//               +---------+
+//               +---------+   +-----------------------+
+// [ Network ] ← | Enframe | ← | ServerDeframedHandler |
+//               +---------+   +-----------------------+
 //
 // Enfrome - prepends each ByteVector emitted from the Process with a
 // int indicating how many bytes are in this ByteVector, when the
@@ -254,7 +254,7 @@ class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService, M: Mo
 object Enframe extends SimpleChannelDownstreamHandler {
   override def writeRequested(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
     me.getMessage match {
-      case Bits(bv) => 
+      case Bits(bv) =>
         val byv = bv.toByteVector
         Channels.write(ctx, me.getFuture(), ChannelBuffers.copiedBuffer(codecs.int32.encodeValid(byv.size).toByteBuffer))
         Channels.write(ctx, me.getFuture(), ChannelBuffers.copiedBuffer(bv.toByteBuffer))
@@ -264,4 +264,3 @@ object Enframe extends SimpleChannelDownstreamHandler {
     }
   }
 }
-
