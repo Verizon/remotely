@@ -93,7 +93,7 @@ import scodec.bits.ByteVector
   * probably unecessary, I'm probably just trying to sweep an
   * isInstanceOf test under the compiler
   */
-trait Framed
+sealed trait Framed
 case class Bits(bv: BitVector) extends Framed
 case object EOS extends Framed
 
