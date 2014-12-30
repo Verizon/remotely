@@ -1,7 +1,9 @@
 package remotely
 package test
 
-import DescribeTestProtocol._
+import DescribeTestNewerProtocol._
 
-@GenServer(remotely.test.DescribeTestProtocol.definition) abstract class DescribeTestServer
-@GenClient(remotely.test.DescribeTestProtocol.definition.signatures) object DescribeTestClient
+@GenServer(remotely.test.DescribeTestOlderProtocol.definition) abstract class DescribeTestOlderServer
+@GenServer(remotely.test.DescribeTestNewerProtocol.definition) abstract class DescribeTestNewerServer
+@GenClient(remotely.test.DescribeTestOlderProtocol.definition.signatures) object DescribeTestOlderClient
+@GenClient(remotely.test.DescribeTestNewerProtocol.definition.signatures) object DescribeTestNewerClient

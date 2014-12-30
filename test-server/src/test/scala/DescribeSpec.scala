@@ -6,26 +6,42 @@ import org.scalatest.{FlatSpec,Matchers,BeforeAndAfterAll}
 import scodec.Codec
 import transport.netty._
 import java.util.concurrent.Executors
+import scalaz.-\/
 
-class DescribeTestServerImpl extends DescribeTestServer {
-  override def foo = Response.delay(Foo(1))
-  override def fooId = (foo: Foo) => Response.now(foo)
-  override def foobar = (foo: Foo) => Response.now(Bar(foo.a))
+trait ServerImpl {
+  def foo = Response.delay(Foo(1))
+  def fooId = (foo: Foo) => Response.now(foo)
+  def foobar = (foo: Foo) => Response.now(Bar(foo.a))
+  def bar = Response.delay(Bar(1))
 }
+
+class DescribeTestOlderServerImpl extends DescribeTestOlderServer with ServerImpl
+class DescribeTestNewerServerImpl extends DescribeTestNewerServer with ServerImpl
 
 class DescribeSpec extends FlatSpec
     with Matchers
     with BeforeAndAfterAll {
 
+  import DescribeTestNewerProtocol._
 
+  val addrN = new java.net.InetSocketAddress("localhost", 9006)
+  val addrO = new java.net.InetSocketAddress("localhost", 9007)
 
-  val addr = new java.net.InetSocketAddress("localhost", 9006)
-  val server = new DescribeTestServerImpl
-  val shutdown: () => Unit = server.environment.serveNetty(addr,
+  val serverN = new DescribeTestNewerServerImpl
+  val serverO = new DescribeTestOlderServerImpl
+
+  val shutdownN: () => Unit = serverN.environment.serveNetty(addrN,
                                                            Executors.newCachedThreadPool,
                                                            Monitoring.empty)
 
-  val endpoint = Endpoint.single(NettyTransport.single(addr))
+  val shutdownO: () => Unit = serverO.environment.serveNetty(addrO,
+                                                           Executors.newCachedThreadPool,
+                                                           Monitoring.empty)
+
+  val endpointOldToOld = Endpoint.single(NettyTransport.single(addrO, DescribeTestOlderClient.expectedSignatures, Monitoring.consoleLogger("OldToOld")))
+  val endpointOldToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestOlderClient.expectedSignatures, Monitoring.consoleLogger("OldToNew")))
+  val endpointNewToOld = Endpoint.single(NettyTransport.single(addrO, DescribeTestNewerClient.expectedSignatures, Monitoring.consoleLogger("NewToOld")))
+  val endpointNewToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestNewerClient.expectedSignatures, Monitoring.consoleLogger("NewToNew")))
   
   behavior of "Describe"
   
@@ -33,15 +49,37 @@ class DescribeSpec extends FlatSpec
     import codecs.list
     import Signature._
     import remotely.Remote.implicits._
-    val desc = evaluate(endpoint, Monitoring.consoleLogger())(DescribeTestClient.describe).apply(Response.Context.empty).run
+    val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", "foo: remotely.test.Foo", Nil, "remotely.test.Foo"))
     desc should contain (Signature("fooId", "fooId: remotely.test.Foo => remotely.test.Foo", List("remotely.test.Foo"), "remotely.test.Foo"))
     desc should contain (Signature("foobar", "foobar: remotely.test.Foo => remotely.test.Bar", List("remotely.test.Foo"), "remotely.test.Bar"))
     desc should contain (Signature("describe", "describe: List[remotely.Signature]", Nil, "List[Remotely.Signature]"))
   }
 
+  behavior of "Client"
+
+  it should "connect older to newer" in {
+    val desc = evaluate(endpointOldToNew, Monitoring.consoleLogger())(DescribeTestOlderClient.describe).apply(Response.Context.empty).run
+    desc should contain (Signature("foo", "foo: remotely.test.Foo", Nil, "remotely.test.Foo"))
+  }
+
+  it should "connect newer to newer" in {
+    val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
+    desc should contain (Signature("foo", "foo: remotely.test.Foo", Nil, "remotely.test.Foo"))
+  }
+
+  it should "not connect newer to older" in {
+    val desc = evaluate(endpointNewToOld, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).attemptRun
+    println("new to old: "  + desc)
+    desc match {
+      case -\/(e) => e shouldBe a [IncompatibleServer]
+      case e => withClue("newer client should have rejected older server")(fail())
+    }
+  }
+
   override def afterAll() {
-    shutdown()
+    shutdownN()
+    shutdownO()
   }
 }
 
