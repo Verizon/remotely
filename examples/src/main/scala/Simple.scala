@@ -41,7 +41,7 @@ object Simple {
       .declareStrict("foo", foo _ ) // referencing existing functions works, too
     }
 
-  val addr = new InetSocketAddress("localhost", 8080)
+  val addr = new InetSocketAddress("localhost", 8083)
 
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated

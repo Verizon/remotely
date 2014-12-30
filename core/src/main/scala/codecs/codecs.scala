@@ -215,8 +215,6 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
       }
     } yield (responseDec, ctx, r)
 
-  def responseCodec[A:Codec] = either[String,A]
-
   def responseDecoder[A:Decoder]: Decoder[String \/ A] = bool flatMap {
     case false => utf8.map(left)
     case true => Decoder[A].map(right)

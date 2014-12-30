@@ -46,19 +46,19 @@ object Server {
               .fold(e => throw new Error(e.messageWithContext), identity)
       val expected = Remote.refs(r)
       val unknown = (expected -- env.values.keySet).toList
-      if (unknown.nonEmpty) // fail fast if the Environment doesn't know about some referenced values
-        fail(s"[validation] server values: <" + env.values.keySet + "> does not have referenced values:\n${unknown.mkString('\n'.toString)}")
-      else if (trailing.nonEmpty) // also fail fast if the request has trailing bits (usually a codec error)
+      if (unknown.nonEmpty) { // fail fast if the Environment doesn't know about some referenced values
+        val missing = unknown.mkString("\n")
+        fail(s"[validation] server values: <" + env.values.keySet + s"> does not have referenced values:\n $missing")
+      } else if (trailing.nonEmpty) // also fail fast if the request has trailing bits (usually a codec error)
         fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
       else // we are good to try executing the request
         eval(env.values)(r)(ctx).flatMap {
           a =>
-            val deltaNanos = System.nanoTime - startNanos
-            val delta = Duration.fromNanos(deltaNanos)
-            val result = right(a)
-            // monitoring.handled(ctx, r, expected, result, delta)
-            monitoring.handled(ctx, r, expected, result, delta)
-            toTask(codecs.responseEncoder(respEncoder).encode(result))
+          val deltaNanos = System.nanoTime - startNanos
+          val delta = Duration.fromNanos(deltaNanos)
+          val result = right(a)
+          monitoring.handled(ctx, r, expected, result, delta)
+          toTask(codecs.responseEncoder(respEncoder).encode(result))
         }.attempt.flatMap {
           // this is a little convoluted - we catch this exception just so
           // we can log the failure using `monitoring`, then reraise it

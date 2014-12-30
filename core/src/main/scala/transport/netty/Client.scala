@@ -59,17 +59,16 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
 
 
 object NettyTransport {
-  def write(c: Channel)(frame: Framed): Task[Unit] = {
-    val cf = c.write(frame)
-    Task.async { cb =>
-      cf.addListener(new ChannelFutureListener {
-                       def operationComplete(cf: ChannelFuture): Unit =
-                         if(cf.isSuccess) cb(\/-(())) else cb(-\/(cf.getCause))
-                     })
-    }
+  def evalCF(cf: ChannelFuture): Task[Unit] = Task.async { cb =>
+    cf.addListener(new ChannelFutureListener {
+                     def operationComplete(cf: ChannelFuture): Unit =
+                       if(cf.isSuccess) cb(\/-(())) else cb(-\/(cf.getCause))
+                   })
   }
 
-  def single(host: InetSocketAddress): NettyTransport = {
-    new NettyTransport(NettyConnectionPool.default(Process.constant(host)))
+  def write(c: Channel)(frame: Framed): Task[Unit] = evalCF(c.write(frame))
+
+  def single(host: InetSocketAddress, expectedSigs: Set[Signature] = Set.empty, M: Monitoring = Monitoring.empty): NettyTransport = {
+    new NettyTransport(NettyConnectionPool.default(Process.constant(host), expectedSigs, M))
   }
 }

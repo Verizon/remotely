@@ -27,7 +27,7 @@ import org.jboss.netty.bootstrap.ServerBootstrap
 import java.net.InetSocketAddress
 import java.util.concurrent.ExecutorService
 
-class NettyServer(handler: Handler, threadPool: ExecutorService, capabilities: Capabilities) {
+class NettyServer(handler: Handler, threadPool: ExecutorService, capabilities: Capabilities, M: Monitoring) {
 
   val cf: ChannelFactory = new NioServerSocketChannelFactory(Executors.newFixedThreadPool(2),
                                                              Executors.newFixedThreadPool(4))
@@ -48,6 +48,7 @@ class NettyServer(handler: Handler, threadPool: ExecutorService, capabilities: C
     override def channelConnected(ctx: ChannelHandlerContext,
                                   e: ChannelStateEvent): Unit = {
       super.channelConnected(ctx,e)
+      M.negotiating(Option(ctx.getChannel().getRemoteAddress()), "channel connected", None)
       val encoded = Capabilities.capabilitiesCodec.encodeValid(capabilities)
       val fut = ctx.getChannel().write(ChannelBuffers.copiedBuffer(encoded.toByteBuffer))
       fut.addListener(new ChannelFutureListener {
@@ -57,7 +58,7 @@ class NettyServer(handler: Handler, threadPool: ExecutorService, capabilities: C
                             p.removeFirst()
                             p.addLast("deframe", new Deframe())
                             p.addLast("enframe", Enframe)
-                            p.addLast("deframed handler", new ServerDeframedHandler(handler, threadPool) )
+                            p.addLast("deframed handler", new ServerDeframedHandler(handler, threadPool, M) )
                           } 
                         }
                       })
@@ -76,8 +77,8 @@ class NettyServer(handler: Handler, threadPool: ExecutorService, capabilities: C
   }
 }
 object NettyServer {
-  def start(addr: InetSocketAddress, handler: Handler, threadPool: ExecutorService, capabilities: Capabilities) = {
-    val server = new NettyServer(handler, threadPool, capabilities)
+  def start(addr: InetSocketAddress, handler: Handler, threadPool: ExecutorService, capabilities: Capabilities, M: Monitoring) = {
+    val server = new NettyServer(handler, threadPool, capabilities, M)
     val b = server.bootstrap
     // Bind and start to accept incoming connections.
     val channel = b.bind(addr)

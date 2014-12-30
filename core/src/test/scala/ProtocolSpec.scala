@@ -27,9 +27,9 @@ import transport.netty._
 class ProtocolSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   val addr = new java.net.InetSocketAddress("localhost", 9002)
   val server = new TestServer
-  val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.empty)
+  val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.consoleLogger("ProtocolSpec-server"))
 
-  val endpoint = Endpoint.single(NettyTransport.single(addr))
+  val endpoint = Endpoint.single(NettyTransport.single(addr, Set.empty, Monitoring.consoleLogger("ProtocolSpec")))
 
   it should "foo" in {
     import remotely.Remote.implicits._
@@ -50,16 +50,19 @@ trait TestServerBase {
   def environment: Environment = Environment(
     Codecs.empty
       .codec[Int]
-      .codec[List[Int]],
+      .codec[List[Int]]
+      .codec[List[Signature]],
     populateDeclarations(Values.empty)
   )
 
   def factorial: Int => Response[Int]
   def foo: Int => Response[scala.List[Int]]
+  def describe: Response[scala.List[Signature]]
 
   private def populateDeclarations(env: Values): Values = env
     .declare("factorial", factorial)
     .declare("foo", foo)
+    .declare("describe", describe)
 }
 
 class TestServer extends TestServerBase {
@@ -68,6 +71,7 @@ class TestServer extends TestServerBase {
   def foo: Int => Response[List[Int]] = i =>  {
     Response.now(collection.immutable.List.fill(10000)(i))
   }
+  def describe: Response[scala.List[Signature]] = Response.now(List(Signature("factorial", "factorial: Int => Int", List("Int"), "Int"),Signature("foo", "foo: Int => List[Int]", List("Int"), "List[Int]"),Signature("describe", "describe: List[Signature]", Nil, "List[Signature]")))
 }
 
 object Client {

@@ -18,6 +18,7 @@
 package remotely
 package transport.netty
 
+import java.net.InetSocketAddress
 import org.jboss.netty.buffer.ChannelBuffer
 import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.channel._
@@ -40,8 +41,8 @@ import scodec.bits.ByteVector
 // Netty connections consist of two pipelines on each side of a
 // network connection, an outbound pipeline and an inbound pipeline
 //
-// Client Outbound Pipeline                               
-//                                                        
+// Client Outbound Pipeline
+//
 //               +---------+   
 // [ Network ] ← | Enframe | ←  Client request
 //               +---------+   
@@ -49,7 +50,7 @@ import scodec.bits.ByteVector
 // Server Inbound Pipeline
 //                
 //               +---------+   +-----------------------+ 
-// [ Network ] → | Deframe | → | ServerDeframedHandler |                     
+// [ Network ] → | Deframe | → | ServerDeframedHandler |
 //               +---------+   +-----------------------+                     
 //                                                                           
 // Deframe - decodes the framing in order to find message boundaries
@@ -57,12 +58,12 @@ import scodec.bits.ByteVector
 // ServerDeframedHandler - accepts full messages from Deframe, for
 // each message, opens a queue/processs pair, calls the handler which
 // returns a result Process which is copied back out to the network
-//                                                        
-// Server Outbound Pipeline                               
-//                                                        
+//
+// Server Outbound Pipeline
+//
 //               +---------+   
-// [ Network ] ← | Enframe | ←  ServerDeframedHandler  
-//               +---------+   
+// [ Network ] ← | Enframe | ←  ServerDeframedHandler
+//               +---------+
 //
 // Enfrome - prepends each ByteVector emitted from the Process with a
 // int indicating how many bytes are in this ByteVector, when the
@@ -71,16 +72,16 @@ import scodec.bits.ByteVector
 //               +-----------------------+
 // [ Network ] ← | ServerDeframedHandler |
 //               +-----------------------+
-//                               
-//                               
-// Client Intbound Pipeline      
-//                               
+//
+//
+// Client Intbound Pipeline
+//
 //               +---------+   +-----------------------+
-// [ Network ] → | Deframe | → | ClientDeframedHandler |               
+// [ Network ] → | Deframe | → | ClientDeframedHandler |
 //               +---------+   +-----------------------+
-//  
+//
 // Deframe - The same as in the Server pipeline
-//                                              
+//
 // ClientDeframedHandler - This is added to the pipeline when a
 // connection is borrowed from the connection pool. It holds onto a
 // queue which it feeds with frames passed up from Deframe. This queue
@@ -179,7 +180,7 @@ class ClientDeframedHandler(queue: async.mutable.Queue[BitVector]) extends Simpl
   * every time we see a boundary, we close one stream, open a new
   * one, and setup a new outgoing stream back to the client.
   */
-class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) extends SimpleChannelUpstreamHandler {
+class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService, M: Monitoring) extends SimpleChannelUpstreamHandler {
 
   var queue: Option[async.mutable.Queue[BitVector]] = None
 
@@ -196,6 +197,7 @@ class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) exten
   //
   private def ensureQueue(ctx: ChannelHandlerContext, me: MessageEvent): async.mutable.Queue[BitVector] = queue match {
     case None =>
+      M.negotiating(Option(ctx.getChannel().getRemoteAddress()), "creating queue", None)
       val queue1 = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.Executor(threadPool))
       val queue = Some(queue1)
       val stream = queue1.dequeue
@@ -229,8 +231,9 @@ class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) exten
   }
 
   // we've seen the end of the input, close the queue writing to the input stream
-  private def close(): Unit = {
+  private def close(ctx: ChannelHandlerContext): Unit = {
     queue.foreach(_.close.runAsync(Function.const(())))
+    M.negotiating(Option(ctx.getChannel().getRemoteAddress()), "closing queue", None)
     queue = None
   }
 
@@ -240,7 +243,7 @@ class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) exten
         val queue = ensureQueue(ctx, me)
         queue.enqueueOne(bv).runAsync(Function.const(()))
     case EOS =>
-      close()
+        close(ctx)
     }
   }
 }

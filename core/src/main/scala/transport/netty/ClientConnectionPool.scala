@@ -9,6 +9,8 @@ import org.apache.commons.pool2.impl.DefaultPooledObject
 import org.apache.commons.pool2.impl.GenericObjectPool
 import org.jboss.netty.bootstrap.ClientBootstrap
 import org.jboss.netty.buffer.ChannelBuffer
+import org.jboss.netty.channel.MessageEvent
+import org.jboss.netty.channel.SimpleChannelUpstreamHandler
 import org.jboss.netty.channel.{Channel, Channels, ChannelFactory, ChannelFuture, ChannelFutureListener,ChannelHandlerContext}
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
 import org.jboss.netty.handler.codec.frame.DelimiterBasedFrameDecoder
@@ -17,16 +19,17 @@ import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.{-\/,\/,\/-}
 import scodec.Err
+import scodec.bits.BitVector
 
 object NettyConnectionPool {
-  def default(hosts: Process[Task,InetSocketAddress]): GenericObjectPool[Channel] = {
-    new GenericObjectPool[Channel](new NettyConnectionPool(hosts))
+  def default(hosts: Process[Task,InetSocketAddress], expectedSigs: Set[Signature] = Set.empty, M: Monitoring = Monitoring.empty): GenericObjectPool[Channel] = {
+    new GenericObjectPool[Channel](new NettyConnectionPool(hosts, expectedSigs, M))
   }
 }
 
 case class IncompatibleServer(msg: String) extends Throwable(msg)
 
-class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePooledObjectFactory[Channel] {
+class NettyConnectionPool(hosts: Process[Task,InetSocketAddress], expectedSigs: Set[Signature], M: Monitoring = Monitoring.consoleLogger("default")) extends BasePooledObjectFactory[Channel] {
   val cf: ChannelFactory = new NioClientSocketChannelFactory(
     Executors.newCachedThreadPool(),
     Executors.newCachedThreadPool())
@@ -37,7 +40,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePo
       if(missing.isEmpty) {
         Task {
           val pipe = channel.getPipeline()
-          pipe.removeFirst()
+          pipe.removeLast()
           pipe.addLast("enframe", Enframe)
           pipe.addLast("deframe", new Deframe)
           channel
@@ -49,9 +52,79 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePo
       }
   }
 
+  class ClientNegotiateDescription(channel: Channel, expectedSigs: Set[Signature], addr: InetSocketAddress) extends SimpleChannelUpstreamHandler {
 
-  class ClientNegotiate extends DelimiterBasedFrameDecoder(1000,Delimiters.lineDelimiter():_*) {
+    M.negotiating(Some(addr), "description negotiation begin", None)
 
+    var cb: Throwable\/Channel => Unit = _
+    val valid: Task[Channel] = Task.async { cb =>
+      this.cb = cb
+    }
+
+    var bits = BitVector.empty
+
+    def fail(msg: String): Unit = {
+      val err = IncompatibleServer(msg)
+
+      val pipe = channel.getPipeline()
+      pipe.removeLast()
+      M.negotiating(Some(addr), "description", Some(err))
+      cb(\/.left(err))
+    }
+
+    def success(): Unit = {
+      val pipe = channel.getPipeline()
+      pipe.removeLast()
+      M.negotiating(Some(addr), "description", None)
+      cb(\/.right(channel))
+    }
+
+    override def messageReceived(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
+      me.getMessage().asInstanceOf[Framed] match {
+        case Bits(bv) =>
+          bits = bits ++ bv
+        case EOS =>
+          M.negotiating(Some(addr), "got end of description response", None)
+          val run: Task[Unit] = for {
+            resp <- codecs.liftDecode(codecs.responseDecoder[List[Signature]](codecs.list(Signature.signatureCodec)).decode(bits))
+          }  yield resp.fold(e => fail(s"error processing description response: $e"),
+                             serverSigs => {
+                               val missing = (expectedSigs -- serverSigs)
+                               if(missing.isEmpty) {
+                                 success()
+                               } else {
+                                 fail(s"server is missing required signatures: ${missing.map(_.tag)}}")
+                               }
+                             })
+          run.runAsync {
+            case -\/(e) => M.negotiating(Some(addr), "error processing description", Some(e))
+            case \/-(_) => M.negotiating(Some(addr), "finmshed processing response", None)
+          }
+      }
+    }
+
+  
+    val pipe = channel.getPipeline()
+    pipe.addLast("negotiateDescription", this)
+
+    //
+    // and then they did some investigation and realized
+    // <gasp>
+    // THE CALL WAS COMING FROM INSIDE THE HOUSE
+    val requestDescription: Task[Unit] = for {
+      bits <- codecs.encodeRequest(Remote.ref[List[Signature]]("describe")).apply(Response.Context.empty)
+      _ <- NettyTransport.evalCF(channel.write(Bits(bits)))
+      _ <- NettyTransport.evalCF(channel.write(EOS))
+      _ = M.negotiating(Some(addr), "sending describe request", None)
+    } yield ()
+
+    requestDescription.runAsync {
+      case \/-(bits) => ()
+      case -\/(x) => fail("error requesting server description: " + x)
+    }
+}
+
+  class ClientNegotiateCapabilities extends DelimiterBasedFrameDecoder(1000,Delimiters.lineDelimiter():_*) {
     var cb: Throwable\/(Capabilities,Channel) => Unit = _
     val capabilities: Task[(Capabilities,Channel)] = Task.async { cb =>
       this.cb = cb
@@ -68,15 +141,18 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePo
     }
   }
 
-  def createTask: Task[Channel] = {
-    val negotiate = new ClientNegotiate
+  def createTask(expectedSigs: Set[Signature]): Task[Channel] = {
+    val negotiateCapable = new ClientNegotiateCapabilities
     for {
+      addrMaybe <- hosts.once.runLast
+      addr <- addrMaybe.fold[Task[InetSocketAddress]](Task.fail(new Exception("out of connections")))(Task.now(_))
+      _ = M.negotiating(Some(addr), "address selected", None)
       fut <- {
         Task.delay {
-                val bootstrap = new ClientBootstrap(cf)
-        bootstrap.setOption("keepAlive", true)
-        bootstrap.setPipeline(Channels.pipeline(negotiate))
-        bootstrap.connect(hosts.once.runLast.run.get)
+          val bootstrap = new ClientBootstrap(cf)
+          bootstrap.setOption("keepAlive", true)
+          bootstrap.setPipeline(Channels.pipeline(negotiateCapable))
+          bootstrap.connect(addr)
       }}
       chan <- {
         Task.async[Channel] { cb =>
@@ -91,12 +167,17 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePo
                         })
         }
       }
-      capable <- negotiate.capabilities
-      channel <- validateCapabilities(capable)
-    } yield(channel)
+      _ = M.negotiating(Some(addr), "channel selected", None)
+      capable <- negotiateCapable.capabilities
+      _ = M.negotiating(Some(addr), "capabilities received", None)
+      c1 <- validateCapabilities(capable)
+      _ = M.negotiating(Some(addr), "capabilities valid", None)
+      c2 <- new ClientNegotiateDescription(c1,expectedSigs, addr).valid
+      _ = M.negotiating(Some(addr), "description valid", None)
+    } yield(c2)
   } 
 
-  override def create: Channel = createTask.run
+  override def create: Channel = createTask(expectedSigs).run
 
   override def wrap(c: Channel): PooledObject[Channel] = new DefaultPooledObject(c)
 

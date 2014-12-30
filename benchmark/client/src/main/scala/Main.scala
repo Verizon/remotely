@@ -123,7 +123,7 @@ object BenchmarkClientMain extends TestData with transformations {
   def main(argv: Array[String]): Unit = {
     val port = Integer.parseInt(argv(0))
     val addr = new java.net.InetSocketAddress("localhost", port)
-    val nettyTrans = NettyTransport.single(addr)
+    val nettyTrans = NettyTransport.single(addr, server.BenchmarkClient.expectedSignatures, Monitoring.consoleLogger("benchmarkClient"))
     val endpoint = Endpoint.single(nettyTrans)
     val num = Integer.parseInt(argv(1))
     val duration = java.lang.Long.parseLong(argv(2))

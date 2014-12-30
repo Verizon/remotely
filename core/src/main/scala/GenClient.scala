@@ -30,6 +30,12 @@ class GenClient(sigs: Signatures) extends StaticAnnotation {
 }
 
 object GenClient {
+  def liftSignature(c: Context)(s: Signature): c.universe.Tree = {
+    import c.universe._
+    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType})"
+    t
+  }
+
   def impl(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
     import Flag._
@@ -43,9 +49,17 @@ object GenClient {
     }
 
     // Generate the val-defs that get inserted into the object declaration
-    val signatures = s.signatures.toList.map { sig =>
-      val (name, typ) = Signatures.split(sig.tag)
-      c.parse(s"""val $name = Remote.ref[$typ]("$name")""")
+    val signatures : Set[Tree] = s.signatures.map { sig =>
+        val (name, typ) = Signatures.split(sig.tag)
+        c.parse(s"""val $name = Remote.ref[$typ]("$name")""")
+    }
+
+
+    val esSet = {
+      val sigs = s.signatures.map { sig =>
+        q"_root_.remotely.Signature(${sig.name}, ${sig.tag}, ${sig.inTypes}, ${sig.outType})"
+      }
+      c.Expr[Set[Signature]](q"Set[Signature]( ..${sigs.toList} )")
     }
 
     // Generate the actual client object, with the signature val-defs generated above
@@ -56,8 +70,12 @@ object GenClient {
           import remotely.Remote
           ..$signatures
           ..$body
-        }
-      """
+
+          val expectedSignatures = ${esSet}
+
+    }
+     """
+
       case _ => c.abort(
         c.enclosingPosition,
         "GenClient must annotate an object declaration."

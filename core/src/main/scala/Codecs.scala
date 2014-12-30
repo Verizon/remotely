@@ -33,13 +33,12 @@ case class Codecs(codecs: Map[String,Codec[Any]]) {
 
   def get(k: String): Option[Codec[Any]] = codecs.get(k)
 
-  def pretty =
-    "Codecs.empty\n  " + codecs.keySet.toList.sorted.map(d => s".codec[$d]").mkString("\n  ")
+  def pretty = "Codecs.empty\n  " + codecs.keySet.toList.sorted.map(d => s".codec[$d]").mkString("\n  ")
 
   override def toString = pretty
 }
 
 object Codecs {
 
-  val empty = Codecs(Map("List[remotely.Signature]" -> codecs.list(Signature.signatureCodec).asInstanceOf[Codec[Any]]))
+  val empty = Codecs(Map("List[remotely.Signature]" -> codecs.set(Signature.signatureCodec).asInstanceOf[Codec[Any]]))
 }

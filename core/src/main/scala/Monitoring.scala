@@ -17,6 +17,8 @@
 
 package remotely
 
+import java.net.InetSocketAddress
+import java.net.SocketAddress
 import scala.concurrent.duration._
 import scalaz.\/
 
@@ -37,18 +39,33 @@ trait Monitoring { self =>
                  result: Throwable \/ A,
                  took: Duration): Unit
 
+  def negotiating(addr: Option[SocketAddress],
+                  what: String,
+                  error: Option[Throwable]): Unit
+
+  protected def renderAddress(addr: Option[SocketAddress]): String = addr match {
+    case Some(addr) if addr.isInstanceOf[InetSocketAddress] => addr.asInstanceOf[InetSocketAddress].toString
+    case _ => "<unknown addr>"
+  }
+
   /**
    * Return a new `Monitoring` instance that send statistics
    * to both `this` and `other`.
    */
   def ++(other: Monitoring): Monitoring = new Monitoring {
-    def handled[A](ctx: Response.Context,
+    override def handled[A](ctx: Response.Context,
                    req: Remote[A],
                    references: Iterable[String],
                    result: Throwable \/ A,
                    took: Duration): Unit = {
       self.handled(ctx, req, references, result, took)
       other.handled(ctx, req, references, result, took)
+    }
+    override def negotiating(addr: Option[SocketAddress],
+                             what: String,
+                             error: Option[Throwable]): Unit = {
+      self.negotiating(addr, what, error)
+      other.negotiating(addr, what, error)
     }
   }
 
@@ -59,20 +76,27 @@ trait Monitoring { self =>
   def sample(every: Duration): Monitoring = {
     val nextUpdate = new java.util.concurrent.atomic.AtomicLong(System.nanoTime + every.toNanos)
     new Monitoring {
-      def handled[A](ctx: Response.Context,
-                     req: Remote[A],
-                     references: Iterable[String],
-                     result: Throwable \/ A,
-                     took: Duration): Unit = {
+
+      def maybe(t: => Unit) {
         val cur = nextUpdate.get
         if (System.nanoTime > cur) {
-          self.handled(ctx, req, references, result, took)
+          t
           // only one thread gets to bump this
           nextUpdate.compareAndSet(cur, cur + every.toNanos)
           ()
-        }
-        else () // do nothing
+        } else ()
+
       }
+
+      override def handled[A](ctx: Response.Context,
+                     req: Remote[A],
+                     references: Iterable[String],
+                     result: Throwable \/ A,
+                     took: Duration): Unit = maybe(self.handled(ctx, req, references, result, took))
+
+      override def negotiating(addr: Option[SocketAddress],
+                               what: String,
+                               error: Option[Throwable]): Unit = maybe(self.negotiating(addr,what,error))
     }
   }
 }
@@ -81,11 +105,13 @@ object Monitoring {
 
   /** The `Monitoring` instance that just ignores all inputs. */
   val empty: Monitoring = new Monitoring {
-    def handled[A](ctx: Response.Context,
-                   req: Remote[A],
-                   references: Iterable[String],
-                   result: Throwable \/ A,
-                   took: Duration): Unit = ()
+    override def handled[A](ctx: Response.Context,
+                            req: Remote[A],
+                            references: Iterable[String],
+                            result: Throwable \/ A,
+                            took: Duration): Unit = ()
+
+    override def negotiating(addr: Option[SocketAddress], what: String, error: Option[Throwable]): Unit = ()
   }
 
   /**
@@ -105,6 +131,14 @@ object Monitoring {
       println(s"$prefix request: " + req)
       println(s"$prefix result: " + result)
       println(s"$prefix duration: " + took)
+    }
+
+    override def negotiating(addr: Option[SocketAddress],
+                             what: String,
+                             error: Option[Throwable]): Unit = {
+      error.fold(println(s"$prefix NEGOTIATION - $what with ${renderAddress(addr)}")){e =>
+        println(s"$prefix NEGOTIATION FAILURE - $what with ${renderAddress(addr)}: ${e.getMessage}")
+      }
     }
   }
 }
