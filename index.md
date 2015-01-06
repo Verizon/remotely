@@ -6,7 +6,11 @@ section: "home"
 
 # Introduction
 
-Remotely is an elegant, reasonable machine communication system for functional programmers. Remotely is fast, lightweight and models network operations as explicit monadic computations.
+Remotely is an elegant, reasonable, purely functional remoting system. Remotely is fast, lightweight and models network operations as explicit monadic computations. Remotely is ideally suited for:
+
+* Client/server programming
+* Service-to-service communication
+* Building network-facing APIs
 
 <div class="msg warn">
   <p><strong>NB:</strong> Remotely is currently an experimental project under active development. Feedback and contributions are welcomed as we look to improve the project.</p>
@@ -16,19 +20,19 @@ Remotely is an elegant, reasonable machine communication system for functional p
 
 ## Rationale
 
-Before talking about how to *use* Remotely, its probably worth discussing why it is we felt the need to make this project in the first place. For large distributed service platforms there is typically a large degree of inter-service communication that happens internally before returning control to the caller. In this scenario, several factors become really important:
+Before talking about how to *use* Remotely, it's worth discussing why we made this project in the first place. For large distributed service platforms there is typically a large degree of inter-service communication. In this scenario, several factors become really important:
 
-* **Productivity**. Whilst much progress has been made with the widely used HTTP protocol and there are a myriad of serialisation technologies commonly used for services (e.g. JSON, XML etc), in larger teams one can typically observe development time being spent on transforming `AST => A` and `A => AST`, where the AST is being used to represent the wire content (e.g. `JValue` from lift-json or similar). As these ASTs typically represent some kind of semi-structured data, many users have to then waste time traversing all these different JSON structures (with either none or extremely minimal reuse) to get the typed value they care about. In *Remotely* we have tried to address this by providing a generic means to serialise any `A` over the wire. This immediately removes the need for traversing various types of AST to extract the needed fields as the serialisation / deserialization code is highly composable (thanks to [scodec](https://github.com/scodec/scodec))
+* **Productivity**. We want to spend less of our time writing marshalling/unmarshalling boilerplate. Although much progress has been made with things like JSON or XML over HTTP, in larger teams development time is typically spent on transforming to and from some internal representation of the wire content syntax tree (e.g. `JValue` from lift-json or similar). As this AST is typically some kind of semi-structured data, users have to waste time traversing all these different JSON structures (with either none or extremely minimal reuse) to extract the typed value they care about. Alternatively, some marshalling/unmarshalling libraries resort to runtime reflection or similar magic, which developers find confusing and frustrating. In *Remotely* we have tried to address this by providing a generic way to serialise any given type over the wire. This immediately removes the need for traversing various types of AST to extract fields, since the serialisation and deserialization code is highly composable and modular (thanks to [scodec](https://github.com/scodec/scodec)).
 
-* **Safety**. Something that is distinctly missing from HTTP+JSON services is the ability to know - when moving between revisions of a dependant API - is if the given API is compatible or not with the existing mechanism of calling that service. Typically this kind of meta information ends up being encoded in a version number, or some other out-of-band knowledge. This often results in runtime failures and incompatibility between services unless exceptional care is taken by the service owner not to break their API in any way. Using *Remotely* we build the protocols just like any other compile-time artifact; said artefacts are then published to Nexus and depended upon as build-time contracts. With this base it is then easy to build all runtime dependant services as downstream jobs during the build phase, which gives you a build-time safety check, enabling engineers to get early visibility about compatibility within their service API (incompatibility in an API will result in a build-time failure).
+* **Safety**. In *Remotely*, incompatibilities between client and server result in a compile-time rather than run-time failure. Something that is missing from HTTP+JSON services is the ability to know that clients remain compatible when moving between revisions of a service API. Typically this kind of meta-information ends up being encoded in a version number or some other out-of-band knowledge. This often results in runtime failures and incompatibility between services unless exceptional care is taken by the service owner not to break their API in any way between revisions. Using *Remotely* we build the protocols just like any other compile-time artifact. Those artefacts are then published as JARs and depended upon as build-time contracts by clients. It is then easy to build all dependent services as downstream jobs during the build phase, which gives engineers early warnings about compatibility issues with their service APIs.
 
-* **Reuse**. In most typed-protocol definitions there is a low degree of reuse because the serialisation code does not compose. An example of this would be Thrift's protocol definitions: the definition contains all structures and values used by the client and server, and the entire world of needed files is generated at build time, even if that exact same structure (e.g tuples) is used by an adjacent service. Within *Remotely* we wanted to avoid this nasty code-generation step and instead rely on highly composable structures with their associated combinators to get the granularity and level of reuse we wanted.
+* **Reuse**. In most typed-protocol definitions there is a low degree of reuse because the serialisation code does not compose, and generally has no higher-order facilities. An example of this would be Thrift's protocol definitions: the definition contains all structures and values used by the client and server, and the entire world of needed files is generated at build time, even if that exact same structure (e.g tuples) is used by an adjacent service. Within *Remotely* we wanted to avoid this nasty code-generation step and instead rely on highly composable structures with their associated combinators to get the granularity and level of reuse we wanted.
 
 <a name="getting-started"></a>
 
 ## Getting Started
 
-Using remotely is straight-forward, and getting started on a new project could not be simpler!
+Using remotely is straightforward, and getting started on a new project could not be simpler!
 
 ### Dependency Information
 
@@ -76,7 +80,7 @@ The structure breaks down like this:
 
 * `core` contains the domain logic for the given application; ideally this is organised around a free algebra which makes `core` self-contained and fully testable without any kind of wire protocol. The module is primarily composed of pure functions (lifted into I/O actions where appropriate)
 
-* `protocol` is a simple compilation unit that only contains the definition of the protocol (not the implementation) - more on this in the XXXX section.
+* `protocol` is a simple compilation unit that only contains the definition of the protocol (not the implementation)
 
 * `rpc` contains the implementation of the aforementioned remotely protocol. In essence this is the meat of any wire<->domain mediation that needs to happen in the application; it exchanges wire representations (whatever they may be) for domain types that can be used as function arguments for the algebra exposed by `core`. This module *must depend on the `rpc` and `core` modules*.
 
@@ -113,8 +117,6 @@ Protocols are the core of the remotely project. They represent the contract betw
 * `codec`: require a `Codec` for the specified type. If the relevant `Codec` cannot be found, you will either have to import one or define your own accordingly. By default, *Remotely* comes with implementations for `String`, `Int` etc - the vast majority of default types you might need. You can however still define `Codec` implementations for any of your own structures as needed.
 
 * `specify`: define a function that the contract will have to implement. In our example, we want to expose a "factorial" function that will take an `Int` and return an `Int`; this is defined using standard Scala function type definitions.
-
-More information on defining complex protocols can be found in the XXXXXXXX section.
 
 ### Server & Client Definition
 
