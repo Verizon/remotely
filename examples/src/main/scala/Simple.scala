@@ -41,7 +41,7 @@ object Simple {
       .declareStrict("foo", foo _ ) // referencing existing functions works, too
     }
 
-  val addr = new InetSocketAddress("localhost", 8080)
+  val addr = new InetSocketAddress("localhost", 8083)
 
   // on client - create local, typed declarations for server
   // functions you wish to call. This can be code generated
@@ -67,7 +67,7 @@ object SimpleMain extends App {
   println(env)
 
   // create a server for this environment
-  val server = env.serveNetty(addr, Executors.newCachedThreadPool)(Monitoring.consoleLogger("[server]"))
+  val server = env.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.consoleLogger("[server]"))
 
   val transport = NettyTransport.single(addr)
   val expr: Remote[Int] = sum(List(0,1,2,3,4))

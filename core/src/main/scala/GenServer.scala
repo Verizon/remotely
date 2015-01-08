@@ -20,6 +20,7 @@ package remotely
 import scala.reflect.macros.Context
 import scala.language.experimental.macros
 import scala.annotation.StaticAnnotation
+import scalaz.NonEmptyList
 
 /**
  * Macro annotation that generates a server interface. Usage:
@@ -30,10 +31,18 @@ class GenServer(p: Protocol) extends StaticAnnotation {
 }
 
 object GenServer {
+  import Signature._
+
   // Turns a `String` into a `TypeTree`.
   def parseType(c: Context)(s: String): c.universe.Tree = {
     import c.universe._
     val q"type T = $t" = c.parse(s"type T = $s")
+    t
+  }
+
+  def liftSignature(c: Context)(s: Signature): c.universe.Tree = {
+    import c.universe._
+    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType})"
     t
   }
 
@@ -57,14 +66,13 @@ object GenServer {
 
     // Creates name/type pairs from the signatures in the protocol.
     val signatures = p.signatures.signatures.map { s =>
-      val (n, t) = Signatures.split(s)
+      val (n, t) = Signatures.split(s.tag)
       val typ = parseType(c)(Signatures.wrapResponse(t))
       (n, typ)
     }
 
     // Generates the method defs for the generated class.
-    val sigDefs = signatures.map { s =>
-      val (n, t) = s
+    val sigDefs = signatures.collect { case (n,t) if n != "describe" =>
       genSig(n, t)
     }
 
@@ -90,13 +98,19 @@ object GenServer {
 
               ..$sigDefs
 
-              private def populateDeclarations(env: Values): Values =
+              def describe: Response[List[Signature]] = 
+                Response.delay(${p.signatures.signatures.foldLeft[Tree](q"List.empty[Signature]")((e,s) => q"$e.::(${liftSignature(c)(s)})")})
+
+
+             private def populateDeclarations(env: Values): Values =
                 ${ signatures.foldLeft(q"env":c.Tree)((e,s) =>
-                  q"$e.declare(${Literal(Constant(s._1))},${Ident(newTermName(s._1))})") }
+                    q"$e.declare(${Literal(Constant(s._1))},${Ident(newTermName(s._1))})"
+                  )}
 
               ..$body
             }
           """
+
         case _ => c.abort(
           c.enclosingPosition,
           "GenServer must annotate an abstract class declaration."

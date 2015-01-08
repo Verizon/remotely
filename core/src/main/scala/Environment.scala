@@ -48,10 +48,6 @@ case class Environment(codecs: Codecs, values: Values) {
   def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
     this.copy(codecs = codecs.codec[A])
 
-//  /** Add the given codecs to this `Environment`, keeping existing codecs. */
-//  def codecs(c: Codecs): Environment =
-//    Environment(codecs ++ c, values)
-
   /**
    * Modify the values inside this `Environment`, using the given function `f`.
    * Example: `Environment.empty.populate { _.declare("x")(Task.now(42)) }`.
@@ -71,8 +67,8 @@ case class Environment(codecs: Codecs, values: Values) {
       }
     }
 
-  def serveNetty(addr: InetSocketAddress, threadPool: ExecutorService)(monitoring: Monitoring = Monitoring.empty): () => Unit =
-    transport.netty.NettyServer.start(addr, serverHandler(monitoring), threadPool)
+  def serveNetty(addr: InetSocketAddress, threadPool: ExecutorService, monitoring: Monitoring = Monitoring.empty, capabilities: Capabilities = Capabilities.default): () => Unit =
+    transport.netty.NettyServer.start(addr, serverHandler(monitoring), threadPool, capabilities, monitoring)
 }
 
 object Environment {

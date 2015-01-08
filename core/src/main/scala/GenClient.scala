@@ -30,6 +30,18 @@ class GenClient(sigs: Signatures) extends StaticAnnotation {
 }
 
 object GenClient {
+  /**
+    * this just allows us to put a $signature into a quasi-quote.
+    * implimented this way instead of by providing Liftable[Signature]
+    * only because I gave up on trying to figure out the complex cake
+    * of path-dependant types which is the current reflection api.
+    */
+  def liftSignature(c: Context)(s: Signature): c.universe.Tree = {
+    import c.universe._
+    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType})"
+    t
+  }
+
   def impl(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
     import Flag._
@@ -43,20 +55,34 @@ object GenClient {
     }
 
     // Generate the val-defs that get inserted into the object declaration
-    val signatures = s.signatures.toList.sorted.map { sig =>
-      val (name, typ) = Signatures.split(sig)
-      c.parse(s"""val $name = Remote.ref[$typ]("$name")""")
+    val signatures : Set[Tree] = s.signatures.map { sig =>
+        val (name, typ) = Signatures.split(sig.tag)
+        c.parse(s"""val $name = Remote.ref[$typ]("$name")""")
+    }
+
+
+    // Generate a Set[Signature] of the function signatures we are
+    // expecting any server to support. This will be baked into the
+    // generated client as an expectedSignatures val.
+    val esSet = {
+      val sigs = s.signatures.map { sig =>
+        q"_root_.remotely.Signature(${sig.name}, ${sig.tag}, ${sig.inTypes}, ${sig.outType})"
+      }
+      c.Expr[Set[Signature]](q"Set[Signature]( ..${sigs.toList} )")
     }
 
     // Generate the actual client object, with the signature val-defs generated above
     val result = annottees.map(_.tree).toList match {
-      case q"object $name extends ..$parents { ..$body }" :: Nil => q"""
+      case q"object $name extends ..$parents { ..$body }" :: Nil =>
+        q"""
         object $name extends ..$parents {
           import remotely.Remote
           ..$signatures
           ..$body
+          val expectedSignatures = ${esSet}
         }
-      """
+        """
+
       case _ => c.abort(
         c.enclosingPosition,
         "GenClient must annotate an object declaration."

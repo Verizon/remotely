@@ -18,66 +18,57 @@
 package remotely
 
 import scala.reflect.runtime.universe.TypeTag
+import codecs._
+import scodec.{Codec,Encoder,Err}
+import scodec.bits.BitVector
+import scalaz.{\/,Foldable,NonEmptyList}
+import scalaz.std.list._
+import scalaz.std.string._
+import shapeless._
 
-case class Signatures(signatures: Set[String]) {
+case class Signature(name: String, tag: String, inTypes: List[String], outType: String) {
+  /** returns a string in the form "Type, Type => Response[Type]",
+    *  wrapping Response around the return type def
+    */
 
-  def specify[A:TypeTag](name: String): Signatures =
-    Signatures(signatures + Remote.nameToTag[A](name))
+  def wrapResponse: String = {
+    val resp = s"Response[$outType]"
+    inTypes match {
+      case Nil => resp
+      case h =>
+        val in = Foldable[List].intercalate(inTypes, ",")
+        s"$in => $resp"
+    }
+  }
+
+}
+
+object Signature {
+  implicit val signatureCodec: Codec[Signature] = (utf8 ~~ utf8 ~~ list(utf8) ~~ utf8).pxmap[Signature]((Signature.apply _), (Signature.unapply _))
+}
+
+case class Signatures(signatures: Set[Signature]) {
+
+  def specify0[A: TypeTag](name: String): Signatures =
+    Signatures(signatures + Signature(name, Remote.nameToTag[A](name), List(), Remote.toTag[A]))
 
   def specify1[A:TypeTag,B:TypeTag](name: String): Signatures =
-    specify[A => B](name)
+    Signatures(signatures + Signature(name, Remote.nameToTag[A=>B](name), List(Remote.toTag[A]), Remote.toTag[B]))
 
   def specify2[A:TypeTag,B:TypeTag,C:TypeTag](name: String): Signatures =
-    specify[(A,B) => C](name)
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B)=>C](name), List(Remote.toTag[A], Remote.toTag[B]), Remote.toTag[C]))
 
   def specify3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String): Signatures =
-    specify[(A,B,C) => D](name)
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C)=>D](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C]), Remote.toTag[D]))
 
   def specify4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String): Signatures =
-    specify[(A,B,C,D) => E](name)
-
-  def generateClient(moduleName: String, pkg: String): String = {
-    def emitValue(s: String) = {
-      val (name,tname) = Signatures.split(s)
-      s"""val $name = Remote.ref[$tname]("$name")"""
-    }
-
-    s"""
-    |package $pkg
-    |
-    |import remotely.Remote
-    |
-    |object $moduleName {
-    |  // This module contains code generated from a `remotely.Protocol`. Do not alter.
-    |  ${signatures.toList.sorted.map(emitValue).mkString("\n\n  ")}
-    |}
-    |""".stripMargin
-  }
-
-  private[remotely] def generateServerTraitBody: String = {
-    // converts from `A` to `Response[A]`, `A => B` to `A => Response[B]`,
-    // `(A,B) => C` to `(A,B) => Response[C]`, etc, via string munging
-    // NB: this regex is too simplistic to work for types like `A => (B => C)`,
-    // but we don't have to worry about these types as a remote function cannot
-    // return a function type in its result (as functions cannot be encoded and sent over wire!)
-    def emitSignature(s: String): String = {
-      val (name, tname) = Signatures.split(s)
-      s"def $name: ${Signatures.wrapResponse(tname)}"
-    }
-    def emitDeclaration(s: String): String = {
-      val (name, tname) = Signatures.split(s)
-      s""".declare("$name", $name)"""
-    }
-
-    signatures.map(emitSignature).mkString("\n\n") + "\n\n" +
-    "private def populateDeclarations(env: Values): Values = env\n" +
-    Signatures.indent("  ") { signatures.map(emitDeclaration).mkString("\n") }
-  }
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C,D)=>D](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C], Remote.toTag[D]), Remote.toTag[E]))
 
   def pretty: String = "Signatures.empty\n" +
-    signatures.map(s => Signatures.split(s) match { case (name,tname) =>
-      s"""  .specify[$tname]("$name")"""
-    }).mkString("\n")
+  signatures.map(s => Signatures.split(s.tag) match { case (name,tname) =>
+                   s"""  .specify[$tname]("$name")"""
+                 }).mkString("\n")
+
 }
 
 object Signatures {
@@ -87,7 +78,7 @@ object Signatures {
     case _ => s"Response[$typename]"
   }
 
-  val empty = Signatures(Set())
+  val empty = Signatures(Set(Signature("describe", "describe: List[remotely.Signature]", List(), "List[Remotely.Signature]")))
 
   // converts "sum: List[Int] => Int" to ("sum", "List[Int] => Int")
   private[remotely] def split(typedName: String): (String,String) = {

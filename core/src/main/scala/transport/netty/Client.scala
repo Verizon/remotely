@@ -19,62 +19,16 @@ package remotely
 package transport.netty
 
 import java.net.InetSocketAddress
-import java.util.concurrent.Executors
-import org.apache.commons.pool2.BasePooledObjectFactory
-import org.apache.commons.pool2.ObjectPool
-import org.apache.commons.pool2.PoolUtils
-import org.apache.commons.pool2.PooledObject
-import org.apache.commons.pool2.impl.DefaultPooledObject
 import org.apache.commons.pool2.impl.GenericObjectPool
 import org.jboss.netty.bootstrap.ClientBootstrap
+import org.jboss.netty.buffer.ChannelBuffer
 import org.jboss.netty.buffer.ChannelBuffers
-import org.jboss.netty.channel._
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory
+import org.jboss.netty.channel.{Channel,ChannelFuture,ChannelHandlerContext,ChannelFutureListener}
 import scalaz.stream.Cause
-import scalaz.{-\/,\/-}
+import scalaz.{-\/,\/,\/-}
 import scalaz.stream.{async,Process}
 import scalaz.concurrent.Task
 import scodec.bits.BitVector
-import scodec.bits.ByteVector
-
-object NettyConnectionPool {
-  def default(hosts: Process[Task,InetSocketAddress]): GenericObjectPool[Channel] = {
-    new GenericObjectPool[Channel](new NettyConnectionPool(hosts))
-  }
-}
-
-class NettyConnectionPool(hosts: Process[Task,InetSocketAddress]) extends BasePooledObjectFactory[Channel] {
-  val cf: ChannelFactory = new NioClientSocketChannelFactory(
-    Executors.newCachedThreadPool(),
-    Executors.newCachedThreadPool())
-
-  def createTask: Task[Channel] = Task.delay {
-    val bootstrap = new ClientBootstrap(cf)
-    bootstrap.setOption("keepAlive", true)
-    bootstrap.setPipeline(Channels.pipeline(new Deframe()))
-    bootstrap.connect(hosts.once.runLast.run.get)
-  } flatMap { fut =>
-    Task.async { cb =>
-      fut.addListener(new ChannelFutureListener {
-                        def operationComplete(cf: ChannelFuture): Unit = {
-                          if(cf.isSuccess) {
-                            cb(\/-(cf.getChannel))
-                          } else {
-                            cb(-\/(cf.getCause()))
-                          }
-                        }
-                      })
-    }
-  }
-
-  override def create: Channel = createTask.run
-
-  override def wrap(c: Channel): PooledObject[Channel] = new DefaultPooledObject(c)
-
-  override def passivateObject(c: PooledObject[Channel]): Unit = {
-    val _ = c.getObject().getPipeline().remove(classOf[ClientDeframedHandler])
-  }
-}
 
 class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
   import NettyTransport._
@@ -83,7 +37,8 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
     val c = pool.borrowObject()
     val fromServer = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.DefaultStrategy)
     c.getPipeline().addLast("clientDeframe", new ClientDeframedHandler(fromServer))
-    val writeBytes: Task[Unit] = (toServer pipe enframe).evalMap(write(c)).run
+    val toFrame = toServer.map(Bits(_)) fby Process.emit(EOS)
+    val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run
     val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
       case Cause.End =>
         pool.returnObject(c)
@@ -102,18 +57,18 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
   }
 }
 
+
 object NettyTransport {
-  def write(c: Channel)(bv: ByteVector): Task[Unit] = {
-    val cf = c.write(ChannelBuffers.wrappedBuffer(bv.toByteBuffer))
-    Task.async { cb =>
-      cf.addListener(new ChannelFutureListener {
-                       def operationComplete(cf: ChannelFuture): Unit =
-                         if(cf.isSuccess) cb(\/-(())) else cb(-\/(cf.getCause))
-                     })
-    }
+  def evalCF(cf: ChannelFuture): Task[Unit] = Task.async { cb =>
+    cf.addListener(new ChannelFutureListener {
+                     def operationComplete(cf: ChannelFuture): Unit =
+                       if(cf.isSuccess) cb(\/-(())) else cb(-\/(cf.getCause))
+                   })
   }
 
-  def single(host: InetSocketAddress): NettyTransport = {
-    new NettyTransport(NettyConnectionPool.default(Process.constant(host)))
+  def write(c: Channel)(frame: Framed): Task[Unit] = evalCF(c.write(frame))
+
+  def single(host: InetSocketAddress, expectedSigs: Set[Signature] = Set.empty, M: Monitoring = Monitoring.empty): NettyTransport = {
+    new NettyTransport(NettyConnectionPool.default(Process.constant(host), expectedSigs, M))
   }
 }

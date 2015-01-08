@@ -18,6 +18,7 @@
 package remotely
 package transport.netty
 
+import java.net.InetSocketAddress
 import org.jboss.netty.buffer.ChannelBuffer
 import org.jboss.netty.buffer.ChannelBuffers
 import org.jboss.netty.channel._
@@ -26,21 +27,75 @@ import org.jboss.netty.channel.socket.nio.NioServerSocketChannel
 import java.nio.ByteBuffer
 import org.apache.commons.pool2.ObjectPool
 import org.jboss.netty.handler.codec.frame.FrameDecoder
-import scalaz.-\/
+import scalaz.{-\/,\/,\/-}
 import scalaz.concurrent.Task
 import scalaz.stream.{Process,async}
+import scodec.Err
 import scodec.bits.BitVector
 import java.util.concurrent.ExecutorService
+import scodec.bits.ByteVector
 
+///////////////////////////////////////////////////////////////////////////
+// A Netty based transport for remotely.
+//
+// Netty connections consist of two pipelines on each side of a
+// network connection, an outbound pipeline and an inbound pipeline
+//
+// Client Outbound Pipeline
+//
+//               +---------+
+// [ Network ] ← | Enframe | ←  Client request
+//               +---------+
+//
+// Server Inbound Pipeline
+//
+//               +---------+   +-----------------------+
+// [ Network ] → | Deframe | → | ServerDeframedHandler |
+//               +---------+   +-----------------------+
+//
+// Deframe - decodes the framing in order to find message boundaries
+//
+// ServerDeframedHandler - accepts full messages from Deframe, for
+// each message, opens a queue/processs pair, calls the handler which
+// returns a result Process which is copied back out to the network
+//
+// Server Outbound Pipeline
+//
+//               +---------+   +-----------------------+
+// [ Network ] ← | Enframe | ← | ServerDeframedHandler |
+//               +---------+   +-----------------------+
+//
+// Enfrome - prepends each ByteVector emitted from the Process with a
+// int indicating how many bytes are in this ByteVector, when the
+// Process halts, a zero is written indicating the end of the stream
+//
+//               +-----------------------+
+// [ Network ] ← | ServerDeframedHandler |
+//               +-----------------------+
+//
+//
+// Client Intbound Pipeline
+//
+//               +---------+   +-----------------------+
+// [ Network ] → | Deframe | → | ClientDeframedHandler |
+//               +---------+   +-----------------------+
+//
+// Deframe - The same as in the Server pipeline
+//
+// ClientDeframedHandler - This is added to the pipeline when a
+// connection is borrowed from the connection pool. It holds onto a
+// queue which it feeds with frames passed up from Deframe. This queue
+// feeds the Process which represents the output of a remote call.
+//
 
-/** 
-  * set of messages passed from FrameDecoder to DeframedHandler
+/**
+  * set of messages passed in and out of the FrameEncoder/FrameDecoder
   * probably unecessary, I'm probably just trying to sweep an
   * isInstanceOf test under the compiler
   */
-trait Deframed
-case class Bits(bv: BitVector) extends Deframed
-case object EOS extends Deframed
+sealed trait Framed
+case class Bits(bv: BitVector) extends Framed
+case object EOS extends Framed
 
 /**
   * handler which is at the lowest level of the stack, it decodes the
@@ -57,11 +112,11 @@ class Deframe extends FrameDecoder {
   var remaining: Option[Int] = None
 
   override protected def decode(ctx: ChannelHandlerContext, // this is our network connection
-                                out: Channel,          
+                                out: Channel,
                                 in: ChannelBuffer  // this is our input
-                               ): Object =  { 
+                               ): Object =  {
     remaining match {
-      case None => 
+      case None =>
         // we are expecting a frame header of a single byte which is
         // the number of bytes in the upcoming frame
         if (in.readableBytes() >= 4) {
@@ -109,12 +164,8 @@ class ClientDeframedHandler(queue: async.mutable.Queue[BitVector]) extends Simpl
   }
 
   override def messageReceived(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
-  me.getMessage().asInstanceOf[Deframed] match {
-      case Bits(bv) =>
-      if(bv.size < 1 ) {
-        println("ZERO BV")
-        Thread.dumpStack
-      } else
+  me.getMessage().asInstanceOf[Framed] match {
+    case Bits(bv) =>
       queue.enqueueOne(bv).runAsync(Function.const(()))
     case EOS =>
       close()
@@ -125,11 +176,11 @@ class ClientDeframedHandler(queue: async.mutable.Queue[BitVector]) extends Simpl
 /**
   * We take the bits coming to us, which have been partitioned for us
   * by FrameDecoder.
-  * 
+  *
   * every time we see a boundary, we close one stream, open a new
   * one, and setup a new outgoing stream back to the client.
   */
-class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) extends SimpleChannelUpstreamHandler {
+class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService, M: Monitoring) extends SimpleChannelUpstreamHandler {
 
   var queue: Option[async.mutable.Queue[BitVector]] = None
 
@@ -139,21 +190,22 @@ class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) exten
   //
   //  if we don't have a queue open, we need to:
   //    - open a queue
-  //    - get the queue's output stream, 
+  //    - get the queue's output stream,
   //    - apply the handler to the stream to get a response stream
   //    - evalMap that stream onto the side effecty "Context" to write
   //      bytes back to to the client (i hate the word context)
   //
   private def ensureQueue(ctx: ChannelHandlerContext, me: MessageEvent): async.mutable.Queue[BitVector] = queue match {
     case None =>
+      M.negotiating(Option(ctx.getChannel().getRemoteAddress()), "creating queue", None)
       val queue1 = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.Executor(threadPool))
       val queue = Some(queue1)
       val stream = queue1.dequeue
 
-      val write: Task[Unit] = (handler(stream) pipe enframe).evalMap { b =>
-
+      val framed = handler(stream) map (Bits(_)) fby Process.emit(EOS)
+      val write: Task[Unit] = framed.evalMap { b =>
         Task.delay {
-          Channels.write(ctx,me.getFuture(), ChannelBuffers.wrappedBuffer(b.toByteBuffer))
+          Channels.write(ctx,me.getFuture(), b)
         }
       }.run
 
@@ -179,38 +231,36 @@ class ServerDeframedHandler(handler: Handler, threadPool: ExecutorService) exten
   }
 
   // we've seen the end of the input, close the queue writing to the input stream
-  private def close(): Unit = {
+  private def close(ctx: ChannelHandlerContext): Unit = {
     queue.foreach(_.close.runAsync(Function.const(())))
+    M.negotiating(Option(ctx.getChannel().getRemoteAddress()), "closing queue", None)
     queue = None
   }
 
   override def messageReceived(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
-    me.getMessage().asInstanceOf[Deframed] match {
+    me.getMessage().asInstanceOf[Framed] match {
       case Bits(bv) =>
-//        println(s"received (${bv.size}): " + bv.bytes.toArray.map("%02x".format(_)).mkString)
-      if(bv.size < 1 ) {
-        println("ZERO BV")
-        Thread.dumpStack
-      } else {
         val queue = ensureQueue(ctx, me)
         queue.enqueueOne(bv).runAsync(Function.const(()))
-      }
-
     case EOS =>
-      close()
+        close(ctx)
     }
   }
 }
 
-/*
 /**
   * output handler which gets a stream of BitVectors and enframes them
   */
-class Enframe extends SimpleChannelDownstreamHandler {
+object Enframe extends SimpleChannelDownstreamHandler {
   override def writeRequested(ctx: ChannelHandlerContext, me: MessageEvent): Unit = {
-    val bv = me.getMessage.asInstanceOf[BitVector]
-    ctx.getChannel().write(bv.size)
-    val _ = ctx.getChannel().write(bv.toByteBuffer)
+    me.getMessage match {
+      case Bits(bv) =>
+        val byv = bv.toByteVector
+        Channels.write(ctx, me.getFuture(), ChannelBuffers.copiedBuffer(codecs.int32.encodeValid(byv.size).toByteBuffer))
+        Channels.write(ctx, me.getFuture(), ChannelBuffers.copiedBuffer(bv.toByteBuffer))
+      case EOS =>
+        Channels.write(ctx, me.getFuture(), ChannelBuffers.copiedBuffer(codecs.int32.encodeValid(0).toByteBuffer))
+      case x => throw new IllegalArgumentException("was expecting Framed, got: " + x)
+    }
   }
 }
- */

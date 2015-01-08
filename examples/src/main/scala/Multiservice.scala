@@ -52,9 +52,9 @@ object Multiservice extends App {
   }
 
   // Serve these functions
-  val addr1 = new java.net.InetSocketAddress("localhost", 8080)
+  val addr1 = new java.net.InetSocketAddress("localhost", 8081)
   val transport = NettyTransport.single(addr1)
-  val stopA = env1.serveNetty(addr1, Executors.newCachedThreadPool)(Monitoring.consoleLogger("[service-a]"))
+  val stopA = env1.serveNetty(addr1, Executors.newCachedThreadPool, Monitoring.consoleLogger("[service-a]"))
 
   // And expose an `Endpoint` for making requests to this service
   val serviceA: Endpoint = Endpoint.single(transport)
@@ -100,7 +100,7 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8081)
-  val stopB = env2.serveNetty(addr2, Executors.newCachedThreadPool)(Monitoring.consoleLogger("[service-b]"))
+  val stopB = env2.serveNetty(addr2, Executors.newCachedThreadPool, Monitoring.consoleLogger("[service-b]"))
   val serviceB: Endpoint = Endpoint.single(NettyTransport.single(addr2))
 
   try {

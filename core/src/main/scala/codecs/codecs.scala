@@ -215,8 +215,6 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
       }
     } yield (responseDec, ctx, r)
 
-  def responseCodec[A:Codec] = either[String,A]
-
   def responseDecoder[A:Decoder]: Decoder[String \/ A] = bool flatMap {
     case false => utf8.map(left)
     case true => Decoder[A].map(right)
@@ -297,7 +295,6 @@ trait TupleHelpers {
         bits2 <- B.encode(abc._2)
         bits3 <- C.encode(abc._3)
       } yield bits ++ bits2 ++ bits3
-
 
     def pxmap[X](to: (A,B,C) => X, from: X => Option[(A,B,C)]): Codec[X] = this.pxmap(to.tupled, from)
   }
