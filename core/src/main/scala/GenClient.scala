@@ -30,6 +30,12 @@ class GenClient(sigs: Signatures) extends StaticAnnotation {
 }
 
 object GenClient {
+  /**
+    * this just allows us to put a $signature into a quasi-quote.
+    * implimented this way instead of by providing Liftable[Signature]
+    * only because I gave up on trying to figure out the complex cake
+    * of path-dependant types which is the current reflection api.
+    */
   def liftSignature(c: Context)(s: Signature): c.universe.Tree = {
     import c.universe._
     val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType})"
@@ -55,6 +61,9 @@ object GenClient {
     }
 
 
+    // Generate a Set[Signature] of the function signatures we are
+    // expecting any server to support. This will be baked into the
+    // generated client as an expectedSignatures val.
     val esSet = {
       val sigs = s.signatures.map { sig =>
         q"_root_.remotely.Signature(${sig.name}, ${sig.tag}, ${sig.inTypes}, ${sig.outType})"
@@ -70,11 +79,9 @@ object GenClient {
           import remotely.Remote
           ..$signatures
           ..$body
-
           val expectedSignatures = ${esSet}
-
-    }
-     """
+        }
+        """
 
       case _ => c.abort(
         c.enclosingPosition,
