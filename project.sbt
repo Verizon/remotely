@@ -19,3 +19,5 @@ lazy val `benchmark-protocol` = project.in(file("benchmark/protocol")).dependsOn
 lazy val `benchmark-server` = project.in(file("benchmark/server")).dependsOn(`benchmark-protocol`)
 
 lazy val `benchmark-client` = project.in(file("benchmark/client")).dependsOn(`benchmark-protocol`, `benchmark-server`)
+
+parallelExecution in Test := false
