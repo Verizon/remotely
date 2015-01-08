@@ -202,7 +202,7 @@ package oncue.svc.example
 
 import scalaz.concurrent.Task
 import java.net.InetSocketAddress
-import remotely._, codecs._
+import remotely._, codecs._, transport.netty._
 
 object Main {
   import Remote.implicits._
@@ -211,9 +211,9 @@ object Main {
 
     val address  = new InetSocketAddress("localhost", 8080)
 
-    val system = akka.actor.ActorSystem("rpc-client")
+    val transport = NettyTransport.single(address)
 
-    val endpoint = Endpoint.single(address)(system)
+    val endpoint = Endpoint.single(transport)
 
     val f: Remote[Int] = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
 
@@ -228,7 +228,7 @@ object Main {
 
 Whilst `address` is the same value from the server, the typical case here of course is that the server and the client are not in the same source file so i've repeated it here for completeness. Let's explore the other values:
 
-* `system`: This is the underlying Akka system used to power the Akka IO networking. This is mandatory and provides the settings nessicary to control the performance of the client (thread pooling, backoff etc)
+* `transport`: This is the underlying network transport which is responsible for transporting serialized requests from the client to the server, and the responses back to the client. Currently, netty is the only implemented transport.
 
 * `endpoint`: An `Endpoint` is an abstraction over callable service locations. Whilst the `Endpoint` object has a range of combinators, for this simple example we simply construct a fixed, static, single location. More information can be found in the [detailed documentation](http://)
 
