@@ -8,8 +8,6 @@ lazy val remotely = project.in(file(".")).aggregate(core, examples, `benchmark-s
 
 lazy val core = project
 
-lazy val paradiseVersion = "2.0.1"
-
 lazy val examples = project dependsOn core
 
 lazy val test = project dependsOn core
