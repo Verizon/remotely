@@ -211,13 +211,13 @@ object Remote {
   /** Provides implicits for promoting values to `Remote[A]`. */
   object implicits extends lowpriority {
 
-    /** Implicitly promote a `Task[A]` to a `Remote[A]`. */
+    /** Implicitly promote a `Response[A]` to a `Remote[A]`. */
     implicit def responseToRemote[A:Encoder:TypeTag](t: Response[A]): Remote[A] = response(t)
 
     /** Implicitly promote a `Task[A]` to a `Remote[A]`. */
     implicit def taskToRemote[A:Encoder:TypeTag](t: Task[A]): Remote[A] = async(t)
 
-    /** Implicitly promote a `Task[A]` to a `Remote[A]`. */
+    /** Implicitly promote a local value to a `Remote[A]`. */
     implicit def localToRemote[A:Encoder:TypeTag](a: A): Remote[A] = local(a)
   }
 }
