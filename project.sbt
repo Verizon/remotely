@@ -8,8 +8,6 @@ lazy val remotely = project.in(file(".")).aggregate(core, examples, `benchmark-s
 
 lazy val core = project
 
-lazy val paradiseVersion = "2.0.1"
-
 lazy val examples = project dependsOn core
 
 lazy val test = project dependsOn core
@@ -21,3 +19,5 @@ lazy val `benchmark-protocol` = project.in(file("benchmark/protocol")).dependsOn
 lazy val `benchmark-server` = project.in(file("benchmark/server")).dependsOn(`benchmark-protocol`)
 
 lazy val `benchmark-client` = project.in(file("benchmark/client")).dependsOn(`benchmark-protocol`, `benchmark-server`)
+
+parallelExecution in Global := false
