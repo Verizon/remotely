@@ -71,7 +71,7 @@ object SimpleMain extends App {
 
   val transport = NettyTransport.single(addr)
   val expr: Remote[Int] = sum(List(0,1,2,3,4))
-  val loc: Endpoint = Endpoint.single(transport) // takes ActorSystem implicitly
+  val loc: Endpoint = Endpoint.single(transport)
   val result: Task[Int] = expr.runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
   // running a couple times just to see the latency improve for subsequent reqs
