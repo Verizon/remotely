@@ -237,7 +237,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress], expectedSigs: 
       _ = M.negotiating(Some(addr), "capabilities received", None)
       c1 <- validateCapabilities(capable)
       _ = M.negotiating(Some(addr), "capabilities valid", None)
-      c2 <- new ClientNegotiateDescription(c1,expectedSigs, addr).valid
+      c2 <- if(expectedSigs.isEmpty) Task.now(c1) else new ClientNegotiateDescription(c1,expectedSigs, addr).valid
       _ = M.negotiating(Some(addr), "description valid", None)
     } yield(c2)
   } 
