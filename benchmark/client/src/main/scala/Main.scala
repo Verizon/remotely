@@ -127,6 +127,11 @@ class Results {
 
 object BenchmarkClientMain extends TestData with transformations {
 
+  def usage() {
+    println("Usage: BenchmarkClientMain port threads seconds")
+    Runtime.getRuntime.exit(1)
+  }
+
   /**
     * run a client against the Benchmark server
     * 
@@ -138,6 +143,8 @@ object BenchmarkClientMain extends TestData with transformations {
     * duration is the number of seconds to run the benchmark
     */
   def main(argv: Array[String]): Unit = {
+    if(argv.length < 3) usage()
+
     val port = Integer.parseInt(argv(0))
     val addr = new java.net.InetSocketAddress("localhost", port)
     val nettyTrans = NettyTransport.single(addr, server.BenchmarkClient.expectedSignatures, Monitoring.consoleLogger("benchmarkClient"))

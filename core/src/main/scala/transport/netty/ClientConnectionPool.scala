@@ -19,7 +19,8 @@ package remotely
 package transport.netty
 
 import java.net.InetSocketAddress
-import java.util.concurrent.Executors
+import java.util.concurrent.{Executors, ThreadFactory}
+import java.util.concurrent.atomic.AtomicInteger
 import org.apache.commons.pool2.BasePooledObjectFactory
 import org.apache.commons.pool2.PooledObject
 import org.apache.commons.pool2.impl.DefaultPooledObject
@@ -47,9 +48,15 @@ object NettyConnectionPool {
 case class IncompatibleServer(msg: String) extends Throwable(msg)
 
 class NettyConnectionPool(hosts: Process[Task,InetSocketAddress], expectedSigs: Set[Signature], M: Monitoring = Monitoring.consoleLogger("default")) extends BasePooledObjectFactory[Channel] {
+  def namedThreadFactory(name: String) = new ThreadFactory {
+    val num = new AtomicInteger(1)
+    def newThread(runnable: Runnable) = new Thread(runnable, s"$name - ${num.incrementAndGet}")
+  }
+
+
   val cf: ChannelFactory = new NioClientSocketChannelFactory(
-    Executors.newCachedThreadPool(),
-    Executors.newCachedThreadPool())
+    Executors.newCachedThreadPool(namedThreadFactory("nettyBoss")),
+    Executors.newCachedThreadPool(namedThreadFactory("nettyWorker")))
 
   val validateCapabilities: ((Capabilities,Channel)) => Task[Channel] = {
     case (capabilties, channel) =>
@@ -69,18 +76,41 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress], expectedSigs: 
       }
   }
 
-  class ClientNegotiateDescription(channel: Channel, expectedSigs: Set[Signature], addr: InetSocketAddress) extends SimpleChannelUpstreamHandler {
+  /**
+    * This is an upstream handler that sits in the client's pipeline
+    * during connection negotiation. 
+    * 
+    * It is put into the pipeline initially, we then make a call to
+    * the server to ask for the descriptions of all the functions that
+    * the server provides. when we receive the response, this handler
+    * checks that all of the expectedSigs passed to the constructor
+    * are present in the server response.
+    * 
+    * The state of this negotiation is captured by the `valid` Task,
+    * which is asynchronously updated when the response is recieved
+    */
+  class ClientNegotiateDescription(channel: Channel,
+                                   expectedSigs: Set[Signature],
+                                   addr: InetSocketAddress) extends SimpleChannelUpstreamHandler {
 
     M.negotiating(Some(addr), "description negotiation begin", None)
 
-    var cb: Throwable\/Channel => Unit = _
+
+    // the callback which will fulfil the valid task
+    private[this] var cb: Throwable\/Channel => Unit = _
+
     val valid: Task[Channel] = Task.async { cb =>
       this.cb = cb
     }
 
-    var bits = BitVector.empty
+    // here we accumulate bits as they arrive, we keep accumulating
+    // until the handler below us signals the end of stream by
+    // emitting a EOS
+    private[this] var bits = BitVector.empty
 
-    def fail(msg: String): Unit = {
+    // negotiation failed. fulfil the callback negatively, and remove
+    // ourselves from the pipeline
+    private[this] def fail(msg: String): Unit = {
       val err = IncompatibleServer(msg)
 
       val pipe = channel.getPipeline()
@@ -89,7 +119,9 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress], expectedSigs: 
       cb(\/.left(err))
     }
 
-    def success(): Unit = {
+    // negiotiation succeeded, fulfil the callback positively, and
+    // remove ourselves from the pipeline
+    private[this] def success(): Unit = {
       val pipe = channel.getPipeline()
       pipe.removeLast()
       M.negotiating(Some(addr), "description", None)
@@ -121,28 +153,44 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress], expectedSigs: 
     }
 
   
-    val pipe = channel.getPipeline()
+    private[this] val pipe = channel.getPipeline()
     pipe.addLast("negotiateDescription", this)
 
     //
     // and then they did some investigation and realized
     // <gasp>
     // THE CALL WAS COMING FROM INSIDE THE HOUSE
-    val requestDescription: Task[Unit] = for {
+    /**
+      * a Task which actually makes a request to the server for the
+      * description of server supported functions
+      */
+    private[this] val requestDescription: Task[Unit] = for {
       bits <- codecs.encodeRequest(Remote.ref[List[Signature]]("describe")).apply(Response.Context.empty)
       _ <- NettyTransport.evalCF(channel.write(Bits(bits)))
       _ <- NettyTransport.evalCF(channel.write(EOS))
       _ = M.negotiating(Some(addr), "sending describe request", None)
     } yield ()
 
+    // actually make the request for the description
     requestDescription.runAsync {
       case \/-(bits) => ()
       case -\/(x) => fail("error requesting server description: " + x)
     }
 }
 
+  /**
+    * pipeline handler which expects the Capabilities string which the
+    * server sends as soon as we connect. this will check that all the
+    * required capabilities are present. if so, it will replace itself
+    * with the ClientNegotiateDescription handler to do the next part
+    * of the negotiation.
+    */
   class ClientNegotiateCapabilities extends DelimiterBasedFrameDecoder(1000,Delimiters.lineDelimiter():_*) {
-    var cb: Throwable\/(Capabilities,Channel) => Unit = _
+
+    // callback which fulfills the capabilities Task
+    private[this] var cb: Throwable\/(Capabilities,Channel) => Unit = _
+
+
     val capabilities: Task[(Capabilities,Channel)] = Task.async { cb =>
       this.cb = cb
     }
@@ -189,7 +237,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress], expectedSigs: 
       _ = M.negotiating(Some(addr), "capabilities received", None)
       c1 <- validateCapabilities(capable)
       _ = M.negotiating(Some(addr), "capabilities valid", None)
-      c2 <- new ClientNegotiateDescription(c1,expectedSigs, addr).valid
+      c2 <- if(expectedSigs.isEmpty) Task.now(c1) else new ClientNegotiateDescription(c1,expectedSigs, addr).valid
       _ = M.negotiating(Some(addr), "description valid", None)
     } yield(c2)
   } 

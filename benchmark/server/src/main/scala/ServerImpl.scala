@@ -31,7 +31,14 @@ class BenchmarkServerImpl extends BenchmarkServer with transformations {
 }
 
 object Main {
+  def usage() {
+    println("usage: BenchmarkServerImpl port numThreads")
+    Runtime.getRuntime.exit(1)
+  }
+
   def main(argv: Array[String]): Unit = {
+    if(argv.length < 2) usage()
+
     val threadNo = new AtomicInteger(0)
     val port = Integer.parseInt(argv(0))
     val addr = new java.net.InetSocketAddress("localhost", port)

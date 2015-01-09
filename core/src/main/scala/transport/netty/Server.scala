@@ -20,9 +20,7 @@ package transport.netty
 
 import java.util.concurrent.Executors
 import org.jboss.netty.buffer.ChannelBuffers
-import org.jboss.netty.channel._
-import org.jboss.netty.channel.socket.ServerSocketChannel
-import org.jboss.netty.channel.socket.nio.{NioServerSocketChannel, NioServerSocketChannelFactory}
+import org.jboss.netty.channel._, socket.ServerSocketChannel, socket.nio.{NioServerSocketChannel, NioServerSocketChannelFactory}
 import org.jboss.netty.bootstrap.ServerBootstrap
 import java.net.InetSocketAddress
 import java.util.concurrent.ExecutorService

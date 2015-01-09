@@ -22,10 +22,54 @@ import scodec.bits.BitVector
 import scalaz.{-\/,\/,\/-}
 import scala.util.parsing.combinator._
 
+/**
+  * A Set of capabilities that a server possesses.
+  * 
+  * this set of capabilities will be transmitted from Server to client
+  * at the time when a connection is built.
+  * 
+  * Currently there is only one known capability, which is the
+  * "Remotely 1.0" capability.
+  * 
+  * You can see this if you telnet to a running remotely server:
+  * {{{
+      $ telnet localhost 9999
+      Trying 127.0.0.1...
+      Connected to localhost.
+      Escape character is '^]'.
+      OK: [Remotely 1.0]
+  * }}}
+  * 
+  * The OK line spit out by the server contains a comma separated list
+  * of capabilities between the square brackets.
+  * 
+  * In the future we might revision our wire format, perhaps because
+  * we want to also allow for XML serialization of objects. Perhaps we
+  * want to add STARTTLS support, perhaps we want to add a way to
+  * fetch documentation for the functions exported by this server,
+  * someday in the future, a remotely server might respond with:
+  * 
+  * OK: [Remotely 1.0, STARTTLS, Remotely XML 1.0, Remotely 2.0]
+  * 
+  * When the client receives this string as part of the connection
+  * negotiation, it can perhaps adapt its behavior depending on the
+  * server capabilities, or it could decide not to talk to this
+  * server.
+  */
 case class Capabilities(capabilities: Set[String])
 
 object Capabilities extends RegexParsers {
-  val required: Set[String] = Set("Remotely 1.0")
+
+  /**
+    * The Remotely 1.0 capability states that the server will have a
+    * `describe` method, which can list all the available functions on
+    * the server, and implies our current serialization format (which
+    * is likely to change)
+    */
+  val `remotely-1.0` = "Remotely 1.0"
+
+  val required: Set[String] = Set(`remotely-1.0`)
+
   val default = Capabilities(required)
 
   val capability: Parser[String] = "[^,\\]]*".r
@@ -47,7 +91,6 @@ object Capabilities extends RegexParsers {
       val str = "OK: " + c.capabilities.mkString("[",",","]") + "\n"
       \/-(BitVector(str.getBytes))
     }
-
 
     override def decode(bv: BitVector): Err \/ (BitVector,Capabilities) = {
       codecs.utf8.decode(bv).flatMap { case(bv,str) => parseHelloString(str).map(bv -> _) }
