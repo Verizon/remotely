@@ -99,7 +99,7 @@ object Multiservice extends App {
   val average5 = Remote.ref[List[Double] => Double]("average5")
 
   // Serve these functions
-  val addr2 = new java.net.InetSocketAddress("localhost", 8081)
+  val addr2 = new java.net.InetSocketAddress("localhost", 8082)
   val stopB = env2.serveNetty(addr2, Executors.newCachedThreadPool, Monitoring.consoleLogger("[service-b]"))
   val serviceB: Endpoint = Endpoint.single(NettyTransport.single(addr2))
 
