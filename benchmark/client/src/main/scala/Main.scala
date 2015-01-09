@@ -127,6 +127,11 @@ class Results {
 
 object BenchmarkClientMain extends TestData with transformations {
 
+  def usage() {
+    println("Usage: BenchmarkClientMain port threads seconds")
+    Runtime.getRuntime.exit(1)
+  }
+
   /**
     * run a client against the Benchmark server
     * 
