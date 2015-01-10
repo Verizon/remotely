@@ -67,7 +67,8 @@ object SimpleMain extends App {
   println(env)
 
   // create a server for this environment
-  val server = env.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.consoleLogger("[server]"))
+  val pool = Executors.newCachedThreadPool
+  val server = env.serveNetty(addr, pool, Monitoring.consoleLogger("[server]"))
 
   val transport = NettyTransport.single(addr)
   val expr: Remote[Int] = sum(List(0,1,2,3,4))
@@ -79,5 +80,6 @@ object SimpleMain extends App {
   finally {
     transport.shutdown()
     server()
+    pool.shutdown()
   }
 }
