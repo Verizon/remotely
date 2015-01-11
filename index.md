@@ -120,7 +120,15 @@ Protocols are the core of the remotely project. They represent the contract betw
 
 ### Server & Client Definition
 
-*Remotely* makes use of compile-time macros to build out interfaces for server implementations and client objects. Given that your service `Protocol` is defined in the `rpc-protocol` module, our dependant `rpc` module can access that protocol as a total value, enabling us to generate servers and clients. Here's an example:
+*Remotely* makes use of compile-time macros to build out interfaces for server implementations and client objects. Because of limitations of the scala macro system, the use of the macros must be in a separate compilation unit (separate project or sub-project) then your protocol implementation. Now that your your service `Protocol` is defined in the `rpc-protocol` module, You can make a dependent `rpc` module which can access that protocol as a total value, enabling us to generate servers and clients. This `rpc` module will need to include the [Macro Paradise](http://docs.scala-lang.org/overviews/macros/paradise.html) compiler plugin, which you can do by adding the following to the build definition for the `rpc` project:
+
+
+```
+addCompilerPlugin("org.scalamacros" % "paradise" % "2.0.1" cross CrossVersion.full)
+
+```
+
+Unfortunately if you forget this step, compiliation of the `rpc` module will succeed, however the macro will not run. Now we are ready to generate a remotely server. Here's an example:
 
 ```
 package oncue.svc.example
@@ -139,7 +147,7 @@ class FactorialServer0 extends FactorialServer {
 
 ```
 
-The `GenServer` macro does require all the FQCN of all the inputs, but provided you organize your project in the manner described earlier in this document, there wont be able problems as the protocol compilation unit will already be total.
+The `GenServer` macro does require all the FQCN of all the inputs, so here we must use `oncue.svc.example.protocol.definition`. For example, using just `protocol.definition` after `import oncue.svc.example._` would *not* work, as in that case, the macro would then only see the AST: `protocol.definition` which doesn't have a value in the compiler context, but provided you organize your project in the manner described earlier in this document.
 
 In a similar fashion, clients are also very simple. The difference here is that clients are fully complete, and do not require any implementation as the function arguments defined in the protocol are entirely known at compile time.
 
