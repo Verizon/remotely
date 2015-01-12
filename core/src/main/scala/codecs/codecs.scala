@@ -259,9 +259,9 @@ trait TupleHelpers {
 
     override def decode(bits: BitVector): Err \/ (BitVector, (A,B)) = {
       for {
-        aa <- A.decode(bits).leftMap(e => Err("tuple2-1 from ${bits.size} bits -- " + e.messageWithContext))
+        aa <- A.decode(bits).leftMap(e => Err(s"tuple2-1 from ${bits.size} bits -- " + e.messageWithContext))
                       (bits1,a) = aa
-        bb <- B.decode(bits1).leftMap(e => Err("tuple2-2 from ${bits1.size} bits -- " + e.messageWithContext))
+        bb <- B.decode(bits1).leftMap(e => Err(s"tuple2-2 from ${bits1.size} bits -- " + e.messageWithContext))
       } yield(bb._1, (a,bb._2))
 
     }
