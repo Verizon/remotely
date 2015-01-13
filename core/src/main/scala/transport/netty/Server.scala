@@ -19,72 +19,175 @@ package remotely
 package transport.netty 
 
 import java.util.concurrent.Executors
-import org.jboss.netty.buffer.ChannelBuffers
-import org.jboss.netty.channel._, socket.ServerSocketChannel, socket.nio.{NioServerSocketChannel, NioServerSocketChannelFactory}
-import org.jboss.netty.bootstrap.ServerBootstrap
+import io.netty.channel._, socket.SocketChannel, nio.NioEventLoopGroup
+import io.netty.channel.socket.nio.NioServerSocketChannel
+import io.netty.buffer.Unpooled
+import io.netty.bootstrap.ServerBootstrap
 import java.net.InetSocketAddress
-import java.util.concurrent.ExecutorService
+import scalaz.concurrent.{Strategy,Task}
+import scalaz.stream.{Process,async}
+import scodec.bits.BitVector
+import scalaz.{-\/,\/}
 
-class NettyServer(handler: Handler, threadPool: ExecutorService, capabilities: Capabilities, M: Monitoring) {
+class NettyServer(handler: Handler,
+                  strategy: Strategy,
+/* STU: punting on this for now to keep things simple
+                  numBossThreads: Int,
+                  numWorkerThreads: Int,
+ */
+                  capabilities: Capabilities,
+                  M: Monitoring) {
 
-  val cf: ChannelFactory = new NioServerSocketChannelFactory(Executors.newFixedThreadPool(2),
-                                                             Executors.newFixedThreadPool(4))
-  /**
-    * Attaches our handlers to a channel
-    */
-  class PipelineInitialize extends ChannelPipelineFactory {
-    override def getPipeline: ChannelPipeline = {
-      Channels.pipeline(ChannelInitialize)
-    }
-  }
+
+  // TODO: obvs 10?
+  val bossThreadPool = new NioEventLoopGroup(10, namedThreadFactory("nettyBoss"))
+  val workerThreadPool = new NioEventLoopGroup(10, namedThreadFactory("nettyWorker"))
+
+  val bootstrap: ServerBootstrap = new ServerBootstrap()
+    .group(bossThreadPool, workerThreadPool)
+    .channel(classOf[NioServerSocketChannel])
+    .option[java.lang.Boolean](ChannelOption.SO_KEEPALIVE, true)
+    .childHandler(new ChannelInitializer[SocketChannel] {
+                   override def initChannel(ch: SocketChannel): Unit = {
+                     val _ = ch.pipeline().addLast(ChannelInitialize);
+                   }
+                 })
 
   /**
     * Sends our capabilities
     */ 
-  object ChannelInitialize extends SimpleChannelUpstreamHandler {
-
-    override def channelConnected(ctx: ChannelHandlerContext,
-                                  e: ChannelStateEvent): Unit = {
-      super.channelConnected(ctx,e)
-      M.negotiating(Option(ctx.getChannel().getRemoteAddress()), "channel connected", None)
+  object ChannelInitialize extends ChannelInboundHandlerAdapter {
+    override def channelRegistered(ctx: ChannelHandlerContext): Unit = {
+      super.channelRegistered(ctx)
+      M.negotiating(Option(ctx.channel.remoteAddress), "channel connected", None)
       val encoded = Capabilities.capabilitiesCodec.encodeValid(capabilities)
-      val fut = ctx.getChannel().write(ChannelBuffers.copiedBuffer(encoded.toByteBuffer))
-      fut.addListener(new ChannelFutureListener {
+      val fut = ctx.channel.write(Unpooled.wrappedBuffer(encoded.toByteArray))
+      ctx.channel.flush()
+      M.negotiating(Option(ctx.channel.remoteAddress), "sending capabilities", None)
+      val _ = fut.addListener(new ChannelFutureListener {
                         def operationComplete(cf: ChannelFuture): Unit = {
                           if(cf.isSuccess) {
-                            val p = ctx.getPipeline()
+                            M.negotiating(Option(ctx.channel.remoteAddress), "sent capabilities", None)
+                            val p = ctx.pipeline()
                             p.removeFirst()
                             p.addLast("deframe", new Deframe())
                             p.addLast("enframe", Enframe)
-                            p.addLast("deframed handler", new ServerDeframedHandler(handler, threadPool, M) )
-                          } 
+                            val _ = p.addLast("deframed handler", new ServerDeframedHandler(handler, strategy, M) )
+                          } else {
+                            M.negotiating(Option(ctx.channel.remoteAddress), s"failed to send capabilities", Option(cf.cause))
+                            shutdown()
+                          }
                         }
                       })
     }
   }
 
-  def bootstrap: ServerBootstrap =  {
-    val b: ServerBootstrap = new ServerBootstrap(cf)
-//    b.setParentHandler(ChannelInitialize)
-    b.setPipelineFactory(new PipelineInitialize)
-    b.setOption("child.keepAlive", true)
-    b
-  }
   def shutdown(): Unit = {
-    cf.releaseExternalResources()
+    bossThreadPool.shutdownGracefully()
+    val _ = workerThreadPool.shutdownGracefully()
   }
 }
 object NettyServer {
-  def start(addr: InetSocketAddress, handler: Handler, threadPool: ExecutorService, capabilities: Capabilities, M: Monitoring) = {
-    val server = new NettyServer(handler, threadPool, capabilities, M)
+  def start(addr: InetSocketAddress,
+            handler: Handler,
+            strategy: Strategy,
+/*
+            numBossThreads: Int,
+            numWorkerThreads: Int,
+ */
+            capabilities: Capabilities,
+            M: Monitoring): Task[Unit] = {
+    val server = new NettyServer(handler, strategy/*, numBossThreads, numWorkerThreads*/, capabilities, M)
     val b = server.bootstrap
-    // Bind and start to accept incoming connections.
-    val channel = b.bind(addr)
 
-    () => {
-      channel.close().awaitUninterruptibly()
-      server.shutdown()
-    }
+    val channel = b.bind(addr)
+    Task.delay {
+      Task.async[Unit] { cb =>
+        val _ = channel.addListener(new ChannelFutureListener {
+                                      override def operationComplete(cf: ChannelFuture): Unit = {
+                                        server.shutdown()
+                                        if(cf.isSuccess) {
+                                          cf.channel.close().awaitUninterruptibly()
+                                        }
+                                        cb(\/.right(()))
+                                      }
+                                    })
+      }
+    }.flatMap(identity)
   }
+}
+
+/**
+  * We take the bits coming to us, which have been partitioned for us
+  * by FrameDecoder.
+  *
+  * every time we see a boundary, we close one stream, open a new
+  * one, and setup a new outgoing stream back to the client.
+  */
+class ServerDeframedHandler(handler: Handler, strategy: Strategy, M: Monitoring) extends SimpleChannelInboundHandler[Framed] {
+
+  var queue: Option[async.mutable.Queue[BitVector]] = None
+
+  //
+  //  We've getting some bits, make sure we have a queue open if these
+  //  bits are part of a new request.
+  //
+  //  if we don't have a queue open, we need to:
+  //    - open a queue
+  //    - get the queue's output stream,
+  //    - apply the handler to the stream to get a response stream
+  //    - evalMap that stream onto the side effecty "Context" to write
+  //      bytes back to to the client (i hate the word context)
+  //
+  private def ensureQueue(ctx: ChannelHandlerContext): async.mutable.Queue[BitVector] = queue match {
+    case None =>
+      M.negotiating(Option(ctx.channel.remoteAddress), "creating queue", None)
+      val queue1 = async.unboundedQueue[BitVector](strategy)
+      val queue = Some(queue1)
+      val stream = queue1.dequeue
+
+      val framed = handler(stream) map (Bits(_)) fby Process.emit(EOS)
+      val write: Task[Unit] = framed.evalMap { b =>
+        Task.delay {
+          ctx.write(b)
+        }
+      }.run.flatMap { _ => Task.delay(ctx.flush()) }
+
+      write.runAsync { e =>
+        e match {
+          case -\/(e) => fail(s"uncaught exception in connection-processing logic: $e", ctx)
+          case _ =>
+        }
+      }
+      queue1
+    case Some(q) => q
+  }
+
+  override def exceptionCaught(ctx: ChannelHandlerContext, ee: Throwable): Unit = {
+    ee.printStackTrace()
+    fail(ee.getMessage, ctx)
+  }
+
+  // there has been an error
+  private def fail(message: String, ctx: ChannelHandlerContext): Unit = {
+    queue.foreach(_.fail(new Throwable(message)).runAsync(Function.const(())))
+    val _ = ctx.channel.close() // should this be disconnect? is there a difference
+  }
+
+  // we've seen the end of the input, close the queue writing to the input stream
+  private def close(ctx: ChannelHandlerContext): Unit = {
+    queue.foreach(_.close.runAsync(Function.const(())))
+    M.negotiating(Option(ctx.channel.remoteAddress), "closing queue", None)
+    queue = None
+  }
+
+  override def channelRead0(ctx: ChannelHandlerContext, f: Framed): Unit =
+    f match {
+      case Bits(bv) =>
+        val queue = ensureQueue(ctx)
+        queue.enqueueOne(bv).runAsync(Function.const(()))
+      case EOS =>
+        close(ctx)
+    }
 }
 

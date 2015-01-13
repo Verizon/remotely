@@ -23,8 +23,8 @@ import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
 import scodec.bits.{BitVector}
 import scalaz.stream.Process
+import scalaz.concurrent.{Strategy,Task}
 import scala.concurrent.duration.DurationInt
-import java.util.concurrent.ExecutorService
 
 /**
  * A collection of codecs and values, which can be populated
@@ -67,8 +67,19 @@ case class Environment(codecs: Codecs, values: Values) {
       }
     }
 
-  def serveNetty(addr: InetSocketAddress, threadPool: ExecutorService, monitoring: Monitoring = Monitoring.empty, capabilities: Capabilities = Capabilities.default): () => Unit =
-    transport.netty.NettyServer.start(addr, serverHandler(monitoring), threadPool, capabilities, monitoring)
+  def serveNetty(addr: InetSocketAddress,
+                 strategy: Strategy = Strategy.DefaultStrategy,
+/*
+                 numBossThreads: Int,
+                 numWorkerThreads: Int,
+ */
+                 monitoring: Monitoring = Monitoring.empty,
+                 capabilities: Capabilities = Capabilities.default): Task[Unit] =
+    transport.netty.NettyServer.start(addr,
+                                      serverHandler(monitoring),
+                                      strategy,
+                                      capabilities,
+                                      monitoring)
 }
 
 object Environment {

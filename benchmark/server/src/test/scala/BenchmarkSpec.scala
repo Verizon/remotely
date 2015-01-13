@@ -27,7 +27,7 @@ import remotely.transport.netty._
 import remotely.{Monitoring,Response,Endpoint,codecs}, codecs._, Response.Context
 import scala.collection.immutable.IndexedSeq
 import scalaz.{-\/,\/-}
-import scalaz.concurrent.Task
+import scalaz.concurrent.{Strategy,Task}
 import remotely._
 import java.util.concurrent._
 import protocol._
@@ -39,7 +39,7 @@ class BenchmarkServerSpec extends FlatSpec
 
   val addr = new java.net.InetSocketAddress("localhost", 9001)
   val server = new BenchmarkServerImpl
-  val shutdown: () => Unit = server.environment.serveNetty(addr, Executors.newFixedThreadPool(8), Monitoring.consoleLogger())
+  val shutdown: Task[Unit] = server.environment.serveNetty(addr, Strategy.DefaultStrategy, Monitoring.consoleLogger())
 
   val endpoint = Endpoint.single(NettyTransport.single(addr))
 
@@ -48,7 +48,7 @@ class BenchmarkServerSpec extends FlatSpec
 
   override def afterAll(){
     Thread.sleep(500)
-    shutdown()
+    shutdown.run
   }
 
   behavior of "identityBig"

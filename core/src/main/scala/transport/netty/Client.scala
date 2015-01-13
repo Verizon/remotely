@@ -20,10 +20,7 @@ package transport.netty
 
 import java.net.InetSocketAddress
 import org.apache.commons.pool2.impl.GenericObjectPool
-import org.jboss.netty.bootstrap.ClientBootstrap
-import org.jboss.netty.buffer.ChannelBuffer
-import org.jboss.netty.buffer.ChannelBuffers
-import org.jboss.netty.channel.{Channel,ChannelFuture,ChannelHandlerContext,ChannelFutureListener}
+import io.netty.channel.{Channel,ChannelFuture,ChannelHandlerContext,ChannelFutureListener}
 import scalaz.stream.Cause
 import scalaz.{-\/,\/,\/-}
 import scalaz.stream.{async,Process}
@@ -36,9 +33,9 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
   def apply(toServer: Process[Task, BitVector]): Process[Task, BitVector] = {
     val c = pool.borrowObject()
     val fromServer = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.DefaultStrategy)
-    c.getPipeline().addLast("clientDeframe", new ClientDeframedHandler(fromServer))
+    c.pipeline.addLast("clientDeframe", new ClientDeframedHandler(fromServer))
     val toFrame = toServer.map(Bits(_)) fby Process.emit(EOS)
-    val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run
+    val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run flatMap ( _ => Task.delay(c.flush))
     val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
       case Cause.End =>
         pool.returnObject(c)
@@ -53,22 +50,23 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
   def shutdown(): Unit = {
     pool.clear()
     pool.close()
-    pool.getFactory().asInstanceOf[NettyConnectionPool].cf.releaseExternalResources()
+
+    val _ = pool.getFactory().asInstanceOf[NettyConnectionPool].workerThreadPool.shutdownGracefully()
   }
 }
 
 
 object NettyTransport {
   def evalCF(cf: ChannelFuture): Task[Unit] = Task.async { cb =>
-    cf.addListener(new ChannelFutureListener {
+    val _ = cf.addListener(new ChannelFutureListener {
                      def operationComplete(cf: ChannelFuture): Unit =
-                       if(cf.isSuccess) cb(\/-(())) else cb(-\/(cf.getCause))
+                       if(cf.isSuccess) cb(\/-(())) else cb(-\/(cf.cause))
                    })
   }
 
   def write(c: Channel)(frame: Framed): Task[Unit] = evalCF(c.write(frame))
 
-  def single(host: InetSocketAddress, expectedSigs: Set[Signature] = Set.empty, M: Monitoring = Monitoring.empty): NettyTransport = {
-    new NettyTransport(NettyConnectionPool.default(Process.constant(host), expectedSigs, M))
+  def single(host: InetSocketAddress/*, numBossThreads: Int = 10, numWorkerThreads: Int = 10*/, expectedSigs: Set[Signature] = Set.empty, M: Monitoring = Monitoring.empty): NettyTransport = {
+    new NettyTransport(NettyConnectionPool.default(Process.constant(host)/*, numBossThreads, numWorkerThreads*/, expectedSigs, M))
   }
 }

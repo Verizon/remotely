@@ -19,9 +19,8 @@ package remotely
 package examples
 
 import java.net.InetSocketAddress
-import java.util.concurrent.Executors
 import remotely.transport.netty.NettyTransport
-import scalaz.concurrent.Task
+import scalaz.concurrent.{Strategy,Task}
 import codecs._
 
 object Simple {
@@ -67,7 +66,7 @@ object SimpleMain extends App {
   println(env)
 
   // create a server for this environment
-  val server = env.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.consoleLogger("[server]"))
+  val server = env.serveNetty(addr, Strategy.DefaultStrategy, Monitoring.consoleLogger("[server]"))
 
   val transport = NettyTransport.single(addr)
   val expr: Remote[Int] = sum(List(0,1,2,3,4))
@@ -78,6 +77,6 @@ object SimpleMain extends App {
   try println { result.run; result.run; result.run }
   finally {
     transport.shutdown()
-    server()
+    server.run
   }
 }
