@@ -80,13 +80,13 @@ The structure breaks down like this:
 
 * `core` contains the domain logic for the given application; ideally this is organised around a free algebra which makes `core` self-contained and fully testable without any kind of wire protocol. The module is primarily composed of pure functions (lifted into I/O actions where appropriate)
 
-* `protocol` is a simple compilation unit that only contains the definition of the protocol (not the implementation)
+* `rpc-protocol` is a simple compilation unit that only contains the definition of the protocol (not the implementation)
 
-* `rpc` contains the implementation of the aforementioned remotely protocol. In essence this is the meat of any wire<->domain mediation that needs to happen in the application; it exchanges wire representations (whatever they may be) for domain types that can be used as function arguments for the algebra exposed by `core`. This module *must depend on the `rpc` and `core` modules*.
+* `rpc` contains the implementation of the aforementioned remotely protocol. In essence this is the meat of any wire<->domain mediation that needs to happen in the application; it exchanges wire representations (whatever they may be) for domain types that can be used as function arguments for the algebra exposed by `core`. This module *must depend on the `rpc-protocol` and `core` modules*.
 
 * `project` is the usual SBT build information.
 
-Once you have the layout configured, using remotely is just like using any other library within SBT; simply add the dependency to your `protocol` module:
+Once you have the layout configured, using remotely is just like using any other library within SBT; simply add the dependency to your `rpc-protocol` module:
 
 ```
 libraryDependencies += "oncue.svc.remotely" %% "core" % "x.x.+"
@@ -105,7 +105,7 @@ import remotely._, codecs._
 object protocol {
   val definition = Protocol.empty
     .codec[Int]
-    .specify[Int => Int]("factorial")
+    .specify1[Int, Int]("factorial")
 }
 
 ```
@@ -116,7 +116,7 @@ Protocols are the core of the remotely project. They represent the contract betw
 
 * `codec`: require a `Codec` for the specified type. If the relevant `Codec` cannot be found, you will either have to import one or define your own accordingly. By default, *Remotely* comes with implementations for `String`, `Int` etc - the vast majority of default types you might need. You can however still define `Codec` implementations for any of your own structures as needed.
 
-* `specify`: define a function that the contract will have to implement. In our example, we want to expose a "factorial" function that will take an `Int` and return an `Int`; this is defined using standard Scala function type definitions.
+* `specify`n: define a function that the contract will have to implement. In our example, we want to expose a "factorial" function of one `Int` argument that return an `Int`; type parameters are types of function arguments followed by the return type of function.
 
 ### Server & Client Definition
 
@@ -128,7 +128,7 @@ addCompilerPlugin("org.scalamacros" % "paradise" % "2.0.1" cross CrossVersion.fu
 
 ```
 
-Unfortunately if you forget this step, compiliation of the `rpc` module will succeed, however the macro will not run. Now we are ready to generate a remotely server. Here's an example:
+Unfortunately if you forget this step, compilation of the `rpc` module will succeed, however the macro will not run. Now we are ready to generate a remotely server. Here's an example:
 
 ```
 package oncue.svc.example
@@ -167,7 +167,7 @@ That's all that is needed to define both a client and a server.
 
 ### Putting it Together
 
-With everything defined, you can now make choices about how best to wire all the things together. For this getting started guide we'll focus on a simple implementation, but the detailed docuemtantion on this site covers lots more information on endpoints, circuit breakers, monitoring, TLS configuration etc.
+With everything defined, you can now make choices about how best to wire all the things together. For this getting started guide we'll focus on a simple implementation, but the detailed documentation on this site covers lots more information on endpoints, circuit breakers, monitoring, TLS configuration etc.
 
 Here's the `main` for the server side:
 
@@ -199,11 +199,11 @@ This is super straightforward, but lets step through the values one by one.
 
 * `service`: An instance of the server implementation (which in turn implements the macro-generated interface based on the protocol)
 
-* `env`: For any given service implementation, an `Environment` can be derived from it. Unlike the protocol implementaiton itself, `Environemnt` is a concrete thing that can be bound and executed at runtime, where as `Protocol` is primarily a compile-time artifact.
+* `env`: For any given service implementation, an `Environment` can be derived from it. Unlike the protocol implementation itself, `Environment` is a concrete thing that can be bound and executed at runtime, where as `Protocol` is primarily a compile-time artifact.
 
 * `shutdown`: Upon calling `env.serve(...)` the process will bind to the specified address and yield a `() => Unit` function that can be used to shutdown the process if needed.
 
-The client on the other hand is simmilar:
+The client on the other hand is similar:
 
 ```
 package oncue.svc.example
@@ -242,7 +242,7 @@ Whilst `address` is the same value from the server, the typical case here of cou
 
 * `f`: Application of the remote function reference. Here we pass in the arguments needed by the remote function, and at compile time you will be forced to ensure that you have a `Codec` for all the arguments supplied, and said arguments must be in scope within that compilation unit (i.e. if the remote service uses custom structures you'll need to ensure you import those accordingly). At this point *no request has actually been made over the wire*.
 
-* `task`: In order to do something useful with the `Remote` instance its nessicary to make a choice about what "context" this remote operation will be executed in. Again, this is covered specificly in the [detailed documentation](http://), but for now we shall elect to run without a context, by way of the `runWithoutContext` function. There still has been no network I/O occour; we have simply applied the function operation and transformed it into a scalaz `Task`.
+* `task`: In order to do something useful with the `Remote` instance its necessary to make a choice about what "context" this remote operation will be executed in. Again, this is covered specifically in the [detailed documentation](http://), but for now we shall elect to run without a context, by way of the `runWithoutContext` function. There still has been no network I/O occur; we have simply applied the function operation and transformed it into a scalaz `Task`.
 
 Finally, the function does network I/O to talk to the server when the `Task` is executed (using the `runAsync` method here). You can learn more about the `Task` monad [on this blog post](http://timperrett.com/2014/07/20/scalaz-task-the-missing-documentation/).
 
