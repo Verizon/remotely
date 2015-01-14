@@ -171,7 +171,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
     private[this] val requestDescription: Task[Unit] = for {
       bits <- codecs.encodeRequest(Remote.ref[List[Signature]]("describe")).apply(Response.Context.empty)
       _ <- NettyTransport.evalCF(channel.write(Bits(bits)))
-      _ <- NettyTransport.evalCF(channel.write(EOS))
+      _ <- NettyTransport.evalCF(channel.writeAndFlush(EOS))
       _ = M.negotiating(Some(addr), "sending describe request", None)
     } yield ()
 

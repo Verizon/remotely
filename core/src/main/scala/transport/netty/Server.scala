@@ -59,8 +59,7 @@ class NettyServer(handler: Handler,
       super.channelRegistered(ctx)
       M.negotiating(Option(ctx.channel.remoteAddress), "channel connected", None)
       val encoded = Capabilities.capabilitiesCodec.encodeValid(capabilities)
-      val fut = ctx.channel.write(Unpooled.wrappedBuffer(encoded.toByteArray))
-      ctx.channel.flush()
+      val fut = ctx.channel.writeAndFlush(Unpooled.wrappedBuffer(encoded.toByteArray))
       M.negotiating(Option(ctx.channel.remoteAddress), "sending capabilities", None)
       val _ = fut.addListener(new ChannelFutureListener {
                         def operationComplete(cf: ChannelFuture): Unit = {
