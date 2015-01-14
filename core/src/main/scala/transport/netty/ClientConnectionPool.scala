@@ -41,17 +41,20 @@ import io.netty.buffer.ByteBuf
 import java.nio.charset.Charset
 
 object NettyConnectionPool {
-  def default(hosts: Process[Task,InetSocketAddress], expectedSigs: Set[Signature] = Set.empty, M: Monitoring = Monitoring.empty): GenericObjectPool[Channel] = {
-    new GenericObjectPool[Channel](new NettyConnectionPool(hosts, expectedSigs, M))
+  def default(hosts: Process[Task,InetSocketAddress], expectedSigs: Set[Signature] = Set.empty, workerThreads: Option[Int] = None, monitoring: Monitoring = Monitoring.empty): GenericObjectPool[Channel] = {
+    new GenericObjectPool[Channel](new NettyConnectionPool(hosts, expectedSigs, workerThreads, monitoring))
   }
 }
 
 case class IncompatibleServer(msg: String) extends Throwable(msg)
 
-class NettyConnectionPool(hosts: Process[Task,InetSocketAddress], expectedSigs: Set[Signature], M: Monitoring = Monitoring.consoleLogger("default")) extends BasePooledObjectFactory[Channel] {
+class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
+                          expectedSigs: Set[Signature],
+                          workerThreads: Option[Int],
+                          M: Monitoring) extends BasePooledObjectFactory[Channel] {
 
-//  val bossThreadPool = new NioEventLoopGroup(10, namedThreadFactory("nettyBoss"))
-  val workerThreadPool = new NioEventLoopGroup(10, namedThreadFactory("nettyWorker"))
+  val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors
+  val workerThreadPool = new NioEventLoopGroup(numWorkerThreads, namedThreadFactory("nettyWorker"))
 
   val validateCapabilities: ((Capabilities,Channel)) => Task[Channel] = {
     case (capabilties, channel) =>

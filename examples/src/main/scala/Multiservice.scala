@@ -53,8 +53,7 @@ object Multiservice extends App {
   // Serve these functions
   val addr1 = new java.net.InetSocketAddress("localhost", 8081)
   val transport = NettyTransport.single(addr1)
-  val aThreads = scalaz.concurrent.Strategy.DefaultStrategy
-  val stopA = env1.serveNetty(addr1, aThreads, Monitoring.consoleLogger("[service-a]"))
+  val stopA = env1.serveNetty(addr1, monitoring = Monitoring.consoleLogger("[service-a]"))
 
   // And expose an `Endpoint` for making requests to this service
   val serviceA: Endpoint = Endpoint.single(transport)
@@ -100,8 +99,9 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8082)
-  val stopB = env2.serveNetty(addr2, scalaz.concurrent.Strategy.DefaultStrategy, Monitoring.consoleLogger("[service-b]"))
-  val serviceB: Endpoint = Endpoint.single(NettyTransport.single(addr2))
+  val stopB = env2.serveNetty(addr2, monitoring=Monitoring.consoleLogger("[service-b]"))
+  val transport2 = NettyTransport.single(addr2)
+  val serviceB: Endpoint = Endpoint.single(transport2)
 
   try {
     val ctx = Response.Context.empty ++ List("flux-capacitor" -> "great SCOTT!")
@@ -125,5 +125,6 @@ object Multiservice extends App {
     stopA.run
     stopB.run
     transport.shutdown()
+    transport2.shutdown()
   }
 }

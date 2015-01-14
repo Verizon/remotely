@@ -67,17 +67,29 @@ case class Environment(codecs: Codecs, values: Values) {
       }
     }
 
+  /**
+    * start a netty server listening to the given address
+    * 
+    * @param addr the address to bind to
+    * @param strategy the strategy used for processing incoming requests
+    * @param numBossThreads number of boss threads to create. These are
+    * threads which accept incomming connection requests and assign
+    * connections to a worker. If unspecified, the default of 2 will be used
+    * @param numWorkerThreads number of worker threads to create. If 
+    * unspecified the default of 2 * number of cores will be used
+    * @param capabilities, the capabilities which will be sent to the client upon connection
+    */
   def serveNetty(addr: InetSocketAddress,
                  strategy: Strategy = Strategy.DefaultStrategy,
-/*
-                 numBossThreads: Int,
-                 numWorkerThreads: Int,
- */
+                 numBossThreads: Option[Int] = None,
+                 numWorkerThreads: Option[Int] = None,
                  monitoring: Monitoring = Monitoring.empty,
                  capabilities: Capabilities = Capabilities.default): Task[Unit] =
     transport.netty.NettyServer.start(addr,
                                       serverHandler(monitoring),
                                       strategy,
+                                      numBossThreads,
+                                      numWorkerThreads,
                                       capabilities,
                                       monitoring)
 }

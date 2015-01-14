@@ -31,17 +31,14 @@ import scalaz.{-\/,\/}
 
 class NettyServer(handler: Handler,
                   strategy: Strategy,
-/* STU: punting on this for now to keep things simple
                   numBossThreads: Int,
                   numWorkerThreads: Int,
- */
                   capabilities: Capabilities,
                   M: Monitoring) {
 
 
-  // TODO: obvs 10?
-  val bossThreadPool = new NioEventLoopGroup(10, namedThreadFactory("nettyBoss"))
-  val workerThreadPool = new NioEventLoopGroup(10, namedThreadFactory("nettyWorker"))
+  val bossThreadPool = new NioEventLoopGroup(numBossThreads, namedThreadFactory("nettyBoss"))
+  val workerThreadPool = new NioEventLoopGroup(numWorkerThreads, namedThreadFactory("nettyWorker"))
 
   val bootstrap: ServerBootstrap = new ServerBootstrap()
     .group(bossThreadPool, workerThreadPool)
@@ -56,6 +53,7 @@ class NettyServer(handler: Handler,
   /**
     * Sends our capabilities
     */ 
+  @ChannelHandler.Sharable
   object ChannelInitialize extends ChannelInboundHandlerAdapter {
     override def channelRegistered(ctx: ChannelHandlerContext): Unit = {
       super.channelRegistered(ctx)
@@ -87,17 +85,33 @@ class NettyServer(handler: Handler,
     val _ = workerThreadPool.shutdownGracefully()
   }
 }
+
 object NettyServer {
+  /**
+    * start a netty server listening to the given address
+    * 
+    * @param addr the address to bind to
+    * @param handler the request handler
+    * @param strategy the strategy used for processing incoming requests
+    * @param numBossThreads number of boss threads to create. These are
+    * threads which accept incomming connection requests and assign
+    * connections to a worker. If unspecified, the default of 2 will be used
+    * @param numWorkerThreads number of worker threads to create. If 
+    * unspecified the default of 2 * number of cores will be used
+    * @param capabilities, the capabilities which will be sent to the client upon connection
+    */
   def start(addr: InetSocketAddress,
             handler: Handler,
-            strategy: Strategy,
-/*
-            numBossThreads: Int,
-            numWorkerThreads: Int,
- */
-            capabilities: Capabilities,
-            M: Monitoring): Task[Unit] = {
-    val server = new NettyServer(handler, strategy/*, numBossThreads, numWorkerThreads*/, capabilities, M)
+            strategy: Strategy = Strategy.DefaultStrategy,
+            bossThreads: Option[Int] = None,
+            workerThreads: Option[Int] = None,
+            capabilities: Capabilities = Capabilities.default,
+            monitoring: Monitoring = Monitoring.empty): Task[Unit] = {
+
+    val numBossThreads = bossThreads getOrElse 2
+    val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors 
+
+    val server = new NettyServer(handler, strategy, numBossThreads, numWorkerThreads, capabilities, monitoring)
     val b = server.bootstrap
 
     val channel = b.bind(addr)
@@ -151,7 +165,7 @@ class ServerDeframedHandler(handler: Handler, strategy: Strategy, M: Monitoring)
         Task.delay {
           ctx.write(b)
         }
-      }.run.flatMap { _ => Task.delay(ctx.flush()) }
+      }.run.flatMap { _ => Task.delay{ctx.flush(); ()} }
 
       write.runAsync { e =>
         e match {

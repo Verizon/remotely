@@ -66,7 +66,10 @@ object NettyTransport {
 
   def write(c: Channel)(frame: Framed): Task[Unit] = evalCF(c.write(frame))
 
-  def single(host: InetSocketAddress/*, numBossThreads: Int = 10, numWorkerThreads: Int = 10*/, expectedSigs: Set[Signature] = Set.empty, M: Monitoring = Monitoring.empty): NettyTransport = {
-    new NettyTransport(NettyConnectionPool.default(Process.constant(host)/*, numBossThreads, numWorkerThreads*/, expectedSigs, M))
+  def single(host: InetSocketAddress,
+             expectedSigs: Set[Signature] = Set.empty,
+             workerThreads: Option[Int] = None,
+             monitoring: Monitoring = Monitoring.empty): NettyTransport = {
+    new NettyTransport(NettyConnectionPool.default(Process.constant(host), expectedSigs, workerThreads, monitoring))
   }
 }

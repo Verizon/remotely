@@ -33,7 +33,7 @@ class CapabilitiesSpec extends FlatSpec
   val addr1 = new java.net.InetSocketAddress("localhost", 9003)
 
   val server1 = new CountServer
-  val shutdown1: Task[Unit] = server1.environment.serveNetty(addr1, Strategy.DefaultStrategy, Monitoring.empty, Capabilities(Set()))
+  val shutdown1: Task[Unit] = server1.environment.serveNetty(addr1, capabilities = Capabilities(Set()))
 
   override def afterAll() {
     shutdown1.run
@@ -48,7 +48,7 @@ class CapabilitiesSpec extends FlatSpec
     import codecs._
 
     an[IncompatibleServer] should be thrownBy {
-      evaluate(endpoint1, Monitoring.empty)(CountClient.ping(1)).apply(Context.empty).run
+      val _ = evaluate(endpoint1, Monitoring.empty)(CountClient.ping(1)).apply(Context.empty).run
     }
   }
 }

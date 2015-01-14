@@ -22,7 +22,7 @@ import java.net.InetSocketAddress
 import scala.concurrent.duration.DurationInt
 
 object Echo5Server extends App {
-  val stop = transport.netty.NettyServer.start(new InetSocketAddress("localhost", 8084), _.take(5), scalaz.concurrent.Strategy.DefaultStrategy, Capabilities.default, Monitoring.empty)
+  val stop = transport.netty.NettyServer.start(new InetSocketAddress("localhost", 8084), _.take(5))
   readLine()
   stop.run
 }
