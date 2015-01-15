@@ -46,7 +46,7 @@ object RemoteSpec extends Properties("Remote") {
     }
 
   val addr = new InetSocketAddress("localhost", 8082)
-  val server = env.serveNetty(addr, Executors.newCachedThreadPool, Monitoring.empty)
+  val server = env.serveNetty(addr)
   val nettyTrans = NettyTransport.single(addr)
   val loc: Endpoint = Endpoint.single(nettyTrans)
 
@@ -58,7 +58,7 @@ object RemoteSpec extends Properties("Remote") {
 
   property("roundtrip") =
     forAll { (l: List[Int], kvs: Map[String,String]) =>
-      l.sum == sum(l).runWithContext(loc, ctx ++ kvs).run
+      l.sum == sum(l).runWithoutContext(loc).run//(loc, ctx ++ kvs).run
     }
 
   property("roundtrip[Double]") =
@@ -138,7 +138,7 @@ object RemoteSpec extends Properties("Remote") {
 
   // NB: this property should always appear last, so it runs after all properties have run
   property("cleanup") = lazily {
-    server()
+    server.run
     nettyTrans.pool.close()
     true
   }

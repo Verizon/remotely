@@ -20,7 +20,6 @@ package examples
 
 import codecs._
 import Remote.implicits._
-import java.util.concurrent.Executors
 import scalaz.concurrent.Task
 import transport.netty._
 
@@ -53,12 +52,11 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr1 = new java.net.InetSocketAddress("localhost", 8081)
-  val transportA = NettyTransport.single(addr1)
-  val poolA = Executors.newCachedThreadPool
-  val stopA = env1.serveNetty(addr1, poolA, Monitoring.consoleLogger("[service-a]"))
+  val transport = NettyTransport.single(addr1)
+  val stopA = env1.serveNetty(addr1, monitoring = Monitoring.consoleLogger("[service-a]"))
 
   // And expose an `Endpoint` for making requests to this service
-  val serviceA: Endpoint = Endpoint.single(transportA)
+  val serviceA: Endpoint = Endpoint.single(transport)
 
   // Define a service exposing an `average` function, which calls `serviceA`.
   val env2 = Environment.empty
@@ -101,10 +99,9 @@ object Multiservice extends App {
 
   // Serve these functions
   val addr2 = new java.net.InetSocketAddress("localhost", 8082)
-  val poolB = Executors.newCachedThreadPool
-  val stopB = env2.serveNetty(addr2, poolB, Monitoring.consoleLogger("[service-b]"))
-  val transportB = NettyTransport.single(addr2)
-  val serviceB: Endpoint = Endpoint.single(transportB)
+  val stopB = env2.serveNetty(addr2, monitoring=Monitoring.consoleLogger("[service-b]"))
+  val transport2 = NettyTransport.single(addr2)
+  val serviceB: Endpoint = Endpoint.single(transport2)
 
   try {
     val ctx = Response.Context.empty ++ List("flux-capacitor" -> "great SCOTT!")
@@ -125,11 +122,9 @@ object Multiservice extends App {
     println { "RESULT 5: " + r5.run }
   }
   finally {
-    transportA.shutdown()
-    transportB.shutdown()
-    stopA()
-    stopB()
-    poolA.shutdown()
-    poolB.shutdown()
+    stopA.run
+    stopB.run
+    transport.shutdown()
+    transport2.shutdown()
   }
 }

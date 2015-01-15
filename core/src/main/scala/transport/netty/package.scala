@@ -15,14 +15,14 @@
 //:
 //: ----------------------------------------------------------------------------
 
-package remotely
-package examples
+package remotely.transport
 
-import java.net.InetSocketAddress
-import scala.concurrent.duration.DurationInt
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.atomic.AtomicInteger
 
-object Echo5Server extends App {
-  val stop = transport.netty.NettyServer.start(new InetSocketAddress("localhost", 8084), _.take(5))
-  readLine()
-  stop.run
+package object netty {
+  def namedThreadFactory(name: String) = new ThreadFactory {
+    val num = new AtomicInteger(1)
+    def newThread(runnable: Runnable) = new Thread(runnable, s"$name - ${num.incrementAndGet}")
+  }
 }
