@@ -6,3 +6,11 @@ jdk:
   - openjdk6
 
 script: sbt ++$TRAVIS_SCALA_VERSION test
+
+notifications:
+  irc:
+    channels:
+      - "chat.freenode.net#oncue"
+    template:
+      - "%{repository} (%{commit}) : %{message} %{foo} "
+      - "Build details: %{build_url}"
