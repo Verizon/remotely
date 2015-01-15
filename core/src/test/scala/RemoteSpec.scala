@@ -100,6 +100,7 @@ object RemoteSpec extends Properties("Remote") {
       a => false
     )
   }
+/* These take forever on travis, and so I'm disabling them, we should leave benchmarking of scodec to scodec and handle benchmarking of remotely in the benchmarking sub-projects
 
   property("encoding speed") = {
     val N = 2000
@@ -135,6 +136,7 @@ object RemoteSpec extends Properties("Remote") {
     println { "round trip took average of: " + (t/N.toDouble) + " milliseconds" }
     true
   }
+ */
 
   // NB: this property should always appear last, so it runs after all properties have run
   property("cleanup") = lazily {
