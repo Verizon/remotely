@@ -56,7 +56,7 @@ object Multiservice extends App {
   val stopA = env1.serveNetty(addr1, monitoring = Monitoring.consoleLogger("[service-a]"))
 
   // And expose an `Endpoint` for making requests to this service
-  val serviceA: Endpoint = Endpoint.single(transportA)
+  val serviceA: Endpoint = Endpoint.single(transport)
 
   // Define a service exposing an `average` function, which calls `serviceA`.
   val env2 = Environment.empty

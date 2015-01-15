@@ -29,7 +29,7 @@ class ProtocolSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   val server = new TestServer
   val shutdown = server.environment.serveNetty(addr, monitoring = Monitoring.consoleLogger("ProtocolSpec-server"))
 
-  val endpoint = Endpoint.single(NettyTransport.single(addr, Set.empty, Monitoring.consoleLogger("ProtocolSpec")))
+  val endpoint = Endpoint.single(NettyTransport.single(addr, monitoring = Monitoring.consoleLogger("ProtocolSpec")))
 
   it should "foo" in {
     import remotely.Remote.implicits._
