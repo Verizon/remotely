@@ -76,7 +76,7 @@ object SimpleMain extends App {
   // running a couple times just to see the latency improve for subsequent reqs
   try println { result.run; result.run; result.run }
   finally {
-    transport.shutdown()
+    transport.shutdown.run
     server.run
   }
 }
