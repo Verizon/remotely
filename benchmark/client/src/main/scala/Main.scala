@@ -164,8 +164,6 @@ object BenchmarkClientMain extends TestData with transformations {
 
     threads.foreach(_.start)
 
-    threads.foreach(_.start)
-
     while( System.currentTimeMillis < end) {
       Thread.sleep(5000)
       results.print()
