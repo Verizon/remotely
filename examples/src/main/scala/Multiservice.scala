@@ -124,7 +124,7 @@ object Multiservice extends App {
   finally {
     stopA.run
     stopB.run
-    transport.shutdown()
-    transport2.shutdown()
+    transport.shutdown.run
+    transport2.shutdown.run
   }
 }

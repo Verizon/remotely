@@ -35,7 +35,7 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
     val fromServer = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.DefaultStrategy)
     c.pipeline.addLast("clientDeframe", new ClientDeframedHandler(fromServer))
     val toFrame = toServer.map(Bits(_)) fby Process.emit(EOS)
-    val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run flatMap ( _ => Task.delay(c.flush))
+    val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run flatMap ( _ => Task.delay{val _ = c.flush})
     val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
       case Cause.End =>
         pool.returnObject(c)
@@ -47,10 +47,9 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
     result
   }
 
-  def shutdown(): Unit = {
+  def shutdown: Task[Unit] = Task.delay {
     pool.clear()
     pool.close()
-
     val _ = pool.getFactory().asInstanceOf[NettyConnectionPool].workerThreadPool.shutdownGracefully()
   }
 }
@@ -69,7 +68,6 @@ object NettyTransport {
   def single(host: InetSocketAddress,
              expectedSigs: Set[Signature] = Set.empty,
              workerThreads: Option[Int] = None,
-             monitoring: Monitoring = Monitoring.empty): NettyTransport = {
+             monitoring: Monitoring = Monitoring.empty): NettyTransport = 
     new NettyTransport(NettyConnectionPool.default(Process.constant(host), expectedSigs, workerThreads, monitoring))
-  }
 }

@@ -24,6 +24,7 @@ import scalaz.concurrent.Task
 import scalaz.Monoid
 import scalaz.syntax.validation._
 import scalaz.syntax.monoid._
+import scalaz.syntax.traverse._
 import scalaz.std.anyVal._
 import scalaz.std.map._
 import remotely._
@@ -172,7 +173,7 @@ object BenchmarkClientMain extends TestData with transformations {
     threads.foreach(_.join)
 
     results.print()
-    nettyTrans.shutdown()
+    nettyTrans.shutdown.run
   }
 }
 
