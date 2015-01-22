@@ -64,7 +64,6 @@ object SSL {
     def untilBegin: Process1[String,String] =
       receive1Or[String,String](halt){ s =>
         if(s startsWith "-----BEGIN") {
-          println("emit")
           if(withHeaders) emit(s+"\n") else halt
         } else {
           untilBegin
@@ -106,7 +105,8 @@ case class SslParameters(caBundle: Option[File],
                          keyFile: Option[File],
                          keyPassword: Option[String],
                          enabledCiphers: Option[List[String]],
-                         enabledProtocols: Option[List[String]]) {
+                         enabledProtocols: Option[List[String]],
+                         requireClientAuth: Boolean) {
 }
 
 object SslParameters {

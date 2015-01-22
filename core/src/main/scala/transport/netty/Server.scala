@@ -36,7 +36,7 @@ private[remotely] class NettyServer(handler: Handler,
                                     numWorkerThreads: Int,
                                     capabilities: Capabilities,
                                     logger: Monitoring,
-                                    sslContext: Option[SslContext]) {
+                                    sslContext: Option[(SslContext,Boolean)]) {
 
 
   val bossThreadPool = new NioEventLoopGroup(numBossThreads, namedThreadFactory("nettyBoss"))
@@ -50,9 +50,11 @@ private[remotely] class NettyServer(handler: Handler,
                    override def initChannel(ch: SocketChannel): Unit = {
                      val pipe = ch.pipeline()
                      // add an SSL layer first iff we were constructed with an SslContext
-                     sslContext.foreach { s =>
+                     sslContext.foreach { case (s,requireClientAuth) =>
                        logger.negotiating(None, "adding ssl", None)
-                       pipe.addLast(s.newHandler(ch.alloc()))
+                       val h = s.newHandler(ch.alloc())
+                       h.engine.setNeedClientAuth(requireClientAuth)
+                       pipe.addLast(h)
                      }
                      // add the rest of the stack
                      val _ = pipe.addLast(ChannelInitialize)
@@ -128,7 +130,7 @@ object NettyServer {
       val numBossThreads = bossThreads getOrElse 2
       val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors
 
-      val server = new NettyServer(handler, strategy, numBossThreads, numWorkerThreads, capabilities, logger, ssl)
+      val server = new NettyServer(handler, strategy, numBossThreads, numWorkerThreads, capabilities, logger, ssl.map(_ -> sslParameters.fold(true)(p => p.requireClientAuth)))
       val b = server.bootstrap
 
       logger.negotiating(Some(addr), s"about to bind", None)

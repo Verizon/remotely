@@ -49,14 +49,16 @@ class SSLSpec extends FlatSpec
                                        Some(serverKey),
                                        None,
                                        None,
-                                       None)
+                                       None,
+                                       true)
 
   val clientParameters = SslParameters(Some(caCert),
                                        Some(clientCert),
                                        Some(clientKey),
                                        None,
                                        None,
-                                       None)
+                                       None,
+                                       true)
                                        
 
   it should "start" in {
