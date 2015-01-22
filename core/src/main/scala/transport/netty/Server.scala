@@ -23,18 +23,20 @@ import io.netty.channel._, socket.SocketChannel, nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.buffer.Unpooled
 import io.netty.bootstrap.ServerBootstrap
+import io.netty.handler.ssl.SslContext
 import java.net.InetSocketAddress
 import scalaz.concurrent.{Strategy,Task}
 import scalaz.stream.{Process,async}
 import scodec.bits.BitVector
 import scalaz.{-\/,\/}
 
-class NettyServer(handler: Handler,
-                  strategy: Strategy,
-                  numBossThreads: Int,
-                  numWorkerThreads: Int,
-                  capabilities: Capabilities,
-                  M: Monitoring) {
+private[remotely] class NettyServer(handler: Handler,
+                                    strategy: Strategy,
+                                    numBossThreads: Int,
+                                    numWorkerThreads: Int,
+                                    capabilities: Capabilities,
+                                    logger: Monitoring,
+                                    sslContext: Option[SslContext]) {
 
 
   val bossThreadPool = new NioEventLoopGroup(numBossThreads, namedThreadFactory("nettyBoss"))
@@ -46,36 +48,47 @@ class NettyServer(handler: Handler,
     .option[java.lang.Boolean](ChannelOption.SO_KEEPALIVE, true)
     .childHandler(new ChannelInitializer[SocketChannel] {
                    override def initChannel(ch: SocketChannel): Unit = {
-                     val _ = ch.pipeline().addLast(ChannelInitialize);
+                     val pipe = ch.pipeline()
+                     // add an SSL layer first iff we were constructed with an SslContext
+                     sslContext.foreach { s =>
+                       logger.negotiating(None, "adding ssl", None)
+                       pipe.addLast(s.newHandler(ch.alloc()))
+                     }
+                     // add the rest of the stack
+                     val _ = pipe.addLast(ChannelInitialize)
                    }
                  })
 
+
   /**
-    * Sends our capabilities
+    * once a connection is negotiated, we send our capabilities string
+    * to the client, which might look something like:
+    *  
+    * OK: [Remotely 1.0]
     */ 
   @ChannelHandler.Sharable
   object ChannelInitialize extends ChannelInboundHandlerAdapter {
     override def channelRegistered(ctx: ChannelHandlerContext): Unit = {
       super.channelRegistered(ctx)
-      M.negotiating(Option(ctx.channel.remoteAddress), "channel connected", None)
+      logger.negotiating(Option(ctx.channel.remoteAddress), "channel connected", None)
       val encoded = Capabilities.capabilitiesCodec.encodeValid(capabilities)
       val fut = ctx.channel.writeAndFlush(Unpooled.wrappedBuffer(encoded.toByteArray))
-      M.negotiating(Option(ctx.channel.remoteAddress), "sending capabilities", None)
+      logger.negotiating(Option(ctx.channel.remoteAddress), "sending capabilities", None)
       val _ = fut.addListener(new ChannelFutureListener {
-                        def operationComplete(cf: ChannelFuture): Unit = {
-                          if(cf.isSuccess) {
-                            M.negotiating(Option(ctx.channel.remoteAddress), "sent capabilities", None)
-                            val p = ctx.pipeline()
-                            p.removeFirst()
-                            p.addLast("deframe", new Deframe())
-                            p.addLast("enframe", Enframe)
-                            val _ = p.addLast("deframed handler", new ServerDeframedHandler(handler, strategy, M) )
-                          } else {
-                            M.negotiating(Option(ctx.channel.remoteAddress), s"failed to send capabilities", Option(cf.cause))
-                            shutdown()
-                          }
-                        }
-                      })
+                                def operationComplete(cf: ChannelFuture): Unit = {
+                                  if(cf.isSuccess) {
+                                    logger.negotiating(Option(ctx.channel.remoteAddress), "sent capabilities", None)
+                                    val p = ctx.pipeline()
+                                    p.removeLast()
+                                    p.addLast("deframe", new Deframe())
+                                    p.addLast("enframe", Enframe)
+                                    val _ = p.addLast("deframed handler", new ServerDeframedHandler(handler, strategy, logger) )
+                                  } else {
+                                    logger.negotiating(Option(ctx.channel.remoteAddress), s"failed to send capabilities", Option(cf.cause))
+                                    shutdown()
+                                  }
+                                }
+                              })
     }
   }
 
@@ -84,6 +97,8 @@ class NettyServer(handler: Handler,
     val _ = workerThreadPool.shutdownGracefully()
   }
 }
+
+
 
 object NettyServer {
   /**
@@ -105,28 +120,34 @@ object NettyServer {
             bossThreads: Option[Int] = None,
             workerThreads: Option[Int] = None,
             capabilities: Capabilities = Capabilities.default,
-            monitoring: Monitoring = Monitoring.empty): Task[Unit] = {
+            logger: Monitoring = Monitoring.empty,
+            sslParameters: Option[SslParameters] = None): Task[Task[Unit]] = {
 
-    val numBossThreads = bossThreads getOrElse 2
-    val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors 
+    SslParameters.toServerContext(sslParameters) map { ssl =>
+      logger.negotiating(Some(addr), s"got ssl parameters: $ssl", None)
+      val numBossThreads = bossThreads getOrElse 2
+      val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors
 
-    val server = new NettyServer(handler, strategy, numBossThreads, numWorkerThreads, capabilities, monitoring)
-    val b = server.bootstrap
+      val server = new NettyServer(handler, strategy, numBossThreads, numWorkerThreads, capabilities, logger, ssl)
+      val b = server.bootstrap
 
-    val channel = b.bind(addr)
-    Task.delay {
-      Task.async[Unit] { cb =>
-        val _ = channel.addListener(new ChannelFutureListener {
-                                      override def operationComplete(cf: ChannelFuture): Unit = {
-                                        server.shutdown()
-                                        if(cf.isSuccess) {
-                                          cf.channel.close().awaitUninterruptibly()
+      logger.negotiating(Some(addr), s"about to bind", None)
+      val channel = b.bind(addr)
+      logger.negotiating(Some(addr), s"bound", None)
+      Task.delay {
+        Task.async[Unit] { cb =>
+          val _ = channel.addListener(new ChannelFutureListener {
+                                        override def operationComplete(cf: ChannelFuture): Unit = {
+                                          server.shutdown()
+                                          if(cf.isSuccess) {
+                                            cf.channel.close().awaitUninterruptibly()
+                                          }
+                                          cb(\/.right(()))
                                         }
-                                        cb(\/.right(()))
-                                      }
-                                    })
-      }
-    }.flatMap(identity)
+                                      })
+        }
+      }.flatMap(identity)
+    }
   }
 }
 
@@ -137,7 +158,7 @@ object NettyServer {
   * every time we see a boundary, we close one stream, open a new
   * one, and setup a new outgoing stream back to the client.
   */
-class ServerDeframedHandler(handler: Handler, strategy: Strategy, M: Monitoring) extends SimpleChannelInboundHandler[Framed] {
+class ServerDeframedHandler(handler: Handler, strategy: Strategy, logger: Monitoring) extends SimpleChannelInboundHandler[Framed] {
 
   var queue: Option[async.mutable.Queue[BitVector]] = None
 
@@ -154,7 +175,7 @@ class ServerDeframedHandler(handler: Handler, strategy: Strategy, M: Monitoring)
   //
   private def ensureQueue(ctx: ChannelHandlerContext): async.mutable.Queue[BitVector] = queue match {
     case None =>
-      M.negotiating(Option(ctx.channel.remoteAddress), "creating queue", None)
+      logger.negotiating(Option(ctx.channel.remoteAddress), "creating queue", None)
       val queue1 = async.unboundedQueue[BitVector](strategy)
       val queue = Some(queue1)
       val stream = queue1.dequeue
@@ -190,7 +211,7 @@ class ServerDeframedHandler(handler: Handler, strategy: Strategy, M: Monitoring)
   // we've seen the end of the input, close the queue writing to the input stream
   private def close(ctx: ChannelHandlerContext): Unit = {
     queue.foreach(_.close.runAsync(Function.const(())))
-    M.negotiating(Option(ctx.channel.remoteAddress), "closing queue", None)
+    logger.negotiating(Option(ctx.channel.remoteAddress), "closing queue", None)
     queue = None
   }
 

@@ -27,22 +27,28 @@ import org.apache.commons.pool2.impl.GenericObjectPool
 import io.netty.channel._, socket._
 import io.netty.channel.nio._
 import io.netty.bootstrap.Bootstrap
-import io.netty.channel.{Channel, ChannelFuture, ChannelFutureListener,ChannelHandlerContext}
-import io.netty.channel.{SimpleChannelInboundHandler}
+import io.netty.channel.{Channel, ChannelFuture, ChannelFutureListener,ChannelHandlerContext,SimpleChannelInboundHandler}
 import io.netty.channel.socket.nio.NioSocketChannel
-import io.netty.handler.codec.DelimiterBasedFrameDecoder
-import io.netty.handler.codec.Delimiters
+import io.netty.handler.codec.{Delimiters,DelimiterBasedFrameDecoder}
+import io.netty.handler.ssl.SslContext
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.{-\/,\/,\/-}
 import scodec.Err
 import scodec.bits.BitVector
 import io.netty.buffer.ByteBuf
+import java.io.File
 import java.nio.charset.Charset
 
 object NettyConnectionPool {
-  def default(hosts: Process[Task,InetSocketAddress], expectedSigs: Set[Signature] = Set.empty, workerThreads: Option[Int] = None, monitoring: Monitoring = Monitoring.empty): GenericObjectPool[Channel] = {
-    new GenericObjectPool[Channel](new NettyConnectionPool(hosts, expectedSigs, workerThreads, monitoring))
+  def default(hosts: Process[Task,InetSocketAddress],
+              expectedSigs: Set[Signature] = Set.empty,
+              workerThreads: Option[Int] = None,
+              monitoring: Monitoring = Monitoring.empty,
+              sslParams: Option[SslParameters]): Task[GenericObjectPool[Channel]] = {
+    SslParameters.toClientContext(sslParams) map { ssl =>
+      new GenericObjectPool[Channel](new NettyConnectionPool(hosts, expectedSigs, workerThreads, monitoring, ssl))
+    }
   }
 }
 
@@ -51,7 +57,8 @@ case class IncompatibleServer(msg: String) extends Throwable(msg)
 class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
                           expectedSigs: Set[Signature],
                           workerThreads: Option[Int],
-                          M: Monitoring) extends BasePooledObjectFactory[Channel] {
+                          M: Monitoring,
+                          sslContext: Option[SslContext]) extends BasePooledObjectFactory[Channel] {
 
   val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors
   val workerThreadPool = new NioEventLoopGroup(numWorkerThreads, namedThreadFactory("nettyWorker"))
@@ -232,7 +239,13 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
           bootstrap.channel(classOf[NioSocketChannel])
           bootstrap.handler(new ChannelInitializer[SocketChannel] {
                               override def initChannel(ch: SocketChannel): Unit = {
-                                val _ = ch.pipeline.addLast(negotiateCapable)
+                                val pipe = ch.pipeline
+                                // add an SSL layer first iff we were constructed with an SslContext
+                                sslContext.foreach{s =>
+                                  println("ADDING SSL CLIENT LAYER")
+                                  pipe.addLast(s.newHandler(ch.alloc(), addr.getAddress.getHostAddress, addr.getPort))
+                                }
+                                val _ = pipe.addLast(negotiateCapable)
                               }
                             })
           bootstrap.connect(addr)

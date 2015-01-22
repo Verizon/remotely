@@ -49,11 +49,11 @@ class DescribeSpec extends FlatSpec
 
   val shutdownN: () => Unit = serverN.environment.serveNetty(addrN,
                                                            Executors.newCachedThreadPool,
-                                                           Monitoring.empty)
+                                                           Monitoring.empty).run
 
   val shutdownO: () => Unit = serverO.environment.serveNetty(addrO,
                                                            Executors.newCachedThreadPool,
-                                                           Monitoring.empty)
+                                                           Monitoring.empty).run
 
   val endpointOldToOld = Endpoint.single(NettyTransport.single(addrO, DescribeTestOlderClient.expectedSignatures, Monitoring.consoleLogger("OldToOld")))
   val endpointOldToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestOlderClient.expectedSignatures, Monitoring.consoleLogger("OldToNew")))

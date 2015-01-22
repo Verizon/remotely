@@ -60,16 +60,16 @@ class UberSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   val server1 = new CountServer
   val server2 = new CountServer
-  val shutdown1 = server1.environment.serveNetty(addr1)
-  val shutdown2 = server2.environment.serveNetty(addr2)
+  val shutdown1 = server1.environment.serveNetty(addr1).run
+  val shutdown2 = server2.environment.serveNetty(addr2).run
 
   override def afterAll() {
     shutdown1.run
     shutdown2.run
   }
 
-  val endpoint1 = Endpoint.single(NettyTransport.single(addr1))
-  val endpoint2 = Endpoint.single(NettyTransport.single(addr2))
+  val endpoint1 = (NettyTransport.single(addr1) map Endpoint.single).run
+  val endpoint2 = (NettyTransport.single(addr2) map Endpoint.single).run
   def endpoints: Process[Nothing,Endpoint] = Process.emitAll(List(endpoint1, endpoint2)) ++ endpoints
   val endpointUber = Endpoint.uber(1 second, 10 seconds, 10, endpoints)
 
