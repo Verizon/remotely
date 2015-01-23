@@ -215,7 +215,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       val bytes = new Array[Byte](buffer.readableBytes)
       buffer.readBytes(bytes)
       val str = new String(bytes, "UTF-8")
-      M.negotiating(None, s"received capavilities string: $str", None)
+      M.negotiating(None, s"received capabilities string: $str", None)
       val r = Capabilities.parseHelloString(str).bimap(
         (e: Err) => new IllegalArgumentException(e.message),
         (cap: Capabilities) => (cap,ctx.channel)
@@ -242,7 +242,6 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
                                 val pipe = ch.pipeline
                                 // add an SSL layer first iff we were constructed with an SslContext
                                 sslContext.foreach{s =>
-                                  println("ADDING SSL CLIENT LAYER")
                                   pipe.addLast(s.newHandler(ch.alloc(), addr.getAddress.getHostAddress, addr.getPort))
                                 }
                                 val _ = pipe.addLast(negotiateCapable)

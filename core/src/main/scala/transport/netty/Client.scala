@@ -36,7 +36,7 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
     c.pipeline.addLast("clientDeframe", new ClientDeframedHandler(fromServer))
     val toFrame = toServer.map(Bits(_)) fby Process.emit(EOS)
     val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run flatMap ( _ => Task.delay{val _ = c.flush})
-    val result = Process.await(writeBytes){_ => println("sent request"); fromServer.dequeue}.onHalt {
+    val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
       case Cause.End =>
         pool.returnObject(c)
         Process.Halt(Cause.End)

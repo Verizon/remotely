@@ -121,7 +121,6 @@ object SslParameters {
         case cert: X509Certificate =>
           val name = cert.getSubjectDN().getName()
           if(cert.getBasicConstraints != -1) trustSet.add(new TrustAnchor(cert, null))
-          println("adding a cert named: " + name)
           SSL.addCert(cert, name, keystore)
         case cert => throw new IllegalArgumentException("unexpected cert which is not x509")
       }.run.run

@@ -26,7 +26,7 @@ import transport.netty._
 class ProtocolSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   val addr = new java.net.InetSocketAddress("localhost", 9002)
   val server = new TestServer
-  val shutdown = server.environment.serveNetty(addr, monitoring = Monitoring.consoleLogger("ProtocolSpec-server")).run
+  val shutdown = server.environment.serveNetty(addr).run
 
   val endpoint = (NettyTransport.single(addr, monitoring = Monitoring.consoleLogger("ProtocolSpec")) map Endpoint.single).run
 
