@@ -116,14 +116,18 @@ object SslParameters {
       val keystore = SSL.emptyKeystore
       val trustSet = new java.util.HashSet[TrustAnchor]()
 
+      // I promise that effects are associative as long as you execute them in the right order
       implicit val taskMonoid: Monoid[Task[Unit]] = Monoid.instance((a,b) => a flatMap(_ => b), Task.now(()))
-      SSL.certFromPEM(new FileInputStream(caBundle)).foldMap {
+
+      val doRun = SSL.certFromPEM(new FileInputStream(caBundle)).foldMap {
         case cert: X509Certificate =>
           val name = cert.getSubjectDN().getName()
           if(cert.getBasicConstraints != -1) trustSet.add(new TrustAnchor(cert, null))
           SSL.addCert(cert, name, keystore)
         case cert => throw new IllegalArgumentException("unexpected cert which is not x509")
-      }.run.run
+      }
+      doRun.run.run // da do run run: https://www.youtube.com/watch?v=uTqnam1zgiw
+
       val tm = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
       val builder = new PKIXBuilderParameters(trustSet, new X509CertSelector)
       builder.setRevocationEnabled(false)

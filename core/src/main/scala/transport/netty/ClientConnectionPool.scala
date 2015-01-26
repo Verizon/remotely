@@ -233,20 +233,22 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       _ = M.negotiating(Some(addr), "address selected", None)
       fut <- {
         Task.delay {
+          // assign this to a val so we can throw it away later, wreckx-n-effect
           val bootstrap = new Bootstrap()
-          bootstrap.option[java.lang.Boolean](ChannelOption.SO_KEEPALIVE, true)
-          bootstrap.group(workerThreadPool)
-          bootstrap.channel(classOf[NioSocketChannel])
-          bootstrap.handler(new ChannelInitializer[SocketChannel] {
+
+          val s = bootstrap.option[java.lang.Boolean](ChannelOption.SO_KEEPALIVE, true)
+          val i = bootstrap.group(workerThreadPool)
+          val d = bootstrap.channel(classOf[NioSocketChannel])
+          val e = bootstrap.handler(new ChannelInitializer[SocketChannel] {
                               override def initChannel(ch: SocketChannel): Unit = {
                                 val pipe = ch.pipeline
-                                // add an SSL layer first iff we were constructed with an SslContext
+                                // add an SSL layer first iff we were constructed with an SslContext, foreach like a unit boss
                                 sslContext.foreach{s =>
                                   pipe.addLast(s.newHandler(ch.alloc(), addr.getAddress.getHostAddress, addr.getPort))
                                 }
-                                val _ = pipe.addLast(negotiateCapable)
+                                val effect = pipe.addLast(negotiateCapable)
                               }
-                            })
+                                    })
           bootstrap.connect(addr)
       }}
       chan <- {
