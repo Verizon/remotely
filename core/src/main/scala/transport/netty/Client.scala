@@ -68,6 +68,8 @@ object NettyTransport {
   def single(host: InetSocketAddress,
              expectedSigs: Set[Signature] = Set.empty,
              workerThreads: Option[Int] = None,
-             monitoring: Monitoring = Monitoring.empty): NettyTransport = 
-    new NettyTransport(NettyConnectionPool.default(Process.constant(host), expectedSigs, workerThreads, monitoring))
+             monitoring: Monitoring = Monitoring.empty,
+             sslParams: Option[SslParameters] = None): Task[NettyTransport] =
+
+  NettyConnectionPool.default(Process.constant(host), expectedSigs, workerThreads, monitoring, sslParams).map(new NettyTransport(_))
 }

@@ -33,12 +33,12 @@ class CapabilitiesSpec extends FlatSpec
   val addr1 = new java.net.InetSocketAddress("localhost", 9003)
 
   val server1 = new CountServer
-  val shutdown1: Task[Unit] = server1.environment.serveNetty(addr1, capabilities = Capabilities(Set()))
+  val shutdown1: Task[Unit] = server1.environment.serveNetty(addr1, capabilities = Capabilities(Set())).run
 
   override def afterAll() {
     shutdown1.run
   }
-  val endpoint1 = Endpoint.single(NettyTransport.single(addr1))
+  val endpoint1 = (NettyTransport.single(addr1) map Endpoint.single).run
 
   behavior of "Capabilities"
   

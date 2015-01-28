@@ -19,13 +19,18 @@ package remotely
 package transport.netty
 
 import java.net.InetSocketAddress
+import java.io.File
+import io.netty.buffer.{ByteBuf,Unpooled}
 import io.netty.channel._
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
-import io.netty.buffer.{ByteBuf,Unpooled}
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import org.apache.commons.pool2.ObjectPool
 import io.netty.handler.codec.ByteToMessageDecoder
-import scalaz.{-\/,\/,\/-}
+import javax.net.ssl.{TrustManagerFactory,CertPathTrustManagerParameters}
+import java.security.KeyStore
+import java.io.FileInputStream
+import scalaz.{-\/,\/,\/-,Monoid}
 import scalaz.concurrent.Task
 import scalaz.stream.{Process,async}
 import scodec.Err
