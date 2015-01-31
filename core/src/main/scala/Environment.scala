@@ -84,14 +84,16 @@ case class Environment(codecs: Codecs, values: Values) {
             numBossThreads: Option[Int] = None,
             numWorkerThreads: Option[Int] = None,
             monitoring: Monitoring = Monitoring.empty,
-            capabilities: Capabilities = Capabilities.default): Task[Unit] =
+            capabilities: Capabilities = Capabilities.default,
+            sslParams: Option[SslParameters] = None): Task[Task[Unit]] =
     transport.netty.NettyServer.start(addr,
                                       serverHandler(monitoring),
                                       strategy,
                                       numBossThreads,
                                       numWorkerThreads,
                                       capabilities,
-                                      monitoring)
+                                      monitoring,
+                                      sslParams)
 }
 
 object Environment {

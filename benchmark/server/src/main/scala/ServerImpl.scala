@@ -43,6 +43,6 @@ object Main {
     val port = Integer.parseInt(argv(0))
     val addr = new java.net.InetSocketAddress("localhost", port)
     val server = new BenchmarkServerImpl
-    val shutdown: Task[Unit] = server.environment.serve(addr)
+    val shutdown: Task[Unit] = server.environment.serve(addr).run
   }
 }

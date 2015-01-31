@@ -66,9 +66,9 @@ object SimpleMain extends App {
   println(env)
 
   // create a server for this environment
-  val server = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]"))
+  val server = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
 
-  val transport = NettyTransport.single(addr)
+  val transport = NettyTransport.single(addr).run
   val expr: Remote[Int] = sum(List(0,1,2,3,4))
   val loc: Endpoint = Endpoint.single(transport)
   val result: Task[Int] = expr.runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))

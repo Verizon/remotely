@@ -46,8 +46,8 @@ object RemoteSpec extends Properties("Remote") {
     }
 
   val addr = new InetSocketAddress("localhost", 8082)
-  val server = env.serve(addr)
-  val nettyTrans = NettyTransport.single(addr)
+  val server = env.serve(addr).run
+  val nettyTrans = NettyTransport.single(addr).run
   val loc: Endpoint = Endpoint.single(nettyTrans)
 
   val sum = Remote.ref[List[Int] => Int]("sum")

@@ -16,6 +16,8 @@ echo "00" > cert.srl
 openssl genrsa -f4 2048 > server_key.pem
 openssl rsa -in server_key.pem -pubout > server_pubkey.pem
 openssl req -key server_key.pem -new -out server.req -subj "/CN=$server_name"
+** convert from SSLeay to pkcs8
+openssl pkcs8 -topk8 -inform pem -in server_key.pem -outform pem -nocrypt -out server_key.pk8
 
 # Sign the server certificate with the CA:
 openssl x509 -req -in server.req -CA CA.pem -passin pass:$CA_passphrase \
@@ -24,6 +26,8 @@ openssl x509 -req -in server.req -CA CA.pem -passin pass:$CA_passphrase \
 ## Generate a Client keypair and certificate:
 openssl genrsa -out client_key.pem 2048
 openssl req -key client_key.pem -new -out client.req -subj "/CN=$client_name"
+** convert from SSLeay to pkcs8
+openssl pkcs8 -topk8 -inform pem -in client_key.pem -outform pem -nocrypt -out client_key.pk8
 
 # Sign the client certificate with the CA:
 openssl x509 -req -in client.req -CA CA.pem -passin pass:$CA_passphrase \
