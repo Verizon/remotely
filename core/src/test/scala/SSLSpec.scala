@@ -45,36 +45,36 @@ class SSLSpec extends FlatSpec
   val serverKey = new File(getClass.getResource("/ssl-testing/server_key.pk8").getFile)
 
   val serverRequiringAuthParameters = SslParameters(Some(caCert),
-                                       Some(serverCert),
-                                       Some(serverKey),
-                                       None,
-                                       None,
-                                       None,
-                                       true)
+                                                    Some(serverCert),
+                                                    Some(serverKey),
+                                                    None,
+                                                    None,
+                                                    None,
+                                                    true)
   val serverNoAuthParameters = SslParameters(Some(caCert),
-                                       Some(serverCert),
-                                       Some(serverKey),
-                                       None,
-                                       None,
-                                       None,
-                                       true)
+                                             Some(serverCert),
+                                             Some(serverKey),
+                                             None,
+                                             None,
+                                             None,
+                                             true)
 
   val clientAuthParameters = SslParameters(Some(caCert),
-                                       Some(clientCert),
-                                       Some(clientKey),
-                                       None,
-                                       None,
-                                       None,
-                                       true)
+                                           Some(clientCert),
+                                           Some(clientKey),
+                                           None,
+                                           None,
+                                           None,
+                                           true)
 
   val clientNoAuthParameters = SslParameters(Some(caCert),
-                                       Some(clientCert),
-                                       Some(clientKey),
-                                       None,
-                                       None,
-                                       None,
-                                       true)
-                                       
+                                             Some(clientCert),
+                                             Some(clientKey),
+                                             None,
+                                             None,
+                                             None,
+                                             true)
+  
 
   val addr = new java.net.InetSocketAddress("localhost", 9101)
   val server = new TestServer
@@ -82,9 +82,9 @@ class SSLSpec extends FlatSpec
   it should "be able to do client authentication" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serveNetty(addr,
-                                                 monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                                 sslParams = Some(serverRequiringAuthParameters)).run
+    val shutdown = server.environment.serve(addr,
+                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
+                                            sslParams = Some(serverRequiringAuthParameters)).run
     val transport = NettyTransport.single(addr,
                                           monitoring = Monitoring.consoleLogger("SSLSpec-client"),
                                           sslParams = Some(clientAuthParameters)).run
@@ -103,9 +103,9 @@ class SSLSpec extends FlatSpec
   it should "reject non auth clients when auth is required" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serveNetty(addr,
-                                                 monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                                 sslParams = Some(serverRequiringAuthParameters)).run
+    val shutdown = server.environment.serve(addr,
+                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
+                                            sslParams = Some(serverRequiringAuthParameters)).run
     val transport = NettyTransport.single(addr,
                                           monitoring = Monitoring.consoleLogger("SSLSpec-client"),
                                           sslParams = Some(clientNoAuthParameters)).run
@@ -124,15 +124,15 @@ class SSLSpec extends FlatSpec
   it should "work without auth" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serveNetty(addr,
-                                                 monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                                 sslParams = Some(serverNoAuthParameters)).run
+    val shutdown = server.environment.serve(addr,
+                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
+                                            sslParams = Some(serverNoAuthParameters)).run
     val transport = NettyTransport.single(addr,
                                           monitoring = Monitoring.consoleLogger("SSLSpec-client"),
                                           sslParams = Some(clientNoAuthParameters)).run
 
     try {
-     val endpoint: Endpoint = Endpoint.single(transport)
+      val endpoint: Endpoint = Endpoint.single(transport)
 
       val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
       fact should be (100)
@@ -145,9 +145,9 @@ class SSLSpec extends FlatSpec
   it should "work with with auth client and no-auth server" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serveNetty(addr,
-                                                 monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                                 sslParams = Some(serverNoAuthParameters)).run
+    val shutdown = server.environment.serve(addr,
+                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
+                                            sslParams = Some(serverNoAuthParameters)).run
     val transport = NettyTransport.single(addr,
                                           monitoring = Monitoring.consoleLogger("SSLSpec-client"),
                                           sslParams = Some(clientAuthParameters)).run
@@ -166,9 +166,9 @@ class SSLSpec extends FlatSpec
   it should "reject a non-ssl server from an ssl client" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serveNetty(addr,
-                                                 monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                                 sslParams = None).run
+    val shutdown = server.environment.serve(addr,
+                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
+                                            sslParams = None).run
     val transport = NettyTransport.single(addr,
                                           monitoring = Monitoring.consoleLogger("SSLSpec-client"),
                                           sslParams = Some(clientNoAuthParameters)).run
@@ -189,9 +189,9 @@ class SSLSpec extends FlatSpec
   ignore should "give a good error when a non-ssl client tries to connect to an ssl server" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serveNetty(addr,
-                                                 monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                                 sslParams = Some(serverNoAuthParameters)).run
+    val shutdown = server.environment.serve(addr,
+                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
+                                            sslParams = Some(serverNoAuthParameters)).run
     val transport = NettyTransport.single(addr,
                                           monitoring = Monitoring.consoleLogger("SSLSpec-client"),
                                           sslParams = None).run
@@ -237,16 +237,16 @@ class SSLSpec extends FlatSpec
 
     val keystore = SSL.emptyKeystore
     val x = (for {
-      ca <- SSL.certFromPEM(caPEMStream).last
-      cl <- SSL.certFromPEM(clientPEMStream).last
-      key <- SSL.keyFromPkcs8(clientKeyStream).last
-      _ <- eval {
-        for {
-          _ <- SSL.addCert(ca, "ca", keystore)
-          _ <- SSL.addKey(key, List(ca, cl), "client", Array[Char](), keystore)
-        } yield ()
-      }
-    } yield()).run.attemptRun
+               ca <- SSL.certFromPEM(caPEMStream).last
+               cl <- SSL.certFromPEM(clientPEMStream).last
+               key <- SSL.keyFromPkcs8(clientKeyStream).last
+               _ <- eval {
+                 for {
+                   _ <- SSL.addCert(ca, "ca", keystore)
+                   _ <- SSL.addKey(key, List(ca, cl), "client", Array[Char](), keystore)
+                 } yield ()
+               }
+             } yield()).run.attemptRun
 
     x should be (\/-(()))
   }
@@ -259,18 +259,18 @@ class SSLSpec extends FlatSpec
     val keystore = SSL.emptyKeystore
     val keystoreTM = SSL.emptyKeystore
     val x = (for {
-      ca <- SSL.certFromPEM(caPEMStream).last
-      cl <- SSL.certFromPEM(clientPEMStream).last
-      key <- SSL.keyFromPkcs8(clientKeyStream).last
-      _ <- eval {
-        for {
-          _ <- SSL.addCert(ca, "ca", keystoreTM)
-          _ <- SSL.addKey(key, List(ca, cl), "client", "changeit".toCharArray, keystore)
-        } yield ()
-      }
-    } yield {
-      keystore -> keystoreTM
-    }).run.attemptRun
+               ca <- SSL.certFromPEM(caPEMStream).last
+               cl <- SSL.certFromPEM(clientPEMStream).last
+               key <- SSL.keyFromPkcs8(clientKeyStream).last
+               _ <- eval {
+                 for {
+                   _ <- SSL.addCert(ca, "ca", keystoreTM)
+                   _ <- SSL.addKey(key, List(ca, cl), "client", "changeit".toCharArray, keystore)
+                 } yield ()
+               }
+             } yield {
+               keystore -> keystoreTM
+             }).run.attemptRun
 
     x should be (\/-(()))
   }
