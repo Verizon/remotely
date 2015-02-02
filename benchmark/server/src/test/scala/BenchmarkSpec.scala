@@ -39,7 +39,7 @@ class BenchmarkServerSpec extends FlatSpec
 
   val addr = new java.net.InetSocketAddress("localhost", 9001)
   val server = new BenchmarkServerImpl
-  val shutdown: Task[Unit] = server.environment.serveNetty(addr).run
+  val shutdown: Task[Unit] = server.environment.serve(addr).run
 
   val endpoint = Endpoint.single(NettyTransport.single(addr).run)
 

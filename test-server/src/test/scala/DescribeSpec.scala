@@ -47,11 +47,11 @@ class DescribeSpec extends FlatSpec
   val serverN = new DescribeTestNewerServerImpl
   val serverO = new DescribeTestOlderServerImpl
 
-  val shutdownN: () => Unit = serverN.environment.serveNetty(addrN,
+  val shutdownN: () => Unit = serverN.environment.serve(addrN,
                                                            Executors.newCachedThreadPool,
                                                            Monitoring.empty).run
 
-  val shutdownO: () => Unit = serverO.environment.serveNetty(addrO,
+  val shutdownO: () => Unit = serverO.environment.serve(addrO,
                                                            Executors.newCachedThreadPool,
                                                            Monitoring.empty).run
 

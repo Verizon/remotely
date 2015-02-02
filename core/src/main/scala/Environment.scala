@@ -79,13 +79,13 @@ case class Environment(codecs: Codecs, values: Values) {
     * unspecified the default of 2 * number of cores will be used
     * @param capabilities, the capabilities which will be sent to the client upon connection
     */
-  def serveNetty(addr: InetSocketAddress,
-                 strategy: Strategy = Strategy.DefaultStrategy,
-                 numBossThreads: Option[Int] = None,
-                 numWorkerThreads: Option[Int] = None,
-                 monitoring: Monitoring = Monitoring.empty,
-                 capabilities: Capabilities = Capabilities.default,
-                 sslParams: Option[SslParameters] = None): Task[Task[Unit]] =
+  def serve(addr: InetSocketAddress,
+            strategy: Strategy = Strategy.DefaultStrategy,
+            numBossThreads: Option[Int] = None,
+            numWorkerThreads: Option[Int] = None,
+            monitoring: Monitoring = Monitoring.empty,
+            capabilities: Capabilities = Capabilities.default,
+            sslParams: Option[SslParameters] = None): Task[Task[Unit]] =
     transport.netty.NettyServer.start(addr,
                                       serverHandler(monitoring),
                                       strategy,
