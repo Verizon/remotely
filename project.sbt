@@ -2,6 +2,8 @@ organization in Global := "oncue.svc.remotely"
 
 scalaVersion in Global := "2.10.4"
 
+crossScalaVersions in Global := Seq("2.10.4", "2.11.5")
+
 resolvers += Resolver.sonatypeRepo("releases")
 
 lazy val remotely = project.in(file(".")).aggregate(core, examples, `benchmark-server`, `benchmark-client`, test)

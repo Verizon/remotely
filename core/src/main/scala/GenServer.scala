@@ -54,7 +54,7 @@ object GenServer {
     // and evaluate it at compile-time.
     val p:Protocol = c.prefix.tree match {
       case q"new $name($protocol)" =>
-        c.eval(c.Expr[Protocol](c.resetAllAttrs(q"{import remotely.codecs._; $protocol}")))
+        c.eval(c.Expr[Protocol](c.resetLocalAttrs(q"{import remotely.codecs._; $protocol}")))
       case _ => c.abort(c.enclosingPosition, "GenServer must be used as an annotation.")
     }
 
