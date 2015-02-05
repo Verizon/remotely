@@ -1,1 +1,1 @@
-libraryDependencies += "oncue.svc.remotely" %% "core" % "1.0-SNAPSHOT"
+libraryDependencies += "oncue.svc.remotely" %% "core" % "1.1-SNAPSHOT"

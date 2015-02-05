@@ -1,3 +1,4 @@
+import common._
 
 name := "core"
 
@@ -23,13 +24,6 @@ libraryDependencies ++= Seq(
   "io.netty"           % "netty-codec"    % "4.0.25.Final"
 )
 
-addCompilerPlugin("org.scalamacros" % "paradise" % "2.0.1" cross CrossVersion.full)
+macrosSettings
 
-libraryDependencies <+= (scalaVersion)("org.scala-lang" % "scala-reflect" %_)
-
-libraryDependencies += ("org.scalamacros" %% "quasiquotes" % "2.0.1")
-
-libraryDependencies ++= Seq(
-  "org.scalatest"  %% "scalatest"  % "2.2.1"  % "test",
-  "org.scalacheck" %% "scalacheck" % "1.11.6" % "test"
-)
+testSettings
