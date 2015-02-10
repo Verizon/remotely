@@ -1,0 +1,151 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Remotely Documentation - Internals</title>
+
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/custom.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <a name="top"></a>
+    <div class="wrapper">
+      <header>
+        <h1>Remotely</h1>
+        <p>Last updated on <em>January 30, 2015</em></p>
+
+        <ul>
+          <li><a href="https://github.com/oncue/remotely/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/oncue/remotely/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/oncue/remotely">View On <strong>GitHub</strong></a></li>
+        </ul>
+
+        <hr />
+
+        <ol id="top">
+          <!-- home -->
+          <li><a href="/">Home</a></li>
+          
+
+          <li><a href="/manual.html">Manual</a></li>
+          
+
+
+          <li><a href="/internals.html">Internals</a></li>
+          
+            <li>
+              <ol class="menu">
+                <li><a href="/internals.html#serialization">Serialization</a></li>
+                <li><a href="/internals.html#networking">Networking</a></li>
+              </ol>
+            </li>
+          
+        </ol>
+
+        <hr />
+
+      </header>
+      <section>
+        <h1>Internals</h1>
+
+<p>TODO</p>
+
+<p><a name="serialization"></a></p>
+
+<h2>Serialization</h2>
+
+<h3>Float</h3>
+
+<p>Floats are encoded into 32 bits according to the <a href="http://en.wikipedia.org/wiki/Single-precision_floating-point_format#IEEE_754_single-precision_binary_floating-point_format:_binary32">IEEE 754 floating-point single precision format</a></p>
+
+<h3>Double</h3>
+
+<p>Doubles are encoded into 64 bits according to the [IEEE 754 floating-point double precision format)[http://en.wikipedia.org/wiki/Double-precision<em>floating-point</em>format#IEEE<em>754</em>double-precision<em>binary</em>floating-point<em>format:</em>binary64] </p>
+
+<h3>Int</h3>
+
+<p>Ints are encoded as either 32 or 64 bit <a href="http://en.wikipedia.org/wiki/Two&#x27;s_complement">2s compliment</a>, <a href="http://en.wikipedia.org/wiki/Endianness">big-endian</a> format</p>
+
+<h3>Boolean</h3>
+
+<p>Booleans are encoded as a single bit, 1 for true and 0 for false.</p>
+
+<h2>Array[Byte]</h2>
+
+<p>Byte arrays are stored as a 32-bit signed integer representing the number of bytes, followed by the actual bytes.</p>
+
+<h3>String</h3>
+
+<p>Strings are <a href="http://en.wikipedia.org/wiki/UTF-8">UTF-8 encoded</a> into an Array of bytes, then serialized as Array[Byte] above</p>
+
+<h3>Sequences: List[A], Seq[A], IndexedSeq[A], Set[A], SortedSet[A]</h3>
+
+<p>Sequence like structures are all stored as a 32-bit signed integer representing the number of items in the collection followed by the bytes for each member of the collection</p>
+
+<h3>Option[A]</h3>
+
+<p>Optional values are represented by a single bit indicating if a byte encoding of the value follows.</p>
+
+<h3>Tuple2..7</h3>
+
+<p>Tuples are represented by a concatenation of the byte representation of each tuple member.</p>
+
+<h3>Disjunctions: A \/ B, Either[A,B]</h3>
+
+<p>Disjunctions are represented as a single bit discrimnator which indicates if the following bytes represent an A value or a B value. A zero bit indicates that A bytes follow, and a one bit indicates that B bytes follow</p>
+
+<h3>Map[A,B] / SortedMap[A,B]</h3>
+
+<p>Maps are encoded by converting them first to a Sequence of Tuple2 values (representing Key followed by Value), which is then encoded as an above List[(A,B)] would be.</p>
+
+<h3>Execution Context</h3>
+
+<ul>
+<li>See the <a href="/manual.html#execution-context%5D">Documentation about Excution Conext</a> for information about the Execution Context. </li>
+</ul>
+
+<p>An execution context is serialized as a Map[String,String] followed by a List[UUID] where uuid is encoded as 128 bits <a href="https://docs.oracle.com/javase/7/docs/api/java/util/UUID.html">as documented here</a></p>
+
+<p><a name="networking"></a></p>
+
+<h2>Networking</h2>
+
+<p>TODO</p>
+
+<h3>Akka I/O</h3>
+
+<p>Currently the network I/O in remotely is currently all plumbed through <a href="http://doc.akka.io/docs/akka/snapshot/scala/io.html">Akka I/O</a> internally.</p>
+
+<p>TODO</p>
+
+<h3>KeepAlive</h3>
+
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="http://github.com/oncue">OnCue OSS</a>.
+        <br/>Distributed under an <a href="http://www.apache.org/licenses/LICENSE-2.0.html" target="_blank">Apache 2.0 License.</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="/js/scale.fix.js" type="text/javascript"></script>
+    <script type="text/javascript">
+    //<![CDATA[
+      var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+      document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+    //]]>
+    </script>
+    <script type="text/javascript">
+    //<![CDATA[
+      try {
+        var pageTracker = _gat._getTracker("UA-57263411-1");
+        pageTracker._trackPageview();
+      } catch(err) {}
+    //]]>
+    </script>
+  </body>
+</html>

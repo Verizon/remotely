@@ -1,0 +1,4 @@
+name: Remotely Documentation
+markdown: redcarpet
+highlighter: pygments
+baseurl: "/"
