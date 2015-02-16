@@ -13,4 +13,4 @@ ghpagesNoJekyll := false
 
 includeFilter in makeSite := "*.yml" | "*.md" | "*.html" | "*.css" | "*.png" | "*.jpg" | "*.gif" | "*.js" | "*.swf"
 
-git.remoteRepo := "git@github.com:stew/remotely.git"
+git.remoteRepo := "git@github.com:oncue/remotely.git"
