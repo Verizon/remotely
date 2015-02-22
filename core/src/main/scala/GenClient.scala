@@ -17,7 +17,6 @@
 
 package remotely
 
-import scala.reflect.macros.Context
 import scala.language.experimental.macros
 import scala.annotation.StaticAnnotation
 
@@ -26,10 +25,10 @@ import scala.annotation.StaticAnnotation
  * `@GenClient(remotely.Protocol.empty) object MyClient`
  */
 class GenClient(sigs: Signatures) extends StaticAnnotation {
-  def macroTransform(annottees: Any*) = macro GenClient.impl
+  def macroTransform(annottees: Any*): Any = macro GenClient.impl
 }
 
-object GenClient {
+object GenClient extends MacrosCompatibility {
   /**
     * this just allows us to put a $signature into a quasi-quote.
     * implemented this way instead of by providing Liftable[Signature]
@@ -51,7 +50,7 @@ object GenClient {
     // and evaluate it at compile-time.
     val s: Signatures = c.prefix.tree match {
       case q"new $name($sig)" =>
-        c.eval(c.Expr[Signatures](c.resetLocalAttrs(q"{import remotely.codecs._; $sig}")))
+        c.eval(c.Expr[Signatures](resetLocalAttrs(c)(q"{import remotely.codecs._; $sig}")))
       case _ => c.abort(c.enclosingPosition, "GenClient must be used as an annotation.")
     }
 
