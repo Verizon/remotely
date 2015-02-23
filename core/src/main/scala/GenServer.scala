@@ -17,20 +17,19 @@
 
 package remotely
 
-import scala.reflect.macros.Context
 import scala.language.experimental.macros
 import scala.annotation.StaticAnnotation
 import scalaz.NonEmptyList
 
 /**
  * Macro annotation that generates a server interface. Usage:
- * `@GenServer(removely.Protocol.empty) abstract class MyServer`
+ * `@GenServer(remotely.Protocol.empty) abstract class MyServer`
  */
 class GenServer(p: Protocol) extends StaticAnnotation {
-  def macroTransform(annottees: Any*) = macro GenServer.impl
+  def macroTransform(annottees: Any*): Any = macro GenServer.impl
 }
 
-object GenServer {
+object GenServer extends MacrosCompatibility {
   import Signature._
 
   // Turns a `String` into a `TypeTree`.
@@ -54,13 +53,13 @@ object GenServer {
     // and evaluate it at compile-time.
     val p:Protocol = c.prefix.tree match {
       case q"new $name($protocol)" =>
-        c.eval(c.Expr[Protocol](c.resetLocalAttrs(q"{import remotely.codecs._; $protocol}")))
+        c.eval(c.Expr[Protocol](resetLocalAttrs(c)(q"{import remotely.codecs._; $protocol}")))
       case _ => c.abort(c.enclosingPosition, "GenServer must be used as an annotation.")
     }
 
     // Generates a method signature based on a method name and a `TypeTree`.
     def genSig(name: String, typ: c.Tree) =
-      DefDef(Modifiers(DEFERRED), newTermName(name),
+      DefDef(Modifiers(DEFERRED), createTermName(c)(name),
              List(), List(),
              typ, EmptyTree)
 
@@ -104,7 +103,7 @@ object GenServer {
 
              private def populateDeclarations(env: Values): Values =
                 ${ signatures.foldLeft(q"env":c.Tree)((e,s) =>
-                    q"$e.declare(${Literal(Constant(s._1))},${Ident(newTermName(s._1))})"
+                    q"$e.declare(${Literal(Constant(s._1))},${Ident(createTermName(c)(s._1))})"
                   )}
 
               ..$body
