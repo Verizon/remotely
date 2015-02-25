@@ -29,7 +29,7 @@ import codecs._
 class CapabilitiesSpec extends FlatSpec
     with Matchers
     with BeforeAndAfterAll {
-  
+
   val addr1 = new java.net.InetSocketAddress("localhost", 9003)
 
   val server1 = new CountServer
@@ -41,15 +41,23 @@ class CapabilitiesSpec extends FlatSpec
   val endpoint1 = (NettyTransport.single(addr1) map Endpoint.single).run
 
   behavior of "Capabilities"
-  
+
   it should "not call an incompatible server" in {
     import Response.Context
     import Remote.implicits._
     import codecs._
 
-    an[IncompatibleServer] should be thrownBy {
-      val _ = evaluate(endpoint1, Monitoring.empty)(CountClient.ping(1)).apply(Context.empty).run
-    }
+    an[IncompatibleServer] should be thrownBy (
+      try {
+        val _ = evaluate(endpoint1, Monitoring.empty)(CountClient.ping(1)).apply(Context.empty).run
+      } catch {
+        case t: IncompatibleServer =>
+          throw t
+        case t: Throwable =>
+          t.printStackTrace
+          throw t
+      }
+    )
   }
 }
 
