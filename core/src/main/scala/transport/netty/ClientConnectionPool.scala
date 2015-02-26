@@ -36,6 +36,7 @@ import scalaz.stream.Process
 import scalaz.{-\/,\/,\/-}
 import scodec.Err
 import scodec.bits.BitVector
+import scodec.interop.scalaz._
 import io.netty.buffer.ByteBuf
 import java.io.File
 import java.nio.charset.Charset
@@ -216,7 +217,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       buffer.readBytes(bytes)
       val str = new String(bytes, "UTF-8")
       M.negotiating(None, s"received capabilities string: $str", None)
-      val r = Capabilities.parseHelloString(str).bimap(
+      val r = Capabilities.parseHelloString(str).toDisjunction.bimap(
         (e: Err) => new IllegalArgumentException(e.message),
         (cap: Capabilities) => (cap,ctx.channel)
       )
