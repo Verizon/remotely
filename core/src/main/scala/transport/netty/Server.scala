@@ -73,7 +73,7 @@ private[remotely] class NettyServer(handler: Handler,
     override def channelRegistered(ctx: ChannelHandlerContext): Unit = {
       super.channelRegistered(ctx)
       logger.negotiating(Option(ctx.channel.remoteAddress), "channel connected", None)
-      val encoded = Capabilities.capabilitiesCodec.encodeValid(capabilities)
+      val encoded = Capabilities.capabilitiesCodec.encode(capabilities).require
       val fut = ctx.channel.writeAndFlush(Unpooled.wrappedBuffer(encoded.toByteArray))
       logger.negotiating(Option(ctx.channel.remoteAddress), "sending capabilities", None)
       val _ = fut.addListener(new ChannelFutureListener {

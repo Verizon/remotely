@@ -18,7 +18,7 @@
 package remotely
 package examples
 import scalaz._
-import codecs._
+import remotely.codecs._
 
 // NB: The GenServer macro needs to receive the FQN of all types, or import them
 // explicitly. The target of the macro needs to be an abstract class.

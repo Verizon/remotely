@@ -177,9 +177,9 @@ object Enframe extends ChannelOutboundHandlerAdapter {
     obj match {
       case Bits(bv) =>
         val byv = bv.toByteVector
-        val _ = ctx.writeAndFlush(Unpooled.wrappedBuffer((codecs.int32.encodeValid(byv.size) ++ bv).toByteBuffer), cp)
+        val _ = ctx.writeAndFlush(Unpooled.wrappedBuffer((codecs.int32.encode(byv.size).require ++ bv).toByteBuffer), cp)
       case EOS =>
-        val _ = ctx.writeAndFlush(Unpooled.wrappedBuffer(codecs.int32.encodeValid(0).toByteBuffer), cp)
+        val _ = ctx.writeAndFlush(Unpooled.wrappedBuffer(codecs.int32.encode(0).require.toByteBuffer), cp)
       case x => throw new IllegalArgumentException("was expecting Framed, got: " + x)
     }
   }
