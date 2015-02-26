@@ -17,9 +17,8 @@
 
 package remotely
 
-import scodec.{Codec,Err}
+import scodec._
 import scodec.bits.BitVector
-import scalaz.{-\/,\/,\/-}
 import scala.util.parsing.combinator._
 
 /**
@@ -80,20 +79,27 @@ object Capabilities extends RegexParsers {
   val helloString: Parser[Capabilities] =
     "OK: " ~ capabilitiesList ^^ { case _ ~ c => Capabilities(c.toSet) }
 
-  def parseHelloString(str: String): Err \/ Capabilities = {
+  def parseHelloString(str: String): Attempt[Capabilities] = {
     val pr = parseAll(helloString, str)
-    if(pr.successful) \/-(pr.get)
-    else -\/(Err("could not parse greeting from server: " + str))
+    if(pr.successful) Attempt.successful(pr.get)
+    else Attempt.failure(Err("could not parse greeting from server: " + str))
   }
 
   val capabilitiesCodec: Codec[Capabilities] = new Codec[Capabilities] {
-    override def encode(c: Capabilities): Err \/ BitVector = {
-      val str = "OK: " + c.capabilities.mkString("[",",","]") + "\n"
-      \/-(BitVector(str.getBytes))
+
+    def sizeBound = SizeBound.unknown
+    
+    override def encode(c: Capabilities): Attempt[BitVector] = {
+      val s = "OK: " + c.capabilities.mkString("[",",","]") + "\n"
+      Attempt.successful(BitVector(s.getBytes))
     }
 
-    override def decode(bv: BitVector): Err \/ (BitVector,Capabilities) = {
-      codecs.utf8.decode(bv).flatMap { case(bv,str) => parseHelloString(str).map(bv -> _) }
+    override def decode(bv: BitVector): Attempt[DecodeResult[Capabilities]] = {
+      codecs.utf8.decode(bv).flatMap {
+        case DecodeResult(s, b) ⇒ parseHelloString(s).map(DecodeResult(_, b))
+      }
     }
+    
   }
+  
 }

@@ -23,8 +23,11 @@ import scalaz.{\/,Monad}
 import scalaz.\/.{right,left}
 import scalaz.stream.{merge,nio,Process}
 import scalaz.concurrent.Task
+import remotely.Response.Context
 import scodec.bits.{BitVector,ByteVector}
-import scodec.{Encoder,Err}
+import scodec.{Attempt, DecodeResult, Encoder, Err}
+import scodec.Attempt.Successful
+import scodec.interop.scalaz._
 
 object Server {
 
@@ -40,10 +43,11 @@ object Server {
 
     Task.delay(System.nanoTime).flatMap { startNanos => Task.suspend {
       // decode the request from the environment
-                                           val (trailing, (respEncoder,ctx,r)) =
 
-                                           codecs.requestDecoder(env).decode(request)
-              .fold(e => throw new Error(e.messageWithContext), identity)
+      val DecodeResult((respEncoder,ctx,r), trailing) =
+        codecs.requestDecoder(env).decode(request).
+          fold(e => throw new Error(e.messageWithContext), identity)      
+      
       val expected = Remote.refs(r)
       val unknown = (expected -- env.values.keySet).toList
       if (unknown.nonEmpty) { // fail fast if the Environment doesn't know about some referenced values
@@ -57,8 +61,8 @@ object Server {
           val deltaNanos = System.nanoTime - startNanos
           val delta = Duration.fromNanos(deltaNanos)
           val result = right(a)
-          monitoring.handled(ctx, r, expected, result, delta)
-          toTask(codecs.responseEncoder(respEncoder).encode(result))
+          monitoring.handled(ctx, r, expected, right(a), delta)
+          toTask(codecs.responseEncoder(respEncoder).encode(Successful(a)))
         }.attempt.flatMap {
           // this is a little convoluted - we catch this exception just so
           // we can log the failure using `monitoring`, then reraise it
@@ -73,7 +77,7 @@ object Server {
           )
         }
     }}.attempt.flatMap { _.fold(
-      e => toTask(codecs.responseEncoder(codecs.utf8).encode(left(Err(formatThrowable(e))))),
+      e => toTask(codecs.responseEncoder(codecs.utf8).encode(Attempt.failure(Err(formatThrowable(e))))),
       bits => Task.now(bits)
                         )}
   }
@@ -99,10 +103,10 @@ object Server {
     }
   }
 
-  private def toTask[A](e: Err \/ A): Task[A] =
-    e.fold(e => Task.fail(new Error(e.messageWithContext)),
-           a => Task.now(a))
-
+  private def toTask[A](att: Attempt[A]): Task[A] =
+    att.fold(e => Task.fail(new Error(e.messageWithContext)), 
+             a => Task.now(a))
+  
   def fail(msg: String): Task[Nothing] = Task.fail(new Error(msg))
 
   class Error(msg: String) extends Exception(msg)
