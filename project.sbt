@@ -14,6 +14,8 @@ lazy val examples = project dependsOn core
 
 lazy val test = project dependsOn core
 
+lazy val docs = project dependsOn core
+
 lazy val `test-server` = project dependsOn test
 
 lazy val `benchmark-protocol` = project.in(file("benchmark/protocol")).dependsOn(core)
