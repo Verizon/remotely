@@ -205,7 +205,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
     val capabilities: Task[(Capabilities,Channel)] = Task.async { cb =>
       this.cb = cb
     }
-    
+
     override def exceptionCaught(ctx: ChannelHandlerContext, ee: Throwable): Unit = {
       ee.printStackTrace()
       cb(\/.left(ee))

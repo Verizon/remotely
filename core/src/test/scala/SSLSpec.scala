@@ -32,7 +32,7 @@ class SSLSpec extends FlatSpec
 
 
   behavior of "Netty SSL Server"
-  
+
   val pems = List("CA.pem", "client_cert.pem", "server_cert.pem")
   val keys = List("client_key.pk8", "server_key.pk8")
 
@@ -74,7 +74,7 @@ class SSLSpec extends FlatSpec
                                              None,
                                              None,
                                              true)
-  
+
 
   val addr = new java.net.InetSocketAddress("localhost", 9101)
   val server = new TestServer
@@ -178,7 +178,16 @@ class SSLSpec extends FlatSpec
 
       val fact = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty)
 
-      an[io.netty.handler.ssl.NotSslRecordException] should be thrownBy fact.run
+      an[io.netty.handler.ssl.NotSslRecordException] should be thrownBy (
+        try {
+          val _ = fact.run
+        } catch {
+          case t: io.netty.handler.ssl.NotSslRecordException =>
+            throw t
+          case t: Throwable =>
+            t.printStackTrace
+            throw t
+        })
     } finally {
       shutdown.run
       transport.shutdown.run
