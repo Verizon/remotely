@@ -45,10 +45,8 @@ case class Endpoint(connections: Process[Task,Handler]) {
     * `maxErrors` consecutive failures, and attempts a connection again
     * when `timeout` has passed.
     */
-  def circuitBroken(timeout: Duration, maxErrors: Int): Task[Endpoint] =
-    CircuitBreaker(timeout, maxErrors).map { cb =>
-      Endpoint(connections.map(c => (bs: Process[Task,BitVector]) => c(bs).translate(cb.transform)))
-    }
+  def circuitBroken(timeout: Duration, maxErrors: Int): Endpoint =
+    Endpoint(connections.map(c => (bs: Process[Task,BitVector]) => c(bs).translate(CircuitBreaker(timeout, maxErrors).transform)))
 }
 
 object Endpoint {
@@ -84,7 +82,9 @@ object Endpoint {
            maxErrors: Int,
            es: Process[Task, Endpoint]): Endpoint =
     Endpoint(mergeN(permutations(es).map(ps =>
-                      failoverChain(maxWait, ps.evalMap(p => p.circuitBroken(circuitOpenTime, maxErrors))).connections)))
+                      failoverChain(maxWait, ps.map(_.circuitBroken(circuitOpenTime, maxErrors))).connections)))
+
+
 
   /**
     * Produce a stream of all the permutations of the given stream.

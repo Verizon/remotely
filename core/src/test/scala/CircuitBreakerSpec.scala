@@ -41,8 +41,7 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
     val x = b.toInt
     val n = x.abs
     val p = for {
-      cb <- CircuitBreaker(3.seconds, n)
-      r <- failures(n + 1, cb)
+      r <- failures(n + 1, CircuitBreaker(3.seconds, n))
     } yield r
     p.run match {
       case -\/(e) => e.getMessage == "oops"
@@ -58,8 +57,7 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
     val x = b.toInt
     val n = x.abs
     val p = for {
-      cb <- CircuitBreaker(3.seconds, n)
-      r <- failures(n + 2, cb)
+      r <- failures(n + 2, CircuitBreaker(3.seconds, n))
     } yield r
     p.run match {
       case -\/(CircuitBreakerOpen) => true
@@ -69,8 +67,8 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
 
   // The CB closes again
   property("closes") = secure {
+    val cb = CircuitBreaker(1.milliseconds, 0)
     val p = for {
-      cb <- CircuitBreaker(1.milliseconds, 0)
       _ <- cb(Task.fail(new Error("oops"))).attempt
       _ <- Task(Thread.sleep(2))
       // The breaker should have closed by now
@@ -81,8 +79,8 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
 
   // The CB doesn't open as long as there are successes
   property("stays-closed") = secure {
+    val cb = CircuitBreaker(3.hours, 1)
     val p = for {
-      cb <- CircuitBreaker(3.hours, 1)
       _ <- cb(Task.fail(new Error("oops"))).attempt
       _ <- cb(Task.now(0))
       _ <- cb(Task.fail(new Error("oops"))).attempt

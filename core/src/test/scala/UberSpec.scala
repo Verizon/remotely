@@ -79,7 +79,7 @@ class UberSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     import Remote.implicits._
     import codecs._
     val call = evaluate(endpointUber, Monitoring.empty)(CountClient.ping(1))
-    
+
     val i: Int = call.apply(Context.empty).run
     val j: Int = call.apply(Context.empty).run
     j should be (2)

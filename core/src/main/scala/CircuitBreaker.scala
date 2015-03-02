@@ -39,6 +39,7 @@ class CircuitBreaker(timeout: Duration,
         _ <- addFailure
         r <- Task.fail(e) : Task[A]
       } yield r
+
       case \/-(a) => for {
         _ <- close
         r <- Task.now(a)
@@ -80,6 +81,6 @@ class CircuitBreaker(timeout: Duration,
 }
 
 object CircuitBreaker {
-  def apply(timeout: Duration, maxErrors: Int): Task[CircuitBreaker] =
-    IORef(BreakerState()).map(new CircuitBreaker(timeout, maxErrors, _))
+  def apply(timeout: Duration, maxErrors: Int): CircuitBreaker =
+    new CircuitBreaker(timeout, maxErrors, IORef(BreakerState()))
 }

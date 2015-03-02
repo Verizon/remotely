@@ -32,7 +32,7 @@ sealed abstract class IORef[A] {
 }
 
 object IORef {
-  def apply[A](value: => A): Task[IORef[A]] = Task(new IORef[A] {
+  def apply[A](value: => A): IORef[A] = new IORef[A] {
     val ref = new AtomicReference(value)
     def read = Task(ref.get)
     def write(value: A) = Task(ref.set(value))
@@ -44,7 +44,7 @@ object IORef {
       p <- compareAndSet(a, a2)
       r <- if (p) Task(b) else atomicModify(f)
     } yield r
-  })
+  }
 }
 
 
