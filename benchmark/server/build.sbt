@@ -5,3 +5,5 @@ scalacOptions += "-language:reflectiveCalls"
 macrosSettings
 
 testSettings
+
+publish := {}

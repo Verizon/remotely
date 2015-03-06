@@ -8,3 +8,5 @@ scalacOptions ++= Seq(
 name := "examples"
 
 macrosSettings
+
+publish := {}
