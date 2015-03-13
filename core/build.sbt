@@ -38,8 +38,6 @@ bintraySettings
 
 bintrayPublishSettings
 
-osgiSettings
-
 releaseSettings
 
 publishMavenStyle := true
@@ -54,14 +52,3 @@ bintray.Keys.packageLabels in bintray.Keys.bintray := Seq("remote", "functional 
 bintray.Keys.bintrayOrganization in bintray.Keys.bintray := Some("oncue")
 
 bintray.Keys.repository in bintray.Keys.bintray := "releases"
-
-OsgiKeys.bundleSymbolicName := "remotely-core"
-
-OsgiKeys.exportPackage := Seq("remotely.*")
-
-OsgiKeys.importPackage := Seq(
-  """scalaz.*;version="$<range;[==,=+);$<@>>"""",
-  """io.netty.*;version="$<range;[==,=+);$<@>>"""",
-  """scodec.*;version="$<range;[==,=+);$<@>>"""",
-  "*")
-
