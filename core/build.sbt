@@ -40,6 +40,8 @@ bintrayPublishSettings
 
 osgiSettings
 
+releaseSettings
+
 publishMavenStyle := true
 
 licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html"))
@@ -51,7 +53,7 @@ bintray.Keys.packageLabels in bintray.Keys.bintray := Seq("remote", "functional 
 
 bintray.Keys.bintrayOrganization in bintray.Keys.bintray := Some("oncue")
 
-bintray.Keys.repository in bintray.Keys.bintray := "release"
+bintray.Keys.repository in bintray.Keys.bintray := "releases"
 
 OsgiKeys.bundleSymbolicName := "remotely-core"
 
