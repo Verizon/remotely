@@ -1,4 +1,4 @@
-organization in Global := "oncue.svc.remotely"
+organization in Global := "oncue"
 
 scalaVersion in Global := "2.10.4"
 
