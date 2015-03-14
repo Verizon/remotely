@@ -1,12 +1,7 @@
+
 import common._
 
-name := "core"
-
-normalizedName := "remotely-core"
-
-artifactName := { (sv: ScalaVersion, module: ModuleID, artifact: Artifact) =>
-  "remotely-core"
-}
+name := "remotely-core"
 
 resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
 
@@ -34,7 +29,7 @@ macrosSettings
 
 testSettings
 
-bintraySettings
+promptSettings
 
 bintrayPublishSettings
 

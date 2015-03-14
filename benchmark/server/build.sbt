@@ -6,4 +6,6 @@ macrosSettings
 
 testSettings
 
+promptSettings
+
 publish := {}

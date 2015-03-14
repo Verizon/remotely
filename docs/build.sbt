@@ -1,9 +1,14 @@
 import com.typesafe.sbt.SbtSite.SiteKeys._
 import com.typesafe.sbt.SbtGhPages.GhPagesKeys._
+import common.promptSettings
+
+name := "remotely-docs"
 
 site.settings
 
 tutSettings
+
+promptSettings
 
 site.addMappingsToSiteDir(tut, "")
 

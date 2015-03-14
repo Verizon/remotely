@@ -20,4 +20,4 @@ resolvers += Resolver.url(
 
 addSbtPlugin("org.tpolecat"     % "tut-plugin"      % "0.3.1")
 
-addSbtPlugin("com.github.gseitz" % "sbt-release" % "0.8.5")
+addSbtPlugin("com.github.gseitz" % "sbt-release"    % "0.8.5")

@@ -46,4 +46,6 @@ object common {
       "org.scalacheck" %% "scalacheck" % scalaCheckVersion.value % "test"
     )
   )
+
+  def promptSettings = Prompt.settings
 }

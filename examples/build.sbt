@@ -5,8 +5,10 @@ scalacOptions ++= Seq(
   "-language:postfixOps"
 )
 
-name := "examples"
+name := "remotely-examples"
 
 macrosSettings
+
+promptSettings
 
 publish := {}

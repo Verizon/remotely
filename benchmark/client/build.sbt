@@ -1,5 +1,7 @@
-scalacOptions += "-language:postfixOps"
+import common._
 
-scalacOptions += "-language:reflectiveCalls"
+promptSettings
+
+scalacOptions ++= Seq("-language:postfixOps", "-language:reflectiveCalls")
 
 publish := {}
