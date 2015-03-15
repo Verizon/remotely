@@ -16,8 +16,19 @@
 //: ----------------------------------------------------------------------------
 import sbt._
 import Keys._
+import sbtassembly.Plugin._
 
 object common {
+  import AssemblyKeys._
+
+  def mergeSettings = Seq(
+    mergeStrategy in assembly <<= (mergeStrategy in assembly) { (old) =>
+      {
+        case "META-INF/io.netty.versions.properties" => MergeStrategy.discard
+        case x => old(x)
+      }
+    }
+  )
 
   def macrosSettings = Seq(
     addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full),
