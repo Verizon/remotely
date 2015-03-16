@@ -46,13 +46,13 @@ case class Result(success: Int,
   def meanResponse = if(success == 0) 0 else successTime / success
 
   override def toString =
-    s"OK: $success, KO: $failure, minResponse: $successTimeMin, meanResponse: ${meanResponse}  maxResponse: $successTimeMax\nErrors: " + failures.map{ case (k,v) => s"    $k -> $v" }
+    s"OK: $success, KO: $failure, minResponse: ${successTimeMin}ns, meanResponse: ${meanResponse}ns maxResponse: ${successTimeMax}ns\nErrors: " + failures.map{ case (k,v) => s"    $k -> $v" }
 }
 
 
 object Result {
   implicit val resultMonoid: Monoid[Result] = new Monoid[Result] {
-    def zero: Result = Result(0,0,0,0,0,0,Map.empty)
+    def zero: Result = Result(0,0,0,Long.MaxValue,0,0,Map.empty)
     def append(x: Result, y: => Result) =
       Result(x.success |+| y.success,
              x.failure |+| y.failure,
@@ -65,7 +65,7 @@ object Result {
   }
 }
 
-class Test(results: Results, task: Task[_]) extends Runnable { 
+class Test(results: Results, task: Task[_]) extends Runnable {
 
   var dead = false
   def die(): Unit = {
@@ -73,16 +73,16 @@ class Test(results: Results, task: Task[_]) extends Runnable {
   }
 
   def error(start: Long)(e: Throwable): Unit = {
-    results.failure(e.getMessage, System.currentTimeMillis - start)
+    results.failure(e.getMessage, System.nanoTime - start)
   }
 
   def success(start: Long)(x: Any): Unit = {
-    results.success(System.currentTimeMillis - start)
+    results.success(System.nanoTime - start)
   }
 
   def run(): Unit = {
     while(!dead) {
-      val start = System.currentTimeMillis
+      val start = System.nanoTime
       task.runAsync(_.fold(error(start), success(start)))
     }
   }
@@ -135,10 +135,10 @@ object BenchmarkClientMain extends TestData with transformations {
 
   /**
     * run a client against the Benchmark server
-    * 
+    *
     * Usage:
     *  main port numThreads duration
-    * 
+    *
     * port is the port number the server is running on
     * numThreads is the number of client threads to start
     * duration is the number of seconds to run the benchmark
@@ -153,7 +153,7 @@ object BenchmarkClientMain extends TestData with transformations {
     val num = Integer.parseInt(argv(1))
     val duration = java.lang.Long.parseLong(argv(2))
     val results = new Results
-    val end = System.currentTimeMillis + (duration * 1000)
+    val end = System.nanoTime + (duration * 1000000000l)
 
     val testers = (1 to num).toList.map{ _ =>
       new Test(results, server.BenchmarkClient.identityBig(toBigW(bigIn)).runWithoutContext(endpoint))
@@ -164,7 +164,7 @@ object BenchmarkClientMain extends TestData with transformations {
 
     threads.foreach(_.start)
 
-    while( System.currentTimeMillis < end) {
+    while( System.nanoTime < end) {
       Thread.sleep(5000)
       results.print()
     }
