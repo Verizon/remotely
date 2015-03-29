@@ -221,9 +221,9 @@ object Main {
 
     val address  = new InetSocketAddress("localhost", 8080)
 
-    val transport = NettyTransport.single(address)
+    val transport = NettyTransport.single(address).run
 
-    val endpoint = Endpoint.single(transport).run
+    val endpoint = Endpoint.single(transport)
 
     val f: Remote[Int] = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
 
