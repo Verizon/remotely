@@ -225,7 +225,7 @@ object Main {
 
     val endpoint = Endpoint.single(transport)
 
-    val f: Remote[Int] = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
+    val f: Remote[Int] = FactorialClient.factorial(8)
 
 	val task: Task[Int] = f.runWithoutContext(endpoint)
 
