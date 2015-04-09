@@ -121,11 +121,10 @@ object Endpoint {
   private[remotely] def isEmpty[F[_]: Monad: Catchable, O](p: Process[F, O]): F[Boolean] = ((p as false) |> Process.await1).runLast.map(_.getOrElse(true))
 
   private def time[A](task: Task[A]): Task[(Duration, A)] = for {
-    t1 <- Task(System.currentTimeMillis)
+    t1 <- Task.delay(System.currentTimeMillis)
     a  <- task
-    t2 <- Task(System.currentTimeMillis)
-    t3 <- Task(t2 - t1)
-  } yield (t3.milliseconds, a)
+    t2 <- Task.delay(System.currentTimeMillis)
+  } yield ((t2 - t1).milliseconds, a)
 }
 
 
