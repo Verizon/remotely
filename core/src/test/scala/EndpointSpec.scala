@@ -25,8 +25,8 @@ import scalaz.stream.Process
 
 class EndpointSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   behavior of "failoverChain"
-  ignore should "work" in {
-    val goodAddress = new java.net.InetSocketAddress("localhost", 9000)
+  it should "work" in {
+    val goodAddress = new java.net.InetSocketAddress("localhost", 9007)
     val badAddress = new java.net.InetSocketAddress("localhost", 9009)
 
     val goodEndpoint = (NettyTransport.single(goodAddress) map Endpoint.single).run

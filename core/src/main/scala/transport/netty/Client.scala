@@ -31,20 +31,27 @@ class NettyTransport(val pool: GenericObjectPool[Channel]) extends Handler {
   import NettyTransport._
 
   def apply(toServer: Process[Task, BitVector]): Process[Task, BitVector] = {
-    val c = pool.borrowObject()
     val fromServer = async.unboundedQueue[BitVector](scalaz.concurrent.Strategy.DefaultStrategy)
-    c.pipeline.addLast("clientDeframe", new ClientDeframedHandler(fromServer))
-    val toFrame = toServer.map(Bits(_)) fby Process.emit(EOS)
-    val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run flatMap ( _ => Task.delay{val _ = c.flush})
-    val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
-      case Cause.End =>
-        pool.returnObject(c)
-        Process.Halt(Cause.End)
-      case cause =>
-        pool.invalidateObject(c)
-        Process.Halt(cause)
+    val openConnection = Task.delay{
+      val c = pool.borrowObject()
+      c.pipeline.addLast("clientDeframe", new ClientDeframedHandler(fromServer))
+      c
     }
-    result
+    Process.await(openConnection) { c =>
+      val toFrame = toServer.map(Bits(_)) ++ Process.emit(EOS)
+      val writeBytes: Task[Unit] = toFrame.evalMap(write(c)).run flatMap (_ => Task.delay {
+        val _ = c.flush
+      })
+      val result = Process.await(writeBytes)(_ => fromServer.dequeue).onHalt {
+        case Cause.End =>
+          pool.returnObject(c)
+          Process.Halt(Cause.End)
+        case cause =>
+          pool.invalidateObject(c)
+          Process.Halt(cause)
+      }
+      result
+    }
   }
 
   def shutdown: Task[Unit] = Task.delay {
