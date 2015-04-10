@@ -230,7 +230,9 @@ object Main {
 	val task: Task[Int] = f.runWithoutContext(endpoint)
 
     // then at the edge of the world, run it and print to the console
-    task.map(println(_)).runAsync(_ => ())
+    task.runAsync(println(_)
+    
+    transport.shutdown.run
   }
 }
 
