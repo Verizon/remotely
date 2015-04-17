@@ -136,19 +136,17 @@ object NettyServer {
       logger.negotiating(Some(addr), s"about to bind", None)
       val channel = b.bind(addr)
       logger.negotiating(Some(addr), s"bound", None)
-      Task.delay {
-        Task.async[Unit] { cb =>
-          val _ = channel.addListener(new ChannelFutureListener {
-                                        override def operationComplete(cf: ChannelFuture): Unit = {
-                                          server.shutdown()
-                                          if(cf.isSuccess) {
-                                            cf.channel.close().awaitUninterruptibly()
-                                          }
-                                          cb(\/.right(()))
+      Task.async[Unit] { cb =>
+        val _ = channel.addListener(new ChannelFutureListener {
+                                      override def operationComplete(cf: ChannelFuture): Unit = {
+                                        server.shutdown()
+                                        if(cf.isSuccess) {
+                                          cf.channel.close().awaitUninterruptibly()
                                         }
-                                      })
-        }
-      }.flatMap(identity)
+                                        cb(\/.right(()))
+                                      }
+                                    })
+      }
     }
   }
 }
