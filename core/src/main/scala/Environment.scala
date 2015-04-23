@@ -73,7 +73,7 @@ case class Environment(codecs: Codecs, values: Values) {
     * @param addr the address to bind to
     * @param strategy the strategy used for processing incoming requests
     * @param numBossThreads number of boss threads to create. These are
-    * threads which accept incomming connection requests and assign
+    * threads which accept incoming connection requests and assign
     * connections to a worker. If unspecified, the default of 2 will be used
     * @param numWorkerThreads number of worker threads to create. If 
     * unspecified the default of 2 * number of cores will be used
