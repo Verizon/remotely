@@ -39,6 +39,11 @@ package object remotely {
   */
   type Handler = Process[Task,BitVector] => Process[Task,BitVector]
 
+  def evaluateStream[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Process[Task, A]]): Response[A] = {
+    // TODO: Factor out common code with evalute
+    ???
+  }
+
   /**
    * Evaluate the given remote expression at the
    * specified endpoint, and get back the result.
@@ -87,6 +92,7 @@ package object remotely {
         )
       } yield result
     }
+    ???
   }}}
 
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)

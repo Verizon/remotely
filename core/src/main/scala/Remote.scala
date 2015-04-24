@@ -25,6 +25,7 @@ import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
 import scodec.bits.BitVector
 import shapeless._
+import scalaz.stream.Process
 
 /**
  * Represents a remote computation which yields a
@@ -60,6 +61,12 @@ object Remote {
   def response[A:Encoder:TypeTag](a: Response[A]): Remote[A] =
     Remote.Async(a, Encoder[A], Remote.toTag[A])
 
+  implicit class RunSyntaxForStreaming[A](self: Remote[Process[Task,A]]) {
+    /** Call `self.run(at, M).apply(ctx)` to get back a `Task[A]`. */
+    def runWithContext(at: Endpoint, ctx: Response.Context, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Process[Task,A] =
+      evaluateStream(at,M)(self).apply(ctx)
+  }
+
   /** Provides the syntax `expr.run(endpoint)`, where `endpoint: Endpoint`. */
   implicit class RunSyntax[A](self: Remote[A]) {
     /**
@@ -71,7 +78,8 @@ object Remote {
 
     /** Call `self.run(at, M).apply(ctx)` to get back a `Task[A]`. */
     def runWithContext(at: Endpoint, ctx: Response.Context, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
-      run(at, M).apply(ctx)
+      // We can call get here because we know there is one element (unless there is a bug in Remotely)
+      run(at, M).apply(ctx).runLast.map(_.get)
 
     /** Run this with an empty context */
     def runWithoutContext(at: Endpoint)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
@@ -80,6 +88,14 @@ object Remote {
   implicit class Ap1Syntax[A,B](self: Remote[A => B]) {
     def apply(a: Remote[A]): Remote[B] =
       Remote.Ap1(self, a)
+  }
+  // By declaring this as opposed to an implicit conversion from Stream to a Remote Stream
+  // we are limiting the use of streaming to functions with a single argument
+  // That is because for now, I am not too clear on the desired semantics for a function that takes
+  // multiple Streams as arguments.
+  implicit class ApStream1Syntax[A:Encoder:TypeTag,B](self: Remote[Process[Task,A] => B]) {
+    def apply(stream: Process[Task,A]): Remote[B] =
+      Remote.Ap1(self, LocalStream(stream, Some(Encoder[A]), Remote.toTag[A]))
   }
   implicit class Ap2Syntax[A,B,C](self: Remote[(A,B) => C]) {
     def apply(a: Remote[A], b: Remote[B]): Remote[C] =
@@ -103,6 +119,13 @@ object Remote {
     override def toString = a.toString
   }
 
+  private[remotely] case class LocalStream[A](
+    stream: Process[Task,A],
+    format: Option[Encoder[A]],
+    tag: String
+  ) extends Remote[Process[Task,A]] {
+    override def toString = stream.toString
+  }
 
   /** Promote an asynchronous task to a remote value. */
   private[remotely] case class Async[A](

@@ -23,52 +23,52 @@ import scalaz.{Applicative,Catchable,Functor,Monad,Nondeterminism}
 import scalaz.concurrent.Task
 import scalaz.\/
 import scalaz.\/.{left,right}
+import scalaz.stream.Process
 
 import Response.Context
 
 /** The result type for a remote computation. */
 sealed trait Response[+A] {
-  def apply(c: Context): Task[A]
+  def apply(c: Context): Process[Task,A]
 
   def flatMap[B](f: A => Response[B]): Response[B] =
-    Response { ctx => Task.suspend { this(ctx).flatMap(f andThen (_(ctx))) }}
+    Response { ctx => this(ctx).flatMap(f andThen (_(ctx))) }
 
   def map[B](f: A => B): Response[B] =
-    Response { ctx => Task.suspend { this(ctx) map f }}
+    Response { ctx => this(ctx) map f }
 
   def attempt: Response[Throwable \/ A] =
-    Response { ctx => Task.suspend { this(ctx).attempt }}
+    Response { ctx => this(ctx).attempt() }
 
   /** Modify the asychronous result of this `Response`. */
-  def edit[B](f: Task[A] => Task[B]): Response[B] =
-    Response { ctx => Task.suspend { f(this.apply(ctx))} }
+  def edit[B](f: Process[Task,A] => Process[Task,B]): Response[B] =
+    Response { ctx => f(this.apply(ctx)) }
 }
 
 object Response {
 
   /** Create a `Response[A]` from a `Context => Task[A]`. */
-  def apply[A](f: Context => Task[A]): Response[A] = new Response[A] {
-    def apply(c: Context): Task[A] = f(c)
+  def apply[A](f: Context => Process[Task,A]): Response[A] = new Response[A] {
+    def apply(c: Context): Process[Task,A] = f(c)
   }
 
   /** Monad instance for `Response`. */
   implicit val responseInstance = new Monad[Response] with Catchable[Response] with Nondeterminism[Response] {
     def point[A](a: => A): Response[A] = {
       lazy val result = a // memoized - `point` should not be used for side effects
-      Response(_ => Task.now(a))
+      Response(_ => Process.emit(a))
     }
     def bind[A,B](a: Response[A])(f: A => Response[B]): Response[B] =
-      Response { ctx => Task.suspend { a(ctx).flatMap(f andThen (_(ctx))) }}
+      Response { ctx => a(ctx).flatMap(f andThen (_(ctx))) }
     def attempt[A](a: Response[A]): Response[Throwable \/ A] = a.attempt
     def fail[A](err: Throwable): Response[A] = Response.fail(err)
 
     def chooseAny[A](head: Response[A], tail: Seq[Response[A]]): Response[(A, Seq[Response[A]])] =
-      Response { ctx => Nondeterminism[Task].chooseAny(head(ctx), tail.map(_(ctx))).map {
-        case (a, rem) => (a, rem.map(Response.async(_))) }
+      Response { ctx => ???
       }
 
     override def gatherUnordered[A](rs: Seq[Response[A]]): Response[List[A]] = Response { ctx =>
-      Task.suspend { Nondeterminism[Task].gatherUnordered(rs.map(_(ctx))) }
+      ???
     }
   }
 
@@ -85,30 +85,32 @@ object Response {
   }
 
   /** Fail with the given `Throwable`. */
-  def fail(err: Throwable): Response[Nothing] = Response { _ => Task.fail(err) }
+  def fail(err: Throwable): Response[Nothing] = Response { _ => Process.eval(Task.fail(err)) }
 
   /** Produce a `Response[A]` from a strict value. */
-  def now[A](a: A): Response[A] = Response { _ => Task.now(a) }
+  def now[A](a: A): Response[A] = Response { _ => Process.emit(a) }
+
+  def stream[A](stream: Process[Task, A]) = Response { _ => stream }
 
   /**
    * Produce a `Response[A]` from a nonstrict value, whose result
    * will not be cached if this `Response` is used more than once.
    */
-  def delay[A](a: => A): Response[A] = Response { _ => Task.delay(a) }
+  def delay[A](a: => A): Response[A] = Response { _ => Process.emit(a) }
 
   /** Produce a `Response` nonstrictly. Do not cache the produced `Response`. */
   def suspend[A](a: => Response[A]): Response[A] =
-    Response { ctx => Task.suspend { a(ctx) } }
+    Response { ctx =>  a(ctx) }
 
   /** Obtain the current `Context`. */
-  def ask: Response[Context] = Response { ctx => Task.now(ctx) }
+  def ask: Response[Context] = Response { ctx => Process.emit(ctx) }
 
   /** Obtain a portion of the current `Context`. */
-  def asks[A](f: Context => A): Response[A] = Response { ctx => Task.delay(f(ctx)) }
+  def asks[A](f: Context => A): Response[A] = Response { ctx => Process.emit(f(ctx)) }
 
   /** Apply the given function to the `Context` before passing it to `a`. */
   def local[A](f: Context => Context)(a: Response[A]): Response[A] =
-    Response { ctx => Task.suspend { a(f(ctx)) }}
+    Response { ctx => a(f(ctx)) }
 
   /** Apply the given effectful function to the `Context` before passing it to `a`. */
   def localF[A](f: Response[Context])(a: Response[A]): Response[A] =
@@ -123,10 +125,10 @@ object Response {
    * asynchronous function, `register`.
    */
   def async[A](register: ((Throwable \/ A) => Unit) => Unit): Response[A] =
-    Response { _ => Task.async { register }}
+    Response { _ => Process.eval(Task.async { register })}
 
   /** Create a `Response[A]` from a `Task[A]`. */
-  def async[A](a: Task[A]): Response[A] = Response { _ => a }
+  def async[A](a: Task[A]): Response[A] = Response { _ => Process.eval(a) }
 
   /** Alias for [[remotely.Response.fromFuture]]. */
   def async[A](f: scala.concurrent.Future[A])(implicit E: scala.concurrent.ExecutionContext): Response[A] =
