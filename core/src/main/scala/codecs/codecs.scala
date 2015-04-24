@@ -124,14 +124,10 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
 
   def remoteEncode[A](r: Remote[A]): Err \/ BitVector =
     r match {
-      case Local(a,e,t) => C.uint8.encode(0) <+> // tag byte
-        utf8.encode(t) <+>
-        e.asInstanceOf[Option[Encoder[A]]].map(_.encode(a))
-          .getOrElse(left(Err("cannot encode Local value with undefined encoder")))
+      case l: Local[A] => C.uint8.encode(0) <+> localRemoteEncoder.encode(l)
       case Async(a,e,t) =>
         left(Err("cannot encode Async constructor; call Remote.localize first"))
-      case Ref(t) => C.uint8.encode(1) <+>
-        utf8.encode(t)
+      case r: Ref[A] => C.uint8.encode(1) <+> refCodec.encode(r)
       case Ap1(f,a) => C.uint8.encode(2) <+>
         remoteEncode(f) <+> remoteEncode(a)
       case Ap2(f,a,b) => C.uint8.encode(3) <+>
@@ -144,6 +140,20 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
 
   private val E = Monad[Decoder]
 
+  def localRemoteEncoder[A] = new Encoder[Local[A]] {
+    def encode(a: Local[A]): Err \/ BitVector =
+      a.format.map(encoder => utf8.encode(a.tag) <+> encoder.encode(a.a))
+        .getOrElse(left(Err("cannot encode Local value with undefined encoder")))
+  }
+
+  def localRemoteDecoder(env: Codecs): Decoder[Local[Any]] =
+    utf8.flatMap( formatType =>
+      env.codecs.get(formatType).map{ codec => codec.map { a => Local(a,None,formatType) } }
+        .getOrElse(fail(Err(s"[decoding] unknown format type: $formatType")))
+    )
+
+  def refCodec[A]: Codec[Ref[A]] = utf8.as[Ref[A]]
+
   /**
    * A `Remote[Any]` decoder. If a `Local` value refers
    * to a decoder that is not found in `env`, decoding fails
@@ -152,15 +162,8 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
   def remoteDecoder(env: Codecs): Decoder[Remote[Any]] = {
     def go = remoteDecoder(env)
     C.uint8.flatMap {
-      case 0 =>
-        utf8.flatMap { fmt =>
-                    env.codecs.get(fmt) match {
-                      case None => fail(Err(s"[decoding] unknown format type: $fmt"))
-                      case Some(dec) => dec.map { a => Local(a,None,fmt) }
-                    }
-                  }
-      case 1 =>
-        utf8.map(Ref.apply)
+      case 0 => localRemoteDecoder(env)
+      case 1 => refCodec
       case 2 => E.apply2(go,go)((f,a) =>
                   Ap1(f.asInstanceOf[Remote[Any => Any]],a))
       case 3 => E.apply3(go,go,go)((f,a,b) =>
