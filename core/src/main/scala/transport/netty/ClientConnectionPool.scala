@@ -158,7 +158,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
                              })
           run.runAsync {
             case -\/(e) => M.negotiating(Some(addr), "error processing description", Some(e))
-            case \/-(_) => M.negotiating(Some(addr), "finmshed processing response", None)
+            case \/-(_) => M.negotiating(Some(addr), "finished processing response", None)
           }
       }
     }
