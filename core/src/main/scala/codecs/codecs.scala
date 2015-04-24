@@ -230,22 +230,6 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
     new Decoder[A] { def decode(bits: BitVector) = left(msg) }.asInstanceOf[Decoder[A]]
 
   def succeed[A](a: A): Decoder[A] = C.provide(a)
-
-  def decodeTask[A:Decoder](bits: BitVector): Task[A] =
-    liftDecode(Decoder[A].decode(bits))
-
-  def liftEncode(result: Err \/ BitVector): Task[BitVector] =
-    result.fold(
-      e => Task.fail(new EncodingFailure(e)),
-      bits => Task.now(bits)
-    )
-  def liftDecode[A](result: Err \/ (BitVector,A)): Task[A] =
-    result.fold(
-      e => Task.fail(new DecodingFailure(e)),
-      { case (trailing,a) =>
-        if (trailing.isEmpty) Task.now(a)
-        else Task.fail(new DecodingFailure(Err("trailing bits: " + trailing))) }
-    )
 }
 
 trait TupleHelpers {
