@@ -70,7 +70,7 @@ package object remotely {
           bytes
         }
         resp <- {
-          reportErrors(start) { codecs.responseDecoder[A].complete.decodeValue(respBytes).toTask }
+          reportErrors(start) { codecs.responseDecoder[A].complete.decode(respBytes).map(_.value).toTask }
         }
         result <- resp.fold(
           { e =>

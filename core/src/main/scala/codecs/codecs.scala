@@ -133,7 +133,7 @@ package object codecs extends lowerprioritycodecs {
     r match {
       case l: Local[A] => C.uint8.encode(0) <+> localRemoteEncoder.encode(l)
       case Async(a,e,t) =>
-        left(Err("cannot encode Async constructor; call Remote.localize first"))
+        Attempt.failure(Err("cannot encode Async constructor; call Remote.localize first"))
       case r: Ref[A] => C.uint8.encode(1) <+> refCodec.encode(r)
       case Ap1(f,a) => C.uint8.encode(2) <+>
         remoteEncode(f) <+> remoteEncode(a)
@@ -148,9 +148,10 @@ package object codecs extends lowerprioritycodecs {
   private val E = Monad[Decoder]
 
   def localRemoteEncoder[A] = new Encoder[Local[A]] {
-    def encode(a: Local[A]): Err \/ BitVector =
+    def encode(a: Local[A]): Attempt[BitVector] =
       a.format.map(encoder => utf8.encode(a.tag) <+> encoder.encode(a.a))
-        .getOrElse(left(Err("cannot encode Local value with undefined encoder")))
+        .getOrElse(Attempt.failure(Err("cannot encode Local value with undefined encoder")))
+    def sizeBound = SizeBound.unknown
   }
 
   def localRemoteDecoder(env: Codecs): Decoder[Local[Any]] =
@@ -199,7 +200,7 @@ package object codecs extends lowerprioritycodecs {
    *
    * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
    */
-  def encodeRequest[A:TypeTag](a: Remote[A], ctx: Context): Err \/ BitVector =
+  def encodeRequest[A:TypeTag](a: Remote[A], ctx: Context): Attempt[BitVector] =
     Codec[String].encode(Remote.toTag[A]) <+>
     Encoder[Response.Context].encode(ctx) <+>
     sortedSet[String].encode(formats(a))  <+>
