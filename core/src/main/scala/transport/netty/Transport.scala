@@ -91,7 +91,7 @@ import scodec.bits.BitVector
 
 /**
   * set of messages passed in and out of the FrameEncoder/FrameDecoder
-  * probably unecessary, I'm probably just trying to sweep an
+  * probably unnecessary, I'm probably just trying to sweep an
   * isInstanceOf test under the compiler
   */
 sealed trait Framed

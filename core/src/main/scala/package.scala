@@ -19,16 +19,13 @@
 package object remotely {
   import scala.concurrent.duration._
   import scala.reflect.runtime.universe.TypeTag
-  import scalaz.stream.{Process,Process1, Cause}
-  import Cause.End
-  import Process.Halt
+  import scalaz.stream.Process
   import scalaz.concurrent.Task
   import scalaz.\/.{left,right}
   import scalaz.Monoid
   import scodec.bits.{BitVector,ByteVector}
   import scodec.Decoder
-  import scalaz.std.anyVal._
-  import scalaz.std.tuple._
+  import utils._
 
 /**
   * Represents the logic of a connection handler, a function
@@ -66,14 +63,14 @@ package object remotely {
     Task.delay { System.nanoTime } flatMap { start =>
       for {
         conn <- e.get
-        reqBits <- codecs.encodeRequest(r).apply(ctx)
+        reqBits <- codecs.encodeRequest(r, ctx).toTask
         respBytes <- reportErrors(start) {
           val reqBytestream = Process.emit(reqBits)
           val bytes = fullyRead(conn(reqBytestream))
           bytes
         }
         resp <- {
-          reportErrors(start) { codecs.liftDecode(codecs.responseDecoder[A].decode(respBytes/*._1*/)) }
+          reportErrors(start) { codecs.responseDecoder[A].complete.decodeValue(respBytes).toTask }
         }
         result <- resp.fold(
           { e =>

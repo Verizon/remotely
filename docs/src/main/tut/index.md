@@ -89,7 +89,7 @@ The structure breaks down like this:
 Once you have the layout configured, using remotely is just like using any other library within SBT; simply add the dependency to your `rpc-protocol` module:
 
 ```
-libraryDependencies += "oncue.svc.remotely" %% "core" % "x.x.+"
+libraryDependencies += "oncue" %% "remotely-core" % "x.x.+"
 
 ```
 
@@ -221,16 +221,18 @@ object Main {
 
     val address  = new InetSocketAddress("localhost", 8080)
 
-    val transport = NettyTransport.single(address)
+    val transport = NettyTransport.single(address).run
 
-    val endpoint = Endpoint.single(transport).run
+    val endpoint = Endpoint.single(transport)
 
-    val f: Remote[Int] = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
+    val f: Remote[Int] = FactorialClient.factorial(8)
 
 	val task: Task[Int] = f.runWithoutContext(endpoint)
 
     // then at the edge of the world, run it and print to the console
-    task.map(println(_)).runAsync(_ => ())
+    task.runAsync(println(_)
+    
+    transport.shutdown.run
   }
 }
 

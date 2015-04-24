@@ -17,6 +17,8 @@
 
 package remotely
 
+import remotely.Response.Context
+
 import scala.collection.immutable.{IndexedSeq,Set,SortedMap,SortedSet}
 import scala.math.Ordering
 import scala.reflect.runtime.universe.TypeTag
@@ -129,14 +131,10 @@ package object codecs extends lowerprioritycodecs {
 
   def remoteEncode[A](r: Remote[A]): Attempt[BitVector] =
     r match {
-      case Local(a,e,t) => C.uint8.encode(0) <+> // tag byte
-        utf8.encode(t) <+>
-        e.asInstanceOf[Option[Encoder[A]]].map(_.encode(a))
-          .getOrElse(Attempt.failure(Err("cannot encode Local value with undefined encoder")))
+      case l: Local[A] => C.uint8.encode(0) <+> localRemoteEncoder.encode(l)
       case Async(a,e,t) =>
-        Attempt.failure(Err("cannot encode Async constructor; call Remote.localize first"))
-      case Ref(t) => C.uint8.encode(1) <+>
-        utf8.encode(t)
+        left(Err("cannot encode Async constructor; call Remote.localize first"))
+      case r: Ref[A] => C.uint8.encode(1) <+> refCodec.encode(r)
       case Ap1(f,a) => C.uint8.encode(2) <+>
         remoteEncode(f) <+> remoteEncode(a)
       case Ap2(f,a,b) => C.uint8.encode(3) <+>
@@ -149,6 +147,20 @@ package object codecs extends lowerprioritycodecs {
 
   private val E = Monad[Decoder]
 
+  def localRemoteEncoder[A] = new Encoder[Local[A]] {
+    def encode(a: Local[A]): Err \/ BitVector =
+      a.format.map(encoder => utf8.encode(a.tag) <+> encoder.encode(a.a))
+        .getOrElse(left(Err("cannot encode Local value with undefined encoder")))
+  }
+
+  def localRemoteDecoder(env: Codecs): Decoder[Local[Any]] =
+    utf8.flatMap( formatType =>
+      env.codecs.get(formatType).map{ codec => codec.map { a => Local(a,None,formatType) } }
+        .getOrElse(fail(Err(s"[decoding] unknown format type: $formatType")))
+    )
+
+  def refCodec[A]: Codec[Ref[A]] = utf8.as[Ref[A]]
+
   /**
    * A `Remote[Any]` decoder. If a `Local` value refers
    * to a decoder that is not found in `env`, decoding fails
@@ -157,15 +169,8 @@ package object codecs extends lowerprioritycodecs {
   def remoteDecoder(env: Codecs): Decoder[Remote[Any]] = {
     def go = remoteDecoder(env)
     C.uint8.flatMap {
-      case 0 =>
-        utf8.flatMap { fmt =>
-                    env.codecs.get(fmt) match {
-                      case None => fail(Err(s"[decoding] unknown format type: $fmt"))
-                      case Some(dec) => dec.map { a => Local(a,None,fmt) }
-                    }
-                  }
-      case 1 =>
-        utf8.map(Ref.apply)
+      case 0 => localRemoteDecoder(env)
+      case 1 => refCodec
       case 2 => E.apply2(go,go)((f,a) =>
                   Ap1(f.asInstanceOf[Remote[Any => Any]],a))
       case 3 => E.apply3(go,go,go)((f,a,b) =>
@@ -194,15 +199,11 @@ package object codecs extends lowerprioritycodecs {
    *
    * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
    */
-  def encodeRequest[A:TypeTag](a: Remote[A]): Response[BitVector] = Response { ctx =>
+  def encodeRequest[A:TypeTag](a: Remote[A], ctx: Context): Err \/ BitVector =
     Codec[String].encode(Remote.toTag[A]) <+>
     Encoder[Response.Context].encode(ctx) <+>
     sortedSet[String].encode(formats(a))  <+>
-    remoteEncode(a) fold (
-      err => Task.fail(new EncodingFailure(err)),
-      bits => Task.now(bits)
-    )
-  }
+    remoteEncode(a)
 
   def requestDecoder(env: Environment): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
     for {
@@ -242,21 +243,4 @@ package object codecs extends lowerprioritycodecs {
     }.asInstanceOf[Decoder[A]]
   
   def succeed[A](a: A): Decoder[A] = C.provide(a)
-
-  def decodeTask[A](bits: BitVector)(implicit LDA: Lazy[Decoder[A]]): Task[A] =
-    liftDecode(Decoder[A].decode(bits))
-  
-  def liftEncode(result: Err \/ BitVector): Task[BitVector] =
-    result.fold(
-      e => Task.fail(new EncodingFailure(e)),
-      bits => Task.now(bits)
-    )
-  def liftDecode[A](result: Attempt[DecodeResult[A]]): Task[A] =
-    result.fold(
-      e => Task.fail(new DecodingFailure(e)),
-      { case DecodeResult(a, bv) =>
-        if (bv.isEmpty) Task.now(a)
-        else Task.fail(new DecodingFailure(Err("trailing bits: " + bv))) 
-      }
-    )
 }

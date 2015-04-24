@@ -109,10 +109,10 @@ object NettyServer {
     * @param addr the address to bind to
     * @param handler the request handler
     * @param strategy the strategy used for processing incoming requests
-    * @param numBossThreads number of boss threads to create. These are
-    * threads which accept incomming connection requests and assign
+    * @param bossThreads number of boss threads to create. These are
+    * threads which accept incoming connection requests and assign
     * connections to a worker. If unspecified, the default of 2 will be used
-    * @param numWorkerThreads number of worker threads to create. If 
+    * @param workerThreads number of worker threads to create. If
     * unspecified the default of 2 * number of cores will be used
     * @param capabilities, the capabilities which will be sent to the client upon connection
     */
@@ -136,19 +136,17 @@ object NettyServer {
       logger.negotiating(Some(addr), s"about to bind", None)
       val channel = b.bind(addr)
       logger.negotiating(Some(addr), s"bound", None)
-      Task.delay {
-        Task.async[Unit] { cb =>
-          val _ = channel.addListener(new ChannelFutureListener {
-                                        override def operationComplete(cf: ChannelFuture): Unit = {
-                                          server.shutdown()
-                                          if(cf.isSuccess) {
-                                            cf.channel.close().awaitUninterruptibly()
-                                          }
-                                          cb(\/.right(()))
+      Task.async[Unit] { cb =>
+        val _ = channel.addListener(new ChannelFutureListener {
+                                      override def operationComplete(cf: ChannelFuture): Unit = {
+                                        server.shutdown()
+                                        if(cf.isSuccess) {
+                                          cf.channel.close().awaitUninterruptibly()
                                         }
-                                      })
-        }
-      }.flatMap(identity)
+                                        cb(\/.right(()))
+                                      }
+                                    })
+      }
     }
   }
 }
