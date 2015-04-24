@@ -31,14 +31,13 @@ import io.netty.channel.{Channel, ChannelFuture, ChannelFutureListener,ChannelHa
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.{Delimiters,DelimiterBasedFrameDecoder}
 import io.netty.handler.ssl.SslContext
+import remotely.utils._
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.{-\/,\/,\/-}
 import scodec.Err
 import scodec.bits.BitVector
 import io.netty.buffer.ByteBuf
-import java.io.File
-import java.nio.charset.Charset
 
 object NettyConnectionPool {
   def default(hosts: Process[Task,InetSocketAddress],
@@ -145,21 +144,21 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
           bits = bits ++ bv
         case EOS =>
           M.negotiating(Some(addr), "got end of description response", None)
-          val run: Task[Unit] = for {
-            resp <- codecs.liftDecode(codecs.responseDecoder[List[Signature]](codecs.list(Signature.signatureCodec)).decode(bits))
+          val signatureDecoding: Err \/ Unit = for {
+            resp <- codecs.responseDecoder[List[Signature]](codecs.list(Signature.signatureCodec)).complete.decodeValue(bits)
           }  yield resp.fold(e => fail(s"error processing description response: $e"),
                              serverSigs => {
-                               val missing = (expectedSigs -- serverSigs)
+                               val missing = expectedSigs -- serverSigs
                                if(missing.isEmpty) {
                                  success()
                                } else {
                                  fail(s"server is missing required signatures: ${missing.map(_.tag)}}")
                                }
                              })
-          run.runAsync {
-            case -\/(e) => M.negotiating(Some(addr), "error processing description", Some(e))
-            case \/-(_) => M.negotiating(Some(addr), "finished processing response", None)
-          }
+          signatureDecoding fold (
+            e => M.negotiating(Some(addr), "error processing description", Some(e)),
+            _ => M.negotiating(Some(addr), "finished processing response", None)
+          )
       }
     }
 
