@@ -63,7 +63,7 @@ package object remotely {
     Task.delay { System.nanoTime } flatMap { start =>
       for {
         conn <- e.get
-        reqBits <- codecs.encodeRequest(r).apply(ctx)
+        reqBits <- codecs.encodeRequest(r, ctx).toTask
         respBytes <- reportErrors(start) {
           val reqBytestream = Process.emit(reqBits)
           val bytes = fullyRead(conn(reqBytestream))
