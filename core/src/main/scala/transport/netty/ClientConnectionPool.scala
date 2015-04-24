@@ -130,7 +130,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       fail(ee.getMessage)
     }
 
-    // negotiation succeeded, fulfil the callback positively, and
+    // negotiation succeeded, fulfill the callback positively, and
     // remove ourselves from the pipeline
     private[this] def success(): Unit = {
       val pipe = channel.pipeline()
