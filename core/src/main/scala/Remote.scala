@@ -39,6 +39,15 @@ sealed trait Remote[+A] {
   def pretty: String = "Remote {\n  " +
     Remote.refs(this).mkString("\n  ") + "\n  " +
     toString + "\n}"
+
+  def collect[B](partial: PartialFunction[Remote[Any],B]): List[B] = {
+    val me = partial.lift(this).toList
+    val rest = this match {
+      case app: Remote.Ap[_] => (app.f :: app.args).map(_.collect(partial)).flatten
+      case _ => Nil
+    }
+    me ++ rest
+  }
 }
 
 object Remote {
@@ -143,37 +152,33 @@ object Remote {
     override def toString = name.takeWhile(_ != ':')
   }
 
+  private[remotely] abstract class Ap[A](val f: Remote[Any],val args: List[Remote[Any]]) extends Remote[A] {
+    override def toString = s"""$f({$args.mkString(","})"""
+  }
+
   // we require a separate constructor for each function
   // arity, since remote invocations must be fully saturated
   private[remotely] case class Ap1[A,B](
     f: Remote[A => B],
-    a: Remote[A]) extends Remote[B] {
-    override def toString = s"$f($a)"
-  }
+    a: Remote[A]) extends Ap[B](f,List(a))
 
   private[remotely] case class Ap2[A,B,C](
     f: Remote[(A,B) => C],
     a: Remote[A],
-    b: Remote[B]) extends Remote[C] {
-    override def toString = s"$f($a, $b)"
-  }
+    b: Remote[B]) extends Ap[C](f,List(a,b))
 
   private[remotely] case class Ap3[A,B,C,D](
     f: Remote[(A,B,C) => D],
     a: Remote[A],
     b: Remote[B],
-    c: Remote[C]) extends Remote[D] {
-    override def toString = s"$f($a, $b, $c)"
-  }
+    c: Remote[C]) extends Ap[D](f,List(a,b,c))
 
   private[remotely] case class Ap4[A,B,C,D,E](
     f: Remote[(A,B,C,D) => E],
     a: Remote[A],
     b: Remote[B],
     c: Remote[C],
-    d: Remote[D]) extends Remote[E] {
-    override def toString = s"$f($a, $b, $c, $d)"
-  }
+    d: Remote[D]) extends Ap[E](f,List(a,b,c,d))
 
   /**
    * Precursor to serializing a remote computation
@@ -192,28 +197,20 @@ object Remote {
   }
 
   /** Collect up all the `Ref` names referenced by `r`. */
-  def refs[A](r: Remote[A]): SortedSet[String] = r match {
-    case Local(a,e,t) => SortedSet.empty
+  def refs[A](r: Remote[A]): SortedSet[String] = (r collect {
+    case Local(a,e,t) => SortedSet.empty[String]
     case Async(a,e,t) => sys.error(
       "cannot encode Async constructor; call Remote.localize first")
     case Ref(t) => SortedSet(t)
-    case Ap1(f,a) => refs(f).union(refs(a))
-    case Ap2(f,a,b) => refs(f).union(refs(b)).union(refs(b))
-    case Ap3(f,a,b,c) => refs(f).union(refs(b)).union(refs(b)).union(refs(c))
-    case Ap4(f,a,b,c,d) => refs(f).union(refs(b)).union(refs(b)).union(refs(c)).union(refs(d))
-  }
+  }).reduce(_.union(_))
 
   /** Collect up all the formats referenced by `r`. */
-  def formats[A](r: Remote[A]): SortedSet[String] = r match {
+  def formats[A](r: Remote[A]): SortedSet[String] = r.collect {
     case Local(a,e,t) => SortedSet(t)
     case Async(a,e,t) => sys.error(
       "cannot encode Async constructor; call Remote.localize first")
-    case Ref(t) => SortedSet.empty
-    case Ap1(f,a) => formats(f).union(formats(a))
-    case Ap2(f,a,b) => formats(f).union(formats(b)).union(formats(b))
-    case Ap3(f,a,b,c) => formats(f).union(formats(b)).union(formats(b)).union(formats(c))
-    case Ap4(f,a,b,c,d) => formats(f).union(formats(b)).union(formats(b)).union(formats(c)).union(formats(d))
-  }
+    case Ref(t) => SortedSet.empty[String]
+  }.reduce(_.union(_))
 
   def toTag[A:TypeTag]: String = {
     val tt = typeTag[A]
