@@ -31,6 +31,9 @@ import scodec.bits.BitVector
 import Remote._
 import scodec.Err
 
+import scalaz.stream.Process
+import utils._
+
 private[remotely] trait lowerprioritycodecs {
 
   // Since `Codec[A]` extends `Encoder[A]`, which is contravariant in `A`,
@@ -138,6 +141,7 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c)
       case Ap4(f,a,b,c,d) => C.uint8.encode(5) <+>
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c) <+> remoteEncode(d)
+      case l: LocalStream[A] => C.uint8.encode(6) <+> localStreamRemoteEncoder.encode(l)
     }
 
   private val E = Monad[Decoder]
@@ -155,6 +159,25 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
     )
 
   def refCodec[A]: Codec[Ref[A]] = utf8.as[Ref[A]]
+
+  /**
+   * The LocalStream Encoder does not actually encode the stream which would be impossible
+   * given the signature of decode on an Encoder anyway. It just informs the server side that
+   * it will receive a stream after the transmission of the original request
+   */
+  def localStreamRemoteEncoder[A] = new Encoder[LocalStream[A]] {
+    def encode(a: LocalStream[A]): Err \/ BitVector =
+      a.format.map(encoder => utf8.encode(a.tag))
+        .getOrElse(left(Err("cannot encode Local value with undefined encoder")))
+  }
+
+  /**
+   * This function actually creates a stream of bits from a LocalStream to send to the
+   * server once the initial request has been sent in it's entirety.
+   */
+  def encodeLocalStream[A](l: Option[LocalStream[A]]): Process[Task,BitVector] =
+    l.map(l => l.format.map(encoder => l.stream.map(encoder.encode(_).toProcess))
+      .getOrElse(Process.fail(Err("cannot encode Local value with undefined encoder"))).flatten).getOrElse(Process.empty)
 
   /**
    * A `Remote[Any]` decoder. If a `Local` value refers
