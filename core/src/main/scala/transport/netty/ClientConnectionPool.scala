@@ -32,6 +32,7 @@ import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.{Delimiters,DelimiterBasedFrameDecoder}
 import io.netty.handler.ssl.SslContext
 import remotely.utils._
+import remotely.Response.Context
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.{-\/,\/,\/-}
@@ -129,7 +130,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       fail(ee.getMessage)
     }
 
-    // negiotiation succeeded, fulfil the callback positively, and
+    // negotiation succeeded, fulfill the callback positively, and
     // remove ourselves from the pipeline
     private[this] def success(): Unit = {
       val pipe = channel.pipeline()
@@ -175,7 +176,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       * description of server supported functions
       */
     private[this] val requestDescription: Task[Unit] = for {
-      bits <- codecs.encodeRequest(Remote.ref[List[Signature]]("describe")).apply(Response.Context.empty)
+      bits <- codecs.encodeRequest(Remote.ref[List[Signature]]("describe"), Context.empty).toTask
       _ <- NettyTransport.evalCF(channel.write(Bits(bits)))
       _ <- NettyTransport.evalCF(channel.writeAndFlush(EOS))
       _ = M.negotiating(Some(addr), "sending describe request", None)

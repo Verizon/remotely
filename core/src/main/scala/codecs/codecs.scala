@@ -17,6 +17,8 @@
 
 package remotely
 
+import remotely.Response.Context
+
 import scala.collection.immutable.{IndexedSeq,Set,SortedMap,SortedSet}
 import scala.math.Ordering
 import scala.reflect.runtime.universe.TypeTag
@@ -189,15 +191,11 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
    *
    * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
    */
-  def encodeRequest[A:TypeTag](a: Remote[A]): Response[BitVector] = Response { ctx =>
+  def encodeRequest[A:TypeTag](a: Remote[A], ctx: Context): Err \/ BitVector =
     Codec[String].encode(Remote.toTag[A]) <+>
     Encoder[Response.Context].encode(ctx) <+>
     sortedSet[String].encode(formats(a))  <+>
-    remoteEncode(a) fold (
-      err => Task.fail(new EncodingFailure(err)),
-      bits => Task.now(bits)
-    )
-  }
+    remoteEncode(a)
 
   def requestDecoder(env: Environment): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
     for {

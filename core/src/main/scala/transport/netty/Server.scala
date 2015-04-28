@@ -110,7 +110,7 @@ object NettyServer {
     * @param handler the request handler
     * @param strategy the strategy used for processing incoming requests
     * @param bossThreads number of boss threads to create. These are
-    * threads which accept incomming connection requests and assign
+    * threads which accept incoming connection requests and assign
     * connections to a worker. If unspecified, the default of 2 will be used
     * @param workerThreads number of worker threads to create. If
     * unspecified the default of 2 * number of cores will be used
