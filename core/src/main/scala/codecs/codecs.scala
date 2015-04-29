@@ -219,11 +219,11 @@ package object codecs extends lowerprioritycodecs {
           fail(Err(s"[decoding] server does not have deserializers for:\n$unknownMsg"))
         }
       }
-      responseDec <- env.codecs.get(responseTag) match {
+      responseEncoder <- env.codecs.get(responseTag) match {
         case None => fail(Err(s"[decoding] server does not have response serializer for: $responseTag"))
         case Some(a) => succeed(a)
       }
-    } yield (responseDec, ctx, r)
+    } yield (responseEncoder, ctx, r)
 
   def responseDecoder[A](implicit LDA: Lazy[Decoder[A]]): Decoder[String \/ A] = bool flatMap {
     case false => utf8.map(left)
