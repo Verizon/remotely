@@ -6,6 +6,8 @@ assemblySettings
 
 mergeSettings
 
+macrosSettings
+
 scalacOptions ++= Seq("-language:postfixOps", "-language:reflectiveCalls")
 
 publish := {}

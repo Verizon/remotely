@@ -129,12 +129,12 @@ package object codecs extends lowerprioritycodecs {
              catch { case e: IllegalArgumentException => fail(Err(s"[decoding] error decoding ID in tracing stack: ${e.getMessage}")) }
   } yield Response.Context(header, stack)
 
-  def remoteEncode[A](r: Remote[A]): Attempt[BitVector] =
+  def remoteEncode(r: Remote[Any]): Attempt[BitVector] =
     r match {
-      case l: Local[A] => C.uint8.encode(0) <+> localRemoteEncoder.encode(l)
+      case l: Local[_] => C.uint8.encode(0) <+> localRemoteEncoder.encode(l)
       case Async(a,e,t) =>
         Attempt.failure(Err("cannot encode Async constructor; call Remote.localize first"))
-      case r: Ref[A] => C.uint8.encode(1) <+> refCodec.encode(r)
+      case r: Ref[_] => C.uint8.encode(1) <+> refCodec.encode(r)
       case Ap1(f,a) => C.uint8.encode(2) <+>
         remoteEncode(f) <+> remoteEncode(a)
       case Ap2(f,a,b) => C.uint8.encode(3) <+>
@@ -211,7 +211,7 @@ package object codecs extends lowerprioritycodecs {
       responseTag <- utf8
       ctx <- Decoder[Response.Context]
       formatTags <- sortedSet[String]
-      responseDec <- env.codecs.get(responseTag) match {
+      responseEncoder <- env.codecs.get(responseTag) match {
         case None => fail(Err(s"[decoding] server does not have response serializer for: $responseTag"))
         case Some(a) => succeed(a)
       }
@@ -223,7 +223,7 @@ package object codecs extends lowerprioritycodecs {
           fail(Err(s"[decoding] server does not have deserializers for:\n$unknownMsg"))
         }
       }
-    } yield (responseDec, ctx, r)
+    } yield (responseEncoder, ctx, r)
 
   def responseDecoder[A](implicit LDA: Lazy[Decoder[A]]): Decoder[String \/ A] = bool flatMap {
     case false => utf8.map(left)
