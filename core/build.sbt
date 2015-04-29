@@ -3,6 +3,8 @@ import common._
 
 name := "remotely-core"
 
+resolvers += "Sonatype Public" at "https://oss.sonatype.org/content/groups/public/"
+
 resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
 
 scalacOptions ++= Seq(
@@ -17,7 +19,8 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.typelevel"      %% "scodec-core"   % "1.5.0",
+  "org.scodec"         %% "scodec-core"   % "1.7.0",
+  "org.scodec"         %% "scodec-scalaz" % "1.0.0",
   "org.scalaz"         %% "scalaz-core"   % "7.1.0",
   "org.scalaz.stream"  %% "scalaz-stream" % "0.7a",
   "org.apache.commons" % "commons-pool2"  % "2.2",

@@ -36,8 +36,9 @@ import remotely.Response.Context
 import scalaz.concurrent.Task
 import scalaz.stream.Process
 import scalaz.{-\/,\/,\/-}
-import scodec.Err
+import scodec.{Attempt, Err}
 import scodec.bits.BitVector
+import scodec.interop.scalaz._
 import io.netty.buffer.ByteBuf
 
 object NettyConnectionPool {
@@ -145,8 +146,8 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
           bits = bits ++ bv
         case EOS =>
           M.negotiating(Some(addr), "got end of description response", None)
-          val signatureDecoding: Err \/ Unit = for {
-            resp <- codecs.responseDecoder[List[Signature]](codecs.list(Signature.signatureCodec)).complete.decodeValue(bits)
+          val signatureDecoding: Attempt[Unit] = for {
+            resp <- codecs.responseDecoder[List[Signature]](codecs.list(Signature.signatureCodec)).complete.decode(bits).map(_.value)
           }  yield resp.fold(e => fail(s"error processing description response: $e"),
                              serverSigs => {
                                val missing = expectedSigs -- serverSigs
@@ -216,7 +217,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       buffer.readBytes(bytes)
       val str = new String(bytes, "UTF-8")
       M.negotiating(None, s"received capabilities string: $str", None)
-      val r = Capabilities.parseHelloString(str).bimap(
+      val r = Capabilities.parseHelloString(str).toDisjunction.bimap(
         (e: Err) => new IllegalArgumentException(e.message),
         (cap: Capabilities) => (cap,ctx.channel)
       )
