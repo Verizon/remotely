@@ -21,7 +21,7 @@ package examples
 import java.net.InetSocketAddress
 import remotely.transport.netty.NettyTransport
 import scalaz.concurrent.Task
-import codecs._
+import remotely.codecs._
 import scalaz.stream._
 import scodec.bits.ByteVector
 import scala.reflect.runtime.universe._
@@ -57,8 +57,6 @@ object Streaming {
   //val analyze = Remote.ref[ByteVector => Process[Task, String]]("analyze")
   val continuous = Remote.ref[Process[Task,Byte] => Process[Task, Byte]]("continuous")
 
-  import scodec.codecs._
-
   // And actual client code uses normal looking function calls
   val bytes = ByteVector(4,3,2,1)
   //val ar = upload(localToRemote(bytes)(scodec.codecs.bytes, implicitly[TypeTag[ByteVector]]))
@@ -80,7 +78,8 @@ object StreamingMain extends App {
   val transport = NettyTransport.single(addr).run
   val expr: Remote[Process[Task, Byte]] = download(10)
   val loc: Endpoint = Endpoint.single(transport)
-  val result: Process[Task, Byte] = expr.runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte)
+  val result: Process[Task, Byte] = expr
+    .runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte)
 
   val task = result.map(_.toString).to(io.stdOut).run
 
@@ -88,7 +87,8 @@ object StreamingMain extends App {
 
   //upload.stream(byteStream).runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
-  val continuousResult = continuous(localToRemote(byteStream)).runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
+  val continuousResult = continuous(byteStream)
+    .runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte)
 
   val task1 = continuousResult.map(_.toString).to(io.stdOut).run
 

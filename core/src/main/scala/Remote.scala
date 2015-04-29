@@ -62,6 +62,9 @@ object Remote {
   def local[A:Encoder:TypeTag](a: A): Remote[A] =
     Remote.Local(a, Some(Encoder[A]), Remote.toTag[A])
 
+  def localStream[A: Encoder:TypeTag](stream: Process[Task, A]): Remote[Process[Task,A]] =
+    Remote.LocalStream(stream, Some(Encoder[A]), Remote.toTag[A])
+
   /** Promote an asynchronous `Task` to a remote value. */
   def async[A:Encoder:TypeTag](a: Task[A]): Remote[A] =
     Remote.Async(Response.async(a), Encoder[A], Remote.toTag[A])
@@ -159,22 +162,22 @@ object Remote {
   // we require a separate constructor for each function
   // arity, since remote invocations must be fully saturated
   private[remotely] case class Ap1[A,B](
-    f: Remote[A => B],
+    override val f: Remote[A => B],
     a: Remote[A]) extends Ap[B](f,List(a))
 
   private[remotely] case class Ap2[A,B,C](
-    f: Remote[(A,B) => C],
+    override val f: Remote[(A,B) => C],
     a: Remote[A],
     b: Remote[B]) extends Ap[C](f,List(a,b))
 
   private[remotely] case class Ap3[A,B,C,D](
-    f: Remote[(A,B,C) => D],
+    override val f: Remote[(A,B,C) => D],
     a: Remote[A],
     b: Remote[B],
     c: Remote[C]) extends Ap[D](f,List(a,b,c))
 
   private[remotely] case class Ap4[A,B,C,D,E](
-    f: Remote[(A,B,C,D) => E],
+    override val f: Remote[(A,B,C,D) => E],
     a: Remote[A],
     b: Remote[B],
     c: Remote[C],
@@ -239,6 +242,8 @@ object Remote {
 
     /** Implicitly promote a local value to a `Remote[A]`. */
     implicit def localToRemote[A:Encoder:TypeTag](a: A): Remote[A] = local(a)
+
+    implicit def localStreamToRemote[A: Encoder:TypeTag](stream: Process[Task, A]): Remote[Process[Task,A]] = localStream(stream)
   }
 }
 

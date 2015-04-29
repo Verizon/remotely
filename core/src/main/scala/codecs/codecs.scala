@@ -51,6 +51,7 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
   implicit val double = C.double
   implicit val int32 = C.int32
   implicit val int64 = C.int64
+  implicit val byte = C.byte
   implicit val utf8 = C.variableSizeBytes(int32, C.utf8)
   implicit val bool = C.bool(8) // use a full byte
 
@@ -158,6 +159,9 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
         .getOrElse(fail(Err(s"[decoding] unknown format type: $formatType")))
     )
 
+  def localStreamRemoteDecoder: Decoder[LocalStream[Any]] =
+      utf8.map( tag => LocalStream(null, None, tag))
+
   def refCodec[A]: Codec[Ref[A]] = utf8.as[Ref[A]]
 
   /**
@@ -197,6 +201,7 @@ package object codecs extends lowerprioritycodecs with TupleHelpers {
                   Ap3(f.asInstanceOf[Remote[(Any,Any,Any) => Any]],a,b,c))
       case 5 => E.apply5(go,go,go,go,go)((f,a,b,c,d) =>
                   Ap4(f.asInstanceOf[Remote[(Any,Any,Any,Any) => Any]],a,b,c,d))
+      case 6 => localStreamRemoteDecoder
       case t => fail(Err(s"[decoding] unknown tag byte: $t"))
     }
   }
