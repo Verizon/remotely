@@ -111,7 +111,7 @@ package object remotely {
           }
           reportErrors(start) {
             respBits.map( bits =>
-              failOnServerSideErr(start)(codecs.responseDecoder[A].complete.decodeValue(bits).toProcess)
+              failOnServerSideErr(start)(codecs.responseDecoder[A].complete.decode(bits).map(_.value).toProcess)
             ).flatten
           }
       }

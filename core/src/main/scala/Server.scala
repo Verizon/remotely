@@ -19,14 +19,14 @@ package remotely
 
 import java.net.InetSocketAddress
 import scala.concurrent.duration._
-import scalaz.{\/,Monad}
+import scalaz.{\/-, \/, Monad}
 import scalaz.\/.{right,left}
 import scalaz.stream.{merge,nio,Process}
 import scalaz.concurrent.Task
 import remotely.Response.Context
 import scodec.bits.{BitVector,ByteVector}
 import scodec.{Attempt, DecodeResult, Encoder, Err}
-import scodec.Attempt.Successful
+import scodec.Attempt.{Failure, Successful}
 import scodec.interop.scalaz._
 import utils._
 
@@ -45,7 +45,7 @@ object Server {
       Process.await(request.head) { initialRequest =>
         // decode the request from the environment
         val (respEncoder, ctx, r) =
-          codecs.requestDecoder(env).complete.decodeValue(initialRequest)
+          codecs.requestDecoder(env).complete.decode(initialRequest).map(_.value)
             .fold(e => throw new Error(e.messageWithContext), identity)
         val expected = Remote.refs(r)
         val unknown = (expected -- env.values.keySet).toList
@@ -59,8 +59,8 @@ object Server {
             a =>
               val deltaNanos = System.nanoTime - startNanos
               val delta = Duration.fromNanos(deltaNanos)
-              val result = right(a)
-              monitoring.handled(ctx, r, expected, result, delta)
+              val result = Successful(a)
+              monitoring.handled(ctx, r, expected, \/-(a), delta)
               codecs.responseEncoder(respEncoder).encode(result).toProcess
           }.onFailure {
             // this is a little convoluted - we catch this exception just so
@@ -73,7 +73,7 @@ object Server {
           }
       }
     }.onFailure {
-      e => codecs.responseEncoder(codecs.utf8).encode(left(Err(formatThrowable(e)))).toProcess
+      e => codecs.responseEncoder(codecs.utf8).encode(Failure(Err(formatThrowable(e)))).toProcess
     }
   }
 

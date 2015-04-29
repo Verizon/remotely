@@ -31,5 +31,9 @@ package object utils {
       case Failure(err) => Task.fail(conv(err))
       case Successful(a) => Task.now(a)
     }
+    def toProcess(implicit conv: Err => Throwable): Process[Task,A] = a match {
+      case Failure(err) => Process.fail(conv(err))
+      case Successful(a) => Process.emit(a)
+    }
   }
 }

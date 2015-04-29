@@ -176,9 +176,9 @@ package object codecs extends lowerprioritycodecs {
    * it will receive a stream after the transmission of the original request
    */
   def localStreamRemoteEncoder[A] = new Encoder[LocalStream[A]] {
-    def encode(a: LocalStream[A]): Err \/ BitVector =
-      a.format.map(encoder => utf8.encode(a.tag))
-        .getOrElse(left(Err("cannot encode Local value with undefined encoder")))
+    val sizeBound = utf8.sizeBound
+    def encode(a: LocalStream[A]): Attempt[BitVector] =
+      utf8.encode(a.tag)
   }
 
   /**
