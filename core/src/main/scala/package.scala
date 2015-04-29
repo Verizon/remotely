@@ -74,7 +74,7 @@ package object remotely {
         }
         result <- resp.fold(
           { e =>
-            val ex = ServerException("error decoding response: " + e)
+            val ex = ServerException(e)
             val delta = System.nanoTime - start
             M.handled(ctx, r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
             Task.fail(ex)

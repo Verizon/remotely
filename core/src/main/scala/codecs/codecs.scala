@@ -211,17 +211,17 @@ package object codecs extends lowerprioritycodecs {
       responseTag <- utf8
       ctx <- Decoder[Response.Context]
       formatTags <- sortedSet[String]
+      responseDec <- env.codecs.get(responseTag) match {
+        case None => fail(Err(s"[decoding] server does not have response serializer for: $responseTag"))
+        case Some(a) => succeed(a)
+      }
       r <- {
-        val unknown = ((formatTags + responseTag) -- env.codecs.keySet).toList
+        val unknown = (formatTags -- env.codecs.keySet).toList
         if (unknown.isEmpty) remoteDecoder(env.codecs)
         else {
           val unknownMsg = unknown.mkString("\n")
           fail(Err(s"[decoding] server does not have deserializers for:\n$unknownMsg"))
         }
-      }
-      responseDec <- env.codecs.get(responseTag) match {
-        case None => fail(Err(s"[decoding] server does not have response serializer for: $responseTag"))
-        case Some(a) => succeed(a)
       }
     } yield (responseDec, ctx, r)
 
