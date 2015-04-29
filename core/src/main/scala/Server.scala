@@ -104,5 +104,5 @@ object Server {
   class Error(msg: String) extends Exception(msg)
 
   def formatThrowable(err: Throwable): String =
-    err.toString + "\n stack trace:\n" + err.getStackTrace.mkString("\n")
+    err.getMessage + "\n stack trace:\n" + err.getStackTrace.mkString("\n")
 }

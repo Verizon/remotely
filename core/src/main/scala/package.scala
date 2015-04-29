@@ -88,7 +88,7 @@ package object remotely {
         p.flatMap{
           case -\/(error:String) =>
             // TODO: Error decoding response??????!!!!!
-            val ex = ServerException("error decoding response: " + error)
+            val ex = ServerException(error)
             val delta = System.nanoTime - startNanos
             M.handled(ctx, r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
             Process.fail(ex)
