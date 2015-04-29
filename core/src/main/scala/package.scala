@@ -43,10 +43,17 @@ package object remotely {
   */
   type Handler = Process[Task,BitVector] => Process[Task,BitVector]
 
-  def evaluateStream[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Process[Task, A]]): Response[A] = {
-    // TODO: Factor out common code with evalute
-    ???
-  }
+  /**
+   * Evaluate the given remote stream at the
+   * specified endpoint, and get back the result.
+   * This function is completely pure - no network
+   * activity occurs until the returned `Response` is
+   * run.
+   *
+   * The `Monitoring` instance is notified of each request.
+   */
+  def evaluateStream[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Process[Task, A]]): Response[A] =
+    evaluateImpl(e,M)(r)
 
   /**
    * Evaluate the given remote expression at the
@@ -58,6 +65,13 @@ package object remotely {
    * The `Monitoring` instance is notified of each request.
    */
   def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
+    evaluateImpl(e,M)(r)
+
+  /**
+   * In the actual implementation, we don't really care what type of Remote we receive. In any case, it is
+   * going to become a stream of bits and produce wtv is the expected result is there are no errors.
+   */
+  def evaluateImpl[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Any]): Response[A] =
     Remote.localize(r).flatMap { r => Response.scope { Response { ctx => // push a fresh ID onto the call stack
       val refs = Remote.refs(r)
 
