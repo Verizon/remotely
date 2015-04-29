@@ -129,12 +129,12 @@ package object codecs extends lowerprioritycodecs {
              catch { case e: IllegalArgumentException => fail(Err(s"[decoding] error decoding ID in tracing stack: ${e.getMessage}")) }
   } yield Response.Context(header, stack)
 
-  def remoteEncode[A](r: Remote[A]): Attempt[BitVector] =
+  def remoteEncode(r: Remote[Any]): Attempt[BitVector] =
     r match {
-      case l: Local[A] => C.uint8.encode(0) <+> localRemoteEncoder.encode(l)
+      case l: Local[_] => C.uint8.encode(0) <+> localRemoteEncoder.encode(l)
       case Async(a,e,t) =>
         Attempt.failure(Err("cannot encode Async constructor; call Remote.localize first"))
-      case r: Ref[A] => C.uint8.encode(1) <+> refCodec.encode(r)
+      case r: Ref[_] => C.uint8.encode(1) <+> refCodec.encode(r)
       case Ap1(f,a) => C.uint8.encode(2) <+>
         remoteEncode(f) <+> remoteEncode(a)
       case Ap2(f,a,b) => C.uint8.encode(3) <+>
