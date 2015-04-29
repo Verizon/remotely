@@ -23,8 +23,11 @@ import scalaz.{\/,Monad}
 import scalaz.\/.{right,left}
 import scalaz.stream.{merge,nio,Process}
 import scalaz.concurrent.Task
+import remotely.Response.Context
 import scodec.bits.{BitVector,ByteVector}
-import scodec.{Encoder,Err}
+import scodec.{Attempt, DecodeResult, Encoder, Err}
+import scodec.Attempt.Successful
+import scodec.interop.scalaz._
 import utils._
 
 object Server {
@@ -95,10 +98,6 @@ object Server {
       case _ => Response.delay { sys.error("unable to interpret remote expression of form: " + r) }
     }
   }
-
-  private def toTask[A](e: Err \/ A): Task[A] =
-    e.fold(e => Task.fail(new Error(e.messageWithContext)),
-           a => Task.now(a))
 
   def fail(msg: String): Process[Task, Nothing] = Process.fail(new Error(msg))
 

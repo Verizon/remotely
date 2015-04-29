@@ -1,5 +1,8 @@
+import common._
 
-common.promptSettings
+promptSettings
+
+macrosSettings
 
 name := "remotely-test"
 

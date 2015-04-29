@@ -21,7 +21,7 @@ openssl pkcs8 -topk8 -inform pem -in server_key.pem -outform pem -nocrypt -out s
 
 # Sign the server certificate with the CA:
 openssl x509 -req -in server.req -CA CA.pem -passin pass:$CA_passphrase \
-        -CAkey CA_key.pem -CAserial cert.srl -out server_cert.pem
+        -CAkey CA_key.pem -CAserial cert.srl -out server_cert.pem -days 1000
 
 ## Generate a Client keypair and certificate:
 openssl genrsa -out client_key.pem 2048
@@ -31,7 +31,7 @@ openssl pkcs8 -topk8 -inform pem -in client_key.pem -outform pem -nocrypt -out c
 
 # Sign the client certificate with the CA:
 openssl x509 -req -in client.req -CA CA.pem -passin pass:$CA_passphrase \
-        -CAkey CA_key.pem -CAserial cert.srl -out client_cert.pem
+        -CAkey CA_key.pem -CAserial cert.srl -out client_cert.pem -days 1000
 
 
 echo -e "\n\n\n"

@@ -44,7 +44,7 @@ case class Signature(name: String, tag: String, inTypes: List[String], outType: 
 }
 
 object Signature {
-  implicit val signatureCodec: Codec[Signature] = (utf8 ~~ utf8 ~~ list(utf8) ~~ utf8).pxmap[Signature]((Signature.apply _), (Signature.unapply _))
+  implicit val signatureCodec: Codec[Signature] = (utf8 ~~ utf8 ~~ list(utf8) ~~ utf8).widenAs[Signature](Signature.apply, Signature.unapply)
 }
 
 case class Signatures(signatures: Set[Signature]) {

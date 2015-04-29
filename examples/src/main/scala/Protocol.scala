@@ -18,7 +18,7 @@
 package remotely
 package examples
 import scalaz._
-import codecs._
+import remotely.codecs._
 
 // NB: The GenServer macro needs to receive the FQN of all types, or import them
 // explicitly. The target of the macro needs to be an abstract class.
@@ -30,7 +30,8 @@ import codecs._
 @GenClient(remotely.Protocol.empty.codec[Int].specify1[Int,Int]("fac").signatures)
   object FacClient
 
-@GenServer(remotely.Protocol.empty.codec[List[Int]]) abstract class Foo
+// TODO(ahjohannessen): @stew <- Compiling Foo fails somehow?
+// @GenServer(remotely.Protocol.empty.codec[List[Int]]) abstract class Foo
 
 object TestProtocol {
 
