@@ -92,7 +92,7 @@ class SSLSpec extends FlatSpec
     val endpoint: Endpoint = Endpoint.single(transport)
 
     try {
-      val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+      val fact: Int = Client.factorial(10).runWithoutContext(endpoint, Monitoring.consoleLogger()).run
       fact should be (100)
     } finally {
       shutdown.run
@@ -113,7 +113,7 @@ class SSLSpec extends FlatSpec
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+      val fact: Int = Client.factorial(10).runWithoutContext(endpoint, Monitoring.consoleLogger()).run
       fact should be (100)
     } finally {
       shutdown.run
@@ -134,7 +134,7 @@ class SSLSpec extends FlatSpec
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+      val fact: Int = Client.factorial(10).runWithoutContext(endpoint, Monitoring.consoleLogger()).run
       fact should be (100)
     } finally {
       shutdown.run
@@ -155,7 +155,7 @@ class SSLSpec extends FlatSpec
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+      val fact: Int = Client.factorial(10).runWithoutContext(endpoint, Monitoring.consoleLogger()).run
       fact should be (100)
     } finally {
       shutdown.run

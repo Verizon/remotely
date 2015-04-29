@@ -38,9 +38,9 @@ object ResponseSpec extends Properties("Response") {
     val ctx = Response.Context.empty
     val expected = (0 until N).sum
 
-    leftFold(responses)(ctx).run == expected &&
-    rightFold(responses)(ctx).run == expected &&
-    leftFold(responses2)(ctx).run == expected &&
-    rightFold(responses2)(ctx).run == expected
+    leftFold(responses)(ctx).runLast.run.get == expected &&
+    rightFold(responses)(ctx).runLast.run.get == expected &&
+    leftFold(responses2)(ctx).runLast.run.get == expected &&
+    rightFold(responses2)(ctx).runLast.run.get == expected
   }
 }

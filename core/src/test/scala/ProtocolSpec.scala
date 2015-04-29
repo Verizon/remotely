@@ -32,7 +32,7 @@ class ProtocolSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   it should "foo" in {
     import remotely.Remote.implicits._
-    val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+    val fact: Int = Client.factorial(10).runWithoutContext(endpoint, Monitoring.consoleLogger()).run
     val lst: List[Int] = Client.foo(9).runWithContext(endpoint, Context.empty).run
   }
 
