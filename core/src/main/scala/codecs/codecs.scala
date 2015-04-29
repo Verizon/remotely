@@ -147,7 +147,7 @@ package object codecs extends lowerprioritycodecs {
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c)
       case Ap4(f,a,b,c,d) => C.uint8.encode(5) <+>
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c) <+> remoteEncode(d)
-      case l: LocalStream[A] => C.uint8.encode(6) <+> localStreamRemoteEncoder.encode(l)
+      case l: LocalStream[_] => C.uint8.encode(6) <+> localStreamRemoteEncoder.encode(l)
     }
 
   private val E = Monad[Decoder]
