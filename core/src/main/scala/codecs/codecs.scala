@@ -228,8 +228,8 @@ package object codecs extends lowerprioritycodecs {
    *
    * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
    */
-  def encodeRequest[A:TypeTag](a: Remote[A], ctx: Context): Attempt[BitVector] =
-    Codec[String].encode(Remote.toTag[A]) <+>
+  def encodeRequest(a: Remote[Any], ctx: Context, remoteTag: String): Attempt[BitVector] =
+    Codec[String].encode(remoteTag) <+>
     Encoder[Response.Context].encode(ctx) <+>
     sortedSet[String].encode(formats(a))  <+>
     remoteEncode(a)

@@ -53,7 +53,7 @@ package object remotely {
    * The `Monitoring` instance is notified of each request.
    */
   def evaluateStream[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Process[Task, A]]): Response[A] =
-    evaluateImpl(e,M)(r)
+    evaluateImpl(e,M)(r)(Remote.toTag[A])
 
   /**
    * Evaluate the given remote expression at the
@@ -65,13 +65,13 @@ package object remotely {
    * The `Monitoring` instance is notified of each request.
    */
   def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
-    evaluateImpl(e,M)(r)
+    evaluateImpl(e,M)(r)(Remote.toTag[A])
 
   /**
    * In the actual implementation, we don't really care what type of Remote we receive. In any case, it is
    * going to become a stream of bits and produce wtv is the expected result is there are no errors.
    */
-  def evaluateImpl[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Any]): Response[A] =
+  def evaluateImpl[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Any])(remoteTag: String): Response[A] =
     Remote.localize(r).flatMap { r => Response.scope { Response { ctx => // push a fresh ID onto the call stack
       val refs = Remote.refs(r)
 
@@ -104,7 +104,7 @@ package object remotely {
       } yield (start, conn)
                                                       
       Process.await(timeAndConnection){ case (start, conn) =>
-          val reqBits = codecs.encodeRequest(r, ctx).toProcess
+          val reqBits = codecs.encodeRequest(r, ctx, remoteTag).toProcess
           val respBits = reportErrors(start) {
             val allBits = reqBits ++ userBits
             conn(allBits)
