@@ -87,7 +87,6 @@ package object remotely {
       def failOnServerSideErr[A](startNanos: Long)(p: Process[Task, String \/ A]): Process[Task,A] =
         p.flatMap{
           case -\/(error:String) =>
-            // TODO: Error decoding response??????!!!!!
             val ex = ServerException(error)
             val delta = System.nanoTime - startNanos
             M.handled(ctx, r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
