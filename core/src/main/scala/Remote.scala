@@ -243,7 +243,8 @@ object Remote {
     /** Implicitly promote a local value to a `Remote[A]`. */
     implicit def localToRemote[A:Encoder:TypeTag](a: A): Remote[A] = local(a)
 
-    implicit def localStreamToRemote[A: Encoder:TypeTag](stream: Process[Task, A]): Remote[Process[Task,A]] = localStream(stream)
+    // Commented out because for now cannot call a function that takes multiple streams
+    //implicit def localStreamToRemote[A: Encoder:TypeTag](stream: Process[Task, A]): Remote[Process[Task,A]] = localStream(stream)
   }
 }
 
