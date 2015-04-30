@@ -32,7 +32,7 @@ sealed trait Response[+A] {
   def apply(c: Context): Process[Task,A]
 
   def flatMap[B](f: A => Response[B]): Response[B] =
-    Response { ctx => this(ctx).flatMap(f andThen (_(ctx))) }
+    Response { ctx => Process.suspend(this(ctx).flatMap(f andThen (_(ctx)))) }
 
   def map[B](f: A => B): Response[B] =
     Response { ctx => this(ctx) map f }
@@ -58,8 +58,7 @@ object Response {
       lazy val result = a // memoized - `point` should not be used for side effects
       Response(_ => Process.emit(a))
     }
-    def bind[A,B](a: Response[A])(f: A => Response[B]): Response[B] =
-      Response { ctx => a(ctx).flatMap(f andThen (_(ctx))) }
+    def bind[A,B](a: Response[A])(f: A => Response[B]): Response[B] = a.flatMap(f)
     def attempt[A](a: Response[A]): Response[Throwable \/ A] = a.attempt
     def fail[A](err: Throwable): Response[A] = Response.fail(err)
   }
