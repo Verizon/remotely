@@ -176,7 +176,7 @@ class SSLSpec extends FlatSpec
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty)
+      val fact = Client.factorial(10).runWithoutContext(endpoint, Monitoring.consoleLogger())
 
       an[io.netty.handler.ssl.NotSslRecordException] should be thrownBy (
         try {
