@@ -75,7 +75,7 @@ object Remote {
 
   implicit class RunSyntaxForStreaming[A](self: Remote[Process[Task,A]]) {
     /** Call `self.run(at, M).apply(ctx)` to get back a `Task[A]`. */
-    def runWithContext(at: Endpoint, ctx: Response.Context, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Process[Task,A] =
+    def run(at: Endpoint, ctx: Response.Context = Response.Context.empty, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Process[Task,A] =
       evaluateStream(at,M)(self).apply(ctx)
   }
 

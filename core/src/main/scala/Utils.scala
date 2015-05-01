@@ -20,8 +20,14 @@ package object utils {
     }
   }
 
+  implicit class AugmentedTask[A](t: Task[A]) {
+    def onComplete(f: Throwable \/ A => Unit): Task[A] =
+      t.attempt.flatMap{a => f(a); t}
+  }
+
   implicit class AugmentedProcess[A](p: Process[Task, A]) {
     def head: Task[A] = (p pipe Process.await1).runLast.map(_.get)
+    def apply(index: Int) = p.drop(index).head
     def flatten[B](implicit conv: A => Process[Task,B]): Process[Task,B] =
       p.flatMap(conv)
   }
