@@ -64,24 +64,21 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
   // The CB closes again
   property("closes") = secure {
     val cb = CircuitBreaker(1.milliseconds, 0)
-    val p = for {
-      _ <- cb(Task.fail(new Error("oops"))).attempt
-      _ <- Task(Thread.sleep(2))
-      // The breaker should have closed by now
-      r <- cb(Task.now(0))
-    } yield r
+    val p = Monad[Task].sequence(List(
+      cb(Task.fail(new Error("oops"))).attempt,
+      Task(Thread.sleep(2))
+    )).map(_ => 0)
     p.attemptRun.fold(_ => false, _ == 0)
   }
 
   // The CB doesn't open as long as there are successes
   property("stays-closed") = secure {
     val cb = CircuitBreaker(3.hours, 1)
-    val p = for {
-      _ <- cb(Task.fail(new Error("oops"))).attempt
-      _ <- cb(Task.now(0))
-      _ <- cb(Task.fail(new Error("oops"))).attempt
-      r <- cb(Task.now(1))
-    } yield r
+    val p = Monad[Task].sequence(List(
+      cb(Task.fail(new Error("oops"))).attempt,
+      cb(Task.now(0)),
+      cb(Task.fail(new Error("oops"))).attempt
+    )).map(_ => 1)
     p.attemptRun.fold(_ => false, _ == 1)
   }
 
