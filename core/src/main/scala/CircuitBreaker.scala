@@ -63,8 +63,8 @@ class CircuitBreaker(timeout: Duration,
     } yield r
   }
 
-  def addFailure: Task[Unit] = for {
-    _ <- breaker.modify {
+  def addFailure: Task[Unit] =
+    breaker.modify {
       // We haven't yet reached the breaking point
       case BreakerState(ho, n, None) if (n < maxErrors) =>
         BreakerState(false, n + 1, None)
@@ -75,7 +75,6 @@ class CircuitBreaker(timeout: Duration,
       case BreakerState(ho, n, Some(t)) =>
         BreakerState(false, n + 1, Some(System.currentTimeMillis))
     }
-  } yield ()
 
   def close: Task[Unit] = breaker.write(BreakerState())
 }
