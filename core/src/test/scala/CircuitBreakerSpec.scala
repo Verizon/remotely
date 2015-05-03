@@ -20,13 +20,9 @@ package remotely
 import org.scalacheck._
 import Prop._
 import scalaz.concurrent.Task
-import scodec.bits.ByteVector
-import scalaz.stream._
-import Process._
 import scala.concurrent.duration._
 import scalaz._
-import scalaz.std.anyVal._
-import scalaz.std.tuple._
+import scalaz.std.list._
 import \/._
 
 object CircuitBreakerSpec extends Properties("CircuitBreaker") {
