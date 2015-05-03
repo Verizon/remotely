@@ -62,6 +62,7 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
     val cb = CircuitBreaker(1.milliseconds, 0)
     val p = Monad[Task].sequence(List(
       cb(Task.fail(new Error("oops"))).attempt,
+      // The breaker should have plenty of time to close
       Task(Thread.sleep(2))
     )).map(_ => 0)
     p.attemptRun.fold(_ => false, _ == 0)
