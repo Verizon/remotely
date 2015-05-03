@@ -40,9 +40,7 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
   property("remains-closed") = forAll { (b: Byte) =>
     val x = b.toInt
     val n = x.abs
-    val p = for {
-      r <- failures(n + 1, CircuitBreaker(3.seconds, n))
-    } yield r
+    val p = failures(n + 1, CircuitBreaker(3.seconds, n))
     p.run match {
       case -\/(e) => e.getMessage == "oops"
       case _ => false
@@ -56,9 +54,7 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
     // Scala!
     val x = b.toInt
     val n = x.abs
-    val p = for {
-      r <- failures(n + 2, CircuitBreaker(3.seconds, n))
-    } yield r
+    val p = failures(n + 2, CircuitBreaker(3.seconds, n))
     p.run match {
       case -\/(CircuitBreakerOpen) => true
       case _ => false
