@@ -20,13 +20,9 @@ package remotely
 import org.scalacheck._
 import Prop._
 import scalaz.concurrent.Task
-import scodec.bits.ByteVector
-import scalaz.stream._
-import Process._
 import scala.concurrent.duration._
 import scalaz._
-import scalaz.std.anyVal._
-import scalaz.std.tuple._
+import scalaz.std.list._
 import \/._
 
 object CircuitBreakerSpec extends Properties("CircuitBreaker") {
@@ -40,9 +36,7 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
   property("remains-closed") = forAll { (b: Byte) =>
     val x = b.toInt
     val n = x.abs
-    val p = for {
-      r <- failures(n + 1, CircuitBreaker(3.seconds, n))
-    } yield r
+    val p = failures(n + 1, CircuitBreaker(3.seconds, n))
     p.run match {
       case -\/(e) => e.getMessage == "oops"
       case _ => false
@@ -56,9 +50,7 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
     // Scala!
     val x = b.toInt
     val n = x.abs
-    val p = for {
-      r <- failures(n + 2, CircuitBreaker(3.seconds, n))
-    } yield r
+    val p = failures(n + 2, CircuitBreaker(3.seconds, n))
     p.run match {
       case -\/(CircuitBreakerOpen) => true
       case _ => false
@@ -68,24 +60,22 @@ object CircuitBreakerSpec extends Properties("CircuitBreaker") {
   // The CB closes again
   property("closes") = secure {
     val cb = CircuitBreaker(1.milliseconds, 0)
-    val p = for {
-      _ <- cb(Task.fail(new Error("oops"))).attempt
-      _ <- Task(Thread.sleep(2))
-      // The breaker should have closed by now
-      r <- cb(Task.now(0))
-    } yield r
+    val p = Monad[Task].sequence(List(
+      cb(Task.fail(new Error("oops"))).attempt,
+      // The breaker should have plenty of time to close
+      Task(Thread.sleep(2))
+    )).map(_ => 0)
     p.attemptRun.fold(_ => false, _ == 0)
   }
 
   // The CB doesn't open as long as there are successes
   property("stays-closed") = secure {
     val cb = CircuitBreaker(3.hours, 1)
-    val p = for {
-      _ <- cb(Task.fail(new Error("oops"))).attempt
-      _ <- cb(Task.now(0))
-      _ <- cb(Task.fail(new Error("oops"))).attempt
-      r <- cb(Task.now(1))
-    } yield r
+    val p = Monad[Task].sequence(List(
+      cb(Task.fail(new Error("oops"))).attempt,
+      cb(Task.now(0)),
+      cb(Task.fail(new Error("oops"))).attempt
+    )).map(_ => 1)
     p.attemptRun.fold(_ => false, _ == 1)
   }
 
