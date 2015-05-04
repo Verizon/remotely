@@ -49,7 +49,7 @@ package object remotely {
    * The `Monitoring` instance is notified of each request.
    */
   def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
-  Remote.localize(r).flatMap { r => Response.scope { Response { ctx => // push a fresh ID onto the call stack
+  Response.scope { Response { ctx => // push a fresh ID onto the call stack
     val refs = Remote.refs(r)
 
     def reportErrors[R](startNanos: Long)(t: Task[R]): Task[R] =
@@ -87,7 +87,7 @@ package object remotely {
         )
       } yield result
     }
-  }}}
+  }}
 
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)
