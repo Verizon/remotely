@@ -83,7 +83,6 @@ object Server {
   def eval[A](env: Values)(r: Remote[A])(userStream: Process[Task, Any]): Response[A] = {
     import Remote._
     r match {
-      case Async(a, _, _) => a
       case Local(a,_,_) => Response.now(a)
       case LocalStream(_, _,_) => Response.stream(userStream.asInstanceOf[Process[Task, A]])
       case Ref(name) => env.values.lift(name) match {

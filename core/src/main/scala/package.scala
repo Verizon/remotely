@@ -72,7 +72,7 @@ package object remotely {
    * going to become a stream of bits and produce wtv is the expected result is there are no errors.
    */
   def evaluateImpl[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Any])(remoteTag: String): Response[A] =
-    Remote.localize(r).flatMap { r => Response.scope { Response { ctx => // push a fresh ID onto the call stack
+    Response.scope { Response { ctx => // push a fresh ID onto the call stack
       val refs = Remote.refs(r)
 
       val stream = (r collect { case l: LocalStream[Any]@unchecked => l }).headOption
@@ -114,7 +114,7 @@ package object remotely {
             ).flatten
           }
       }
-    }}}
+    }}
 
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)

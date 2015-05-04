@@ -136,8 +136,6 @@ package object codecs extends lowerprioritycodecs {
   def remoteEncode(r: Remote[Any]): Attempt[BitVector] =
     r match {
       case l: Local[_] => C.uint8.encode(0) <+> localRemoteEncoder.encode(l)
-      case Async(a,e,t) =>
-        Attempt.failure(Err("cannot encode Async constructor; call Remote.localize first"))
       case r: Ref[_] => C.uint8.encode(1) <+> refCodec.encode(r)
       case Ap1(f,a) => C.uint8.encode(2) <+>
         remoteEncode(f) <+> remoteEncode(a)

@@ -34,16 +34,9 @@ class CircuitBreaker(timeout: Duration,
   }
 
   def apply[A](a: Task[A]): Task[A] = {
-    def doAttempt: Task[A] = a.attempt.flatMap {
-      case -\/(e) => for {
-        _ <- addFailure
-        r <- Task.fail(e) : Task[A]
-      } yield r
-
-      case \/-(a) => for {
-        _ <- close
-        r <- Task.now(a)
-      } yield r
+    def doAttempt: Task[A] = a.onFinish{
+      case Some(e) => addFailure
+      case None => close
     }
     for {
       s <- breaker.read
@@ -63,8 +56,8 @@ class CircuitBreaker(timeout: Duration,
     } yield r
   }
 
-  def addFailure: Task[Unit] = for {
-    _ <- breaker.modify {
+  def addFailure: Task[Unit] =
+    breaker.modify {
       // We haven't yet reached the breaking point
       case BreakerState(ho, n, None) if (n < maxErrors) =>
         BreakerState(false, n + 1, None)
@@ -75,7 +68,6 @@ class CircuitBreaker(timeout: Duration,
       case BreakerState(ho, n, Some(t)) =>
         BreakerState(false, n + 1, Some(System.currentTimeMillis))
     }
-  } yield ()
 
   def close: Task[Unit] = breaker.write(BreakerState())
 }
