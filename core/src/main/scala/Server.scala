@@ -88,7 +88,6 @@ object Server {
   def eval[A](env: Values)(r: Remote[A]): Response[A] = {
     import Remote._
     r match {
-      case Async(a, _, _) => a
       case Local(a,_,_) => Response.now(a)
       case Ref(name) => env.values.lift(name) match {
         case None => Response.delay { sys.error("Unknown name on server: " + name) }

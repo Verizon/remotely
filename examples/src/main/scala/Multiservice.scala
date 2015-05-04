@@ -75,8 +75,10 @@ object Multiservice extends App {
       // the first two requests (for the sum and count) in parallel
       .declare("average4", (xs: List[Double]) =>
         // The number of round trips is just the number of calls to run
-        div(sum(xs).run(serviceA),
-            length(xs).run(serviceA)).run(serviceA)
+        for{
+          summed <- sum(xs).run(serviceA)
+          length <- length(xs).run(serviceA)
+        } yield div(summed, length).run(serviceA)
       )
       // This version checks the "flux-capacitor-status" key of the header
       .declare("average5", (xs: List[Double]) => for {
