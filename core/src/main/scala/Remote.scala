@@ -168,15 +168,13 @@ object Remote {
 
   /** Collect up all the `Ref` names referenced by `r`. */
   def refs[A](r: Remote[A]): SortedSet[String] = (r collect {
-    case Local(a,e,t) => SortedSet.empty[String]
     case Ref(t) => SortedSet(t)
-  }).reduce(_.union(_))
+  }).fold(SortedSet.empty[String])(_.union(_))
 
   /** Collect up all the formats referenced by `r`. */
   def formats[A](r: Remote[A]): SortedSet[String] = r.collect {
     case Local(a,e,t) => SortedSet(t)
-    case Ref(t) => SortedSet.empty[String]
-  }.reduce(_.union(_))
+  }.fold(SortedSet.empty[String])(_.union(_))
 
   def toTag[A:TypeTag]: String = {
     val tt = typeTag[A]
