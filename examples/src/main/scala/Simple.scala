@@ -35,9 +35,9 @@ object Simple {
     .codec[Float]
     .codec[List[Int]]
     .codec[List[String]].populate { _
-      .declareStrict("sum", (d: List[Int]) => d.sum )
+      .declare("sum", (d: List[Int]) => Response.now(d.sum) )
       .declare("fac", (n: Int) => Response.delay { (1 to n).foldLeft(1)(_ * _)} ) // async functions also work
-      .declareStrict("foo", foo _ ) // referencing existing functions works, too
+      .declare("foo", Response.now(foo _) ) // referencing existing functions works, too
     }
 
   val addr = new InetSocketAddress("localhost", 8083)

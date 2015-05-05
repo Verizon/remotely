@@ -35,7 +35,7 @@ object RemoteSpec extends Properties("Remote") {
     .codec[List[Double]]
     .codec[List[Signature]]
     .populate { _
-                 .declareStrict("sum", (d: List[Int]) => d.sum)
+                 .declare("sum", (d: List[Int]) => Response.now(d.sum))
                  .declare("describe", Response.now(List(Signature("sum", "sum: List[Double] => Double", List("List[Double]"), "Double"),
                                                         Signature("sum", "sum: List[Int] => Int", List("List[Int]"), "Int"),
                                                         Signature("add1", "add1: List[Int] => List[Int]", List("List[Int]"), "List[Int]"),
