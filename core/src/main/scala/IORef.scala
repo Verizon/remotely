@@ -42,7 +42,7 @@ object IORef {
       a <- read
       (a2, b) = f(a)
       p <- compareAndSet(a, a2)
-      r <- if (p) Task(b) else atomicModify(f)
+      r <- if (p) Task.now(b) else atomicModify(f)
     } yield r
   }
 }
