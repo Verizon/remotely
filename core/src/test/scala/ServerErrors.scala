@@ -18,12 +18,12 @@
 package remotely
 package test
 
-import java.lang.Process
-
 import org.scalatest.{Matchers, FlatSpec}
 import remotely.transport.netty.NettyTransport
+import codecs._
+import Remote.implicits._
 
-class ServerCodecMissingSpec extends FlatSpec with Matchers {
+class ServerErrors extends FlatSpec with Matchers {
   behavior of "missing codec on the server"
   it should "throw the appropriate error if missing encoder for the response" in {
     val address = new java.net.InetSocketAddress("localhost", 9013)
@@ -34,14 +34,31 @@ class ServerCodecMissingSpec extends FlatSpec with Matchers {
 
     val shutdown = server.environment.serve(address).run
 
-    import Remote.implicits._
-    import codecs._
-
     val call = Remote.local(true).runWithoutContext(endpoint)
 
     val thrown = the [ServerException] thrownBy call.run
 
     thrown.getMessage should startWith (s"[decoding] server does not have response serializer for: ${Remote.toTag[Boolean]}")
+
+    shutdown.run
+  }
+  behavior of "incompatible reference on server"
+  it should "throw the appropriate error if there is some kind of reference mismatch" in {
+    val address = new java.net.InetSocketAddress("localhost", 9077)
+
+    val endpoint = (NettyTransport.single(address) map Endpoint.single).run
+
+    val server = new CountServer
+
+    val shutdown = server.environment.serve(address).run
+
+    val wrongRef = Remote.ref[(Int, Int) => Int]("ping")
+
+    val call = wrongRef(1,2).runWithoutContext(endpoint)
+
+    val thrown = the [ServerException] thrownBy call.run
+
+    thrown.getMessage should startWith ("[validation] server values: <Set(ping: Int => Int, describe: List[remotely.Signature])> does not have referenced values:\n ping: (Int, Int) => Int")
 
     shutdown.run
   }
