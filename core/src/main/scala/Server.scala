@@ -94,10 +94,10 @@ object Server {
         case Some(a) => a().asInstanceOf[Response[A]]
       }
       // on the server, only concern ourselves w/ tree of fully saturated calls
-      case Ap1(Ref(f),a) => env.values(f)(eval(env)(a)) .asInstanceOf[Response[A]]
-      case Ap2(Ref(f),a,b) => env.values(f)(eval(env)(a), eval(env)(b)) .asInstanceOf[Response[A]]
-      case Ap3(Ref(f),a,b,c) => env.values(f)(eval(env)(a), eval(env)(b), eval(env)(c)) .asInstanceOf[Response[A]]
-      case Ap4(Ref(f),a,b,c,d) => env.values(f)(eval(env)(a), eval(env)(b), eval(env)(c), eval(env)(d)) .asInstanceOf[Response[A]]
+      case Ap1(Ref(f),a) => eval(env)(a).flatMap(env.values(f)(_)) .asInstanceOf[Response[A]]
+      case Ap2(Ref(f),a,b) => Monad[Response].tuple2(eval(env)(a), eval(env)(b)).flatMap{case (a,b) => env.values(f)(a,b)} .asInstanceOf[Response[A]]
+      case Ap3(Ref(f),a,b,c) => Monad[Response].tuple3(eval(env)(a), eval(env)(b), eval(env)(a)).flatMap{case (a,b,c) => env.values(f)(a,b,c)} .asInstanceOf[Response[A]]
+      case Ap4(Ref(f),a,b,c,d) => Monad[Response].tuple4(eval(env)(a), eval(env)(b), eval(env)(c), eval(env)(d)).flatMap{case (a,b,c,d) => env.values(f)(a,b,c,d)} .asInstanceOf[Response[A]]
       case _ => Response.delay { sys.error("unable to interpret remote expression of form: " + r) }
     }
   }
