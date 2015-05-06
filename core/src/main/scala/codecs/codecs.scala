@@ -152,7 +152,7 @@ package object codecs extends lowerprioritycodecs {
     def sizeBound = SizeBound.unknown
   }
 
-  def localRemoteDecoder(env: Codecs): Decoder[Local[Any]] =
+  def localRemoteDecoder(env: Codecs[_]): Decoder[Local[Any]] =
     utf8.flatMap( formatType =>
       env.codecs.get(formatType).map{ codec => codec.map { a => Local(a,None,formatType) } }
         .getOrElse(fail(Err(s"[decoding] unknown format type: $formatType")))
@@ -165,7 +165,7 @@ package object codecs extends lowerprioritycodecs {
    * to a decoder that is not found in `env`, decoding fails
    * with an error.
    */
-  def remoteDecoder(env: Codecs): Decoder[Remote[Any]] = {
+  def remoteDecoder(env: Codecs[_]): Decoder[Remote[Any]] = {
     def go = remoteDecoder(env)
     C.uint8.flatMap {
       case 0 => localRemoteDecoder(env)
@@ -204,7 +204,7 @@ package object codecs extends lowerprioritycodecs {
     sortedSet[String].encode(formats(a))  <+>
     remoteEncode(a)
 
-  def requestDecoder(env: Environment): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
+  def requestDecoder(env: Environment[_]): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
     for {
       responseTag <- utf8
       ctx <- Decoder[Response.Context]

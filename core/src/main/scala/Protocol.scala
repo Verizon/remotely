@@ -17,27 +17,30 @@
 
 package remotely
 
+import shapeless._
+import shapeless.ops.hlist.Selector
+
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
 
-case class Protocol(codecs: Codecs, signatures: Signatures) {
+case class Protocol[H <: HList](codecs: Codecs[H], signatures: Signatures) {
 
-  def codec[A:TypeTag:Codec]: Protocol =
+  def codec[A:TypeTag:Codec]: Protocol[A :: H] =
     this.copy(codecs = codecs.codec[A])
 
-  def specify0[A:TypeTag](name: String): Protocol =
+  def specify0[A:TypeTag](name: String)(implicit evidenceA : Selector[H, A]): Protocol[H] =
     this.copy(signatures = signatures.specify0[A](name))
 
-  def specify1[A:TypeTag,B:TypeTag](name: String): Protocol =
+  def specify1[A:TypeTag,B:TypeTag](name: String)(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B]): Protocol[H] =
     this.copy(signatures = signatures.specify1[A,B](name))
 
-  def specify2[A:TypeTag,B:TypeTag,C:TypeTag](name: String): Protocol =
+  def specify2[A:TypeTag,B:TypeTag,C:TypeTag](name: String)(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C]): Protocol[H] =
     this.copy(signatures = signatures.specify2[A,B,C](name))
 
-  def specify3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String): Protocol =
+  def specify3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String)(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C], evidenceD: Selector[H, D]): Protocol[H] =
     this.copy(signatures = signatures.specify3[A,B,C,D](name))
 
-  def specify4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String): Protocol =
+  def specify4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String)(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C], evidenceD: Selector[H, D], evidenceE: Selector[H, E]): Protocol[H] =
     this.copy(signatures = signatures.specify4[A,B,C,D,E](name))
 
   def pretty: String =

@@ -39,7 +39,7 @@ object Server {
    * use the `monitoring` argument if you wish to observe
    * these failures.
    */
-  def handle(env: Environment)(request: BitVector)(monitoring: Monitoring): Task[BitVector] = {
+  def handle(env: Environment[_])(request: BitVector)(monitoring: Monitoring): Task[BitVector] = {
 
     Task.delay(System.nanoTime).flatMap { startNanos => Task.suspend {
       // decode the request from the environment
