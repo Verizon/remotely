@@ -18,7 +18,6 @@
 package remotely
 
 import scala.reflect.runtime.universe.TypeTag
-import scalaz.Monad
 
 trait Value {
   def apply(args: Any*): Response[Any]
@@ -34,7 +33,7 @@ object Value {
       case 4 => a.asInstanceOf[(Any, Any, Any, Any) => Response[Any]](args(0), args(1), args(2), args(3))
       case 5 => a.asInstanceOf[(Any, Any, Any, Any, Any) => Response[Any]](args(0), args(1), args(2), args(3), args(4))
       case 6 => a.asInstanceOf[(Any, Any, Any, Any, Any, Any) => Response[Any]](args(0), args(1), args(2), args(3), args(4), args(5))
-      case n => Response.fail(new Exception("functions of arity " + n + " not supported"))
+      case n => SingleResponse.fail(new Exception("functions of arity " + n + " not supported"))
     }
   }
 }

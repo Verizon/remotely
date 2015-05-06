@@ -38,7 +38,6 @@ object Streaming {
     .codec[Float]
     .codec[List[Int]]
     .codec[List[String]].populate { _
-    // It would be nice if this could fail to compile...
     .declare("download", (n: Int) => Response.stream { Process[Byte](1,2,3,4) } )
     .declare("continuous", (p: Process[Task, Byte]) => Response.stream { p.map(_ + 1)} )
   }

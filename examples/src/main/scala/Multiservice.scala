@@ -82,7 +82,7 @@ object Multiservice extends App {
       )
       // This version checks the "flux-capacitor-status" key of the header
       .declare("average5", (xs: List[Double]) => for {
-        ctx <- Response.ask
+        ctx <- SingleResponse.ask
         avg <- if (ctx.header.contains("flux-capacitor")) {
                  println("Flux capacitor is enabled, calling service A in a single request!!")
                  (sum(xs) / length(xs)).run(serviceA)

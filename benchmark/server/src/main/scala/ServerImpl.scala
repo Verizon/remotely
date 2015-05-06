@@ -25,9 +25,9 @@ import scalaz.stream.Process
 import java.util.concurrent.atomic.AtomicInteger
 
 class BenchmarkServerImpl extends BenchmarkServer with transformations {
-  override def identityLarge = (large: LargeW) => Response[LargeW]((c: Response.Context) => Process.emit{toLargeW(fromLargeW(large))})
-  override def identityMedium = (med: MediumW) => Response[MediumW]((c: Response.Context) => Process.emit{toMediumW(fromMediumW(med))})
-  override def identityBig = (big: BigW) => Response[BigW]((c: Response.Context) => Process.emit{toBigW(fromBigW(big))})
+  override def identityLarge = (large: LargeW) => Response.now(toLargeW(fromLargeW(large)))
+  override def identityMedium = (med: MediumW) => Response.now(toMediumW(fromMediumW(med)))
+  override def identityBig = (big: BigW) => Response.now(toBigW(fromBigW(big)))
 
 }
 

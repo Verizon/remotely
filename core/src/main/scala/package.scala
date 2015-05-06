@@ -52,8 +52,10 @@ package object remotely {
    *
    * The `Monitoring` instance is notified of each request.
    */
-  def evaluateStream[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Process[Task, A]]): Response[A] =
-    evaluateImpl(e,M)(r)(Remote.toTag[A])
+  def evaluateStream[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Process[Task, A]]): StreamResponse[A] =
+    StreamResponse.scope { StreamResponse { ctx => // push a fresh ID onto the call stack
+      evaluateImpl(e, M, ctx)(r)(Remote.toTag[A])
+    }}
 
   /**
    * Evaluate the given remote expression at the
@@ -64,57 +66,58 @@ package object remotely {
    *
    * The `Monitoring` instance is notified of each request.
    */
-  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
-    evaluateImpl(e,M)(r)(Remote.toTag[A])
+  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): SingleResponse[A] =
+    SingleResponse.scope { SingleResponse { ctx => // push a fresh ID onto the call stack
+      evaluateImpl(e, M, ctx)(r)(Remote.toTag[A]).head
+    }}
 
   /**
    * In the actual implementation, we don't really care what type of Remote we receive. In any case, it is
    * going to become a stream of bits and produce wtv is the expected result is there are no errors.
    */
-  def evaluateImpl[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Any])(remoteTag: String): Response[A] =
-    Response.scope { Response { ctx => // push a fresh ID onto the call stack
-      val refs = Remote.refs(r)
+  def evaluateImpl[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty, ctx: Response.Context)(r: Remote[Any])(remoteTag: String): Process[Task,A] = {
+    val refs = Remote.refs(r)
 
-      val stream = (r collect { case l: LocalStream[Any]@unchecked => l }).headOption
-      val userBits = codecs.encodeLocalStream(stream)
+    val stream = (r collect { case l: LocalStream[Any]@unchecked => l }).headOption
+    val userBits = codecs.encodeLocalStream(stream)
 
-      def reportErrors[R](startNanos: Long)(t: Process[Task,R]): Process[Task,R] =
-        t.onFailure { e =>
-          M.handled(ctx,r,refs,left(e), Duration.fromNanos(System.nanoTime - startNanos))
-          Process.fail(e):Process[Task,R]
-        }
-
-      def failOnServerSideErr[A](startNanos: Long)(p: Process[Task, String \/ A]): Process[Task,A] =
-        p.flatMap{
-          case -\/(error:String) =>
-            val ex = ServerException(error)
-            val delta = System.nanoTime - startNanos
-            M.handled(ctx, r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
-            Process.fail(ex)
-          case \/-(a) =>
-            val delta = System.nanoTime - startNanos
-            M.handled(ctx, r, refs, right(a), Duration.fromNanos(delta))
-            Process.emit(a)
-        }
-
-      val timeAndConnection = for {
-        start <- Task.delay( System.nanoTime() )
-        conn <- e.get
-      } yield (start, conn)
-                                                      
-      Process.await(timeAndConnection){ case (start, conn) =>
-          val reqBits = codecs.encodeRequest(r, ctx, remoteTag).toProcess
-          val respBits = reportErrors(start) {
-            val allBits = reqBits ++ userBits
-            conn(allBits)
-          }
-          reportErrors(start) {
-            respBits.map( bits =>
-              failOnServerSideErr(start)(codecs.responseDecoder[A].complete.decode(bits).map(_.value).toProcess)
-            ).flatten
-          }
+    def reportErrors[R](startNanos: Long)(t: Process[Task,R]): Process[Task,R] =
+      t.onFailure { e =>
+        M.handled(ctx,r,refs,left(e), Duration.fromNanos(System.nanoTime - startNanos))
+        Process.fail(e):Process[Task,R]
       }
-    }}
+
+    def failOnServerSideErr[A](startNanos: Long)(p: Process[Task, String \/ A]): Process[Task,A] =
+      p.flatMap{
+        case -\/(error:String) =>
+          val ex = ServerException(error)
+          val delta = System.nanoTime - startNanos
+          M.handled(ctx, r, Remote.refs(r), left(ex), Duration.fromNanos(delta))
+          Process.fail(ex)
+        case \/-(a) =>
+          val delta = System.nanoTime - startNanos
+          M.handled(ctx, r, refs, right(a), Duration.fromNanos(delta))
+          Process.emit(a)
+      }
+
+    val timeAndConnection = for {
+      start <- Task.delay( System.nanoTime() )
+      conn <- e.get
+    } yield (start, conn)
+
+    Process.await(timeAndConnection){ case (start, conn) =>
+        val reqBits = codecs.encodeRequest(r, ctx, remoteTag).toProcess
+        val respBits = reportErrors(start) {
+          val allBits = reqBits ++ userBits
+          conn(allBits)
+        }
+        reportErrors(start) {
+          respBits.map( bits =>
+            failOnServerSideErr(start)(codecs.responseDecoder[A].complete.decode(bits).map(_.value).toProcess)
+          ).flatten
+        }
+    }
+  }
 
   implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)

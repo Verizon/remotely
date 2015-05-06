@@ -54,9 +54,9 @@ trait TestServerBase {
     populateDeclarations(Values.empty)
   )
 
-  def factorial: Int => Response[Int]
-  def foo: Int => Response[scala.List[Int]]
-  def describe: Response[scala.List[Signature]]
+  def factorial: Int => SingleResponse[Int]
+  def foo: Int => SingleResponse[scala.List[Int]]
+  def describe: SingleResponse[scala.List[Signature]]
 
   private def populateDeclarations(env: Values): Values = env
     .declare("factorial", factorial)
@@ -66,11 +66,11 @@ trait TestServerBase {
 
 class TestServer extends TestServerBase {
   implicit val intcodec = int32
-  def factorial: Int => Response[Int] = i => Response.now(i * i)
-  def foo: Int => Response[List[Int]] = i =>  {
+  def factorial: Int => SingleResponse[Int] = i => Response.now(i * i)
+  def foo: Int => SingleResponse[List[Int]] = i =>  {
     Response.now(collection.immutable.List.fill(10000)(i))
   }
-  def describe: Response[scala.List[Signature]] = Response.now(List(Signature("factorial", "factorial: Int => Int", List("Int"), "Int"),Signature("foo", "foo: Int => List[Int]", List("Int"), "List[Int]"),Signature("describe", "describe: List[Signature]", Nil, "List[Signature]")))
+  def describe: SingleResponse[scala.List[Signature]] = Response.now(List(Signature("factorial", "factorial: Int => Int", List("Int"), "Int"),Signature("foo", "foo: Int => List[Int]", List("Int"), "List[Int]"),Signature("describe", "describe: List[Signature]", Nil, "List[Signature]")))
 }
 
 object Client {

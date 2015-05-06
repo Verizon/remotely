@@ -33,35 +33,41 @@ import scala.concurrent.duration._
 
 class StreamingSpec extends FlatSpec with Matchers {
   behavior of "Streaming"
-  it should "work" in {
-    // on server, populate environment with codecs and values
-    val env = Environment.empty
-      .codec[Byte]
-      .codec[Int]
-      .populate { _
-      // It would be nice if this could fail to compile...
-      .declare("download", (n: Int) => Response.stream { Process[Byte](1,2,3,4) } )
-      .declare("continuous", (p: Process[Task, Byte]) => Response.stream { p.map(_ + 1)} )
-    }
+  // on server, populate environment with codecs and values
+  val env = Environment.empty
+    .codec[Byte]
+    .codec[Int]
+    .populate { _
+    // It would be nice if this could fail to compile...
+    .declare("download", (n: Int) => Response.stream { Process[Byte](1,2,3,4) } )
+    .declare("continuous", (p: Process[Task, Byte]) => Response.stream { p.map(_ + 1)} )
+  }
 
-    val addr = new InetSocketAddress("localhost", 8083)
+  val addr = new InetSocketAddress("localhost", 8091)
 
-    val download = Remote.ref[Int => Process[Task,Byte]]("download")
+  val download = Remote.ref[Int => Process[Task,Byte]]("download")
 
-    val continuous = Remote.ref[Process[Task,Byte] => Process[Task, Byte]]("continuous")
+  val continuous = Remote.ref[Process[Task,Byte] => Process[Task, Int]]("continuous")
 
-    val serverShutdown = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
+  val serverShutdown = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
 
-    val transport = NettyTransport.single(addr).run
+  val transport = NettyTransport.single(addr).run
+  val loc: Endpoint = Endpoint.single(transport)
+
+  it should "work for a function that returns a Stream" in {
     val expr: Remote[Process[Task, Byte]] = download(10)
     val loc: Endpoint = Endpoint.single(transport)
     val result: Process[Task, Byte] = expr.run(loc, M = Monitoring.consoleLogger("[client]"))
 
+    result.runLog.run shouldEqual(Seq(1,2,3,4))
+
+    transport.shutdown.run
+    serverShutdown.run
+  }
+  ignore should "work for a function that takes a stream and returns a Stream" in {
     val byteStream: Process[Task, Byte] = Process(3,4,5)
 
-    val continuousResult = continuous(byteStream).run(loc, M = Monitoring.consoleLogger("[client]"))
-
-    //continuousResult.map(_.toString).to(io.stdOut)
+    val continuousResult = continuous.apply(byteStream).run(loc, M = Monitoring.consoleLogger("[client]"))
 
     continuousResult.runLog.run shouldEqual(List(4,5,6))
 
@@ -69,25 +75,6 @@ class StreamingSpec extends FlatSpec with Matchers {
     serverShutdown.run
   }
   ignore should "work (mutable)" in {
-    // on server, populate environment with codecs and values
-    val env = Environment.empty
-      .codec[Byte]
-      .codec[Int]
-      .populate { _
-      // It would be nice if this could fail to compile...
-      .declare("download", (n: Int) => Response.stream { Process[Byte](1,2,3,4) } )
-      .declare("continuous", (p: Process[Task, Byte]) => Response.stream { p.map(_ + 1)} )
-    }
-
-    val addr = new InetSocketAddress("localhost", 8083)
-
-    val download = Remote.ref[Int => Process[Task,Byte]]("download")
-
-    val continuous = Remote.ref[Process[Task,Byte] => Process[Task, Byte]]("continuous")
-
-    val serverShutdown = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
-
-    val transport = NettyTransport.single(addr).run
     val expr: Remote[Process[Task, Byte]] = download(10)
     val loc: Endpoint = Endpoint.single(transport)
     val result: Process[Task, Byte] = expr.run(loc, M = Monitoring.consoleLogger("[client]"))
