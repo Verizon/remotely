@@ -40,7 +40,7 @@ object Server {
    * use the `monitoring` argument if you wish to observe
    * these failures.
    */
-  def handle(env: Environment)(request: Process[Task, BitVector])(monitoring: Monitoring): Process[Task,BitVector] = {
+  def handle(env: Environment[_])(request: Process[Task, BitVector])(monitoring: Monitoring): Process[Task,BitVector] = {
     Process.await(Task.delay(System.nanoTime)) { startNanos =>
       Process.await(request.head) { initialRequest =>
         // decode the request from the environment
@@ -90,10 +90,10 @@ object Server {
         case Some(a) => a().asInstanceOf[Response[A]]
       }
       // on the server, only concern ourselves w/ tree of fully saturated calls
-      case Ap1(Ref(f),a) => env.values(f)(eval(env)(a)(userStream)) .asInstanceOf[Response[A]]
-      case Ap2(Ref(f),a,b) => env.values(f)(eval(env)(a)(userStream), eval(env)(b)(userStream)) .asInstanceOf[Response[A]]
-      case Ap3(Ref(f),a,b,c) => env.values(f)(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream)) .asInstanceOf[Response[A]]
-      case Ap4(Ref(f),a,b,c,d) => env.values(f)(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream), eval(env)(d)(userStream)) .asInstanceOf[Response[A]]
+      case Ap1(Ref(f),a) => eval(env)(a)(userStream).flatMap(env.values(f)(_)) .asInstanceOf[Response[A]]
+      case Ap2(Ref(f),a,b) => Monad[Response].tuple2(eval(env)(a)(userStream), eval(env)(b)(userStream)).flatMap{case (a,b) => env.values(f)(a,b)} .asInstanceOf[Response[A]]
+      case Ap3(Ref(f),a,b,c) => Monad[Response].tuple3(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(a)(userStream)).flatMap{case (a,b,c) => env.values(f)(a,b,c)} .asInstanceOf[Response[A]]
+      case Ap4(Ref(f),a,b,c,d) => Monad[Response].tuple4(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream), eval(env)(d)(userStream)).flatMap{case (a,b,c,d) => env.values(f)(a,b,c,d)} .asInstanceOf[Response[A]]
       case _ => Response.delay { sys.error("unable to interpret remote expression of form: " + r) }
     }
   }
