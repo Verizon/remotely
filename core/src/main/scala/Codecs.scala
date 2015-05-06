@@ -17,17 +17,20 @@
 
 package remotely
 
+import shapeless.ops.hlist.Prepend
+import shapeless.{HNil, HList, ::}
+
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
 
-case class Codecs(codecs: Map[String,Codec[Any]]) {
-  def codec[A:TypeTag:Codec]: Codecs = {
-    val name = Remote.toTag(implicitly[TypeTag[A]])
-    this.copy(codecs = codecs + (name -> Codec[A].asInstanceOf[Codec[Any]]))
+case class Codecs[A <: HList](codecs: Map[String,Codec[Any]]) {
+  def codec[C:TypeTag:Codec]: Codecs[C :: A] = {
+    val name = Remote.toTag(implicitly[TypeTag[C]])
+    this.copy(codecs = codecs + (name -> Codec[C].asInstanceOf[Codec[Any]]))
   }
 
 
-  def ++(c: Codecs): Codecs = Codecs(codecs ++ c.codecs)
+  def ++[C <: HList](c: Codecs[C])(implicit prepend : Prepend[A, C]) : Codecs[prepend.Out] = Codecs[prepend.Out](codecs ++ c.codecs)
 
   def keySet = codecs.keySet
 
@@ -40,5 +43,5 @@ case class Codecs(codecs: Map[String,Codec[Any]]) {
 
 object Codecs {
 
-  val empty = Codecs(Map("List[remotely.Signature]" -> codecs.set(Signature.signatureCodec).asInstanceOf[Codec[Any]]))
+  val empty: Codecs[HNil] = Codecs(Map("List[remotely.Signature]" -> codecs.set(Signature.signatureCodec).asInstanceOf[Codec[Any]]))
 }
