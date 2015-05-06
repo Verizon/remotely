@@ -36,6 +36,7 @@ object RemoteSpec extends Properties("Remote") {
     .codec[List[Signature]]
     .populate { _
                  .declare("sum", (d: List[Int]) => Response.now(d.sum))
+                 .declare("add3", (a: Int, b: Int, c: Int) => Response.now(a + b + c))
                  .declare("describe", Response.now(List(Signature("sum", "sum: List[Double] => Double", List("List[Double]"), "Double"),
                                                         Signature("sum", "sum: List[Int] => Int", List("List[Int]"), "Int"),
                                                         Signature("add1", "add1: List[Int] => List[Int]", List("List[Int]"), "List[Int]"),
@@ -53,6 +54,7 @@ object RemoteSpec extends Properties("Remote") {
   val sum = Remote.ref[List[Int] => Int]("sum")
   val sumD = Remote.ref[List[Double] => Double]("sum")
   val mapI = Remote.ref[List[Int] => List[Int]]("add1")
+  val add3 = Remote.ref[(Int, Int, Int) => Int]("add3")
 
   val ctx = Response.Context.empty
 
@@ -100,6 +102,11 @@ object RemoteSpec extends Properties("Remote") {
       a => false
     )
   }
+
+  property("add3") =
+    forAll { (one: Int, two: Int, three: Int) =>
+      add3(one, two, three).runWithoutContext(loc).run == (one + two + three)
+    }
 /* These take forever on travis, and so I'm disabling them, we should leave benchmarking of scodec to scodec and handle benchmarking of remotely in the benchmarking sub-projects
 
   property("encoding speed") = {
