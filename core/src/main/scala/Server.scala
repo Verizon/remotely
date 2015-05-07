@@ -55,7 +55,7 @@ object Server {
           fail(s"[validation] server values: <" + env.values.keySet + s"> does not have referenced values:\n $missing")
         }
         else // we are good to try executing the request
-          eval(env.values)(r)(request.tail)(ctx).flatMap {
+          eval(env)(r)(request.tail)(ctx).flatMap {
             a =>
               val deltaNanos = System.nanoTime - startNanos
               val delta = Duration.fromNanos(deltaNanos)
@@ -80,20 +80,25 @@ object Server {
   val P = Process
 
   /** Evaluate a remote expression, using the given (untyped) environment. */
-  def eval(env: Values)(r: Remote[Any])(userStream: Process[Task, Any]): StreamResponse[Any] = {
+  def eval(env: Environment[_])(r: Remote[Any])(userStream: Process[Task, BitVector]): StreamResponse[Any] = {
+    val values = env.values.values
     import Remote._
     r match {
       case Local(a,_,_) => Response.now(a).toStream
-      case LocalStream(_, _,_) => Response.stream(userStream)
-      case Ref(name) => env.values.lift(name) match {
+      case LocalStream(_, _,tag) =>
+        env.codecs.get(tag).map { decoder =>
+          val decodedStream: Process[Task, Any] = userStream.map(bits => decoder.complete.decode(bits).map(_.value)).flatMap(_.toProcess)
+          Response.stream(decodedStream)
+        }.getOrElse(StreamResponse.fail(new Error(s"[decoding] server does not have deserializers for:\n$tag")))
+      case Ref(name) => values.lift(name) match {
         case None => Response.delay { sys.error("Unknown name on server: " + name) }.toStream
         case Some(a) => a().toStream
       }
       // on the server, only concern ourselves w/ tree of fully saturated calls
-      case Ap1(Ref(f),a) => eval(env)(a)(userStream).toStream.flatMap(env.values(f)(_).toStream)
-      case Ap2(Ref(f),a,b) => Monad[StreamResponse].tuple2(eval(env)(a)(userStream), eval(env)(b)(userStream)).flatMap{case (a,b) => env.values(f)(a,b).toStream}
-      case Ap3(Ref(f),a,b,c) => Monad[StreamResponse].tuple3(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream)).flatMap{case (a,b,c) => env.values(f)(a,b,c).toStream}
-      case Ap4(Ref(f),a,b,c,d) => Monad[StreamResponse].tuple4(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream), eval(env)(d)(userStream)).flatMap{case (a,b,c,d) => env.values(f)(a,b,c,d).toStream}
+      case Ap1(Ref(f),a) => eval(env)(a)(userStream).toStream.flatMap(values(f)(_).toStream)
+      case Ap2(Ref(f),a,b) => Monad[StreamResponse].tuple2(eval(env)(a)(userStream), eval(env)(b)(userStream)).flatMap{case (a,b) => values(f)(a,b).toStream}
+      case Ap3(Ref(f),a,b,c) => Monad[StreamResponse].tuple3(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream)).flatMap{case (a,b,c) => values(f)(a,b,c).toStream}
+      case Ap4(Ref(f),a,b,c,d) => Monad[StreamResponse].tuple4(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream), eval(env)(d)(userStream)).flatMap{case (a,b,c,d) => values(f)(a,b,c,d).toStream}
       case _ => StreamResponse { _ => sys.error("unable to interpret remote expression of form: " + r) }
     }
   }

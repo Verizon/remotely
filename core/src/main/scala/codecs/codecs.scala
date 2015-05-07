@@ -164,7 +164,7 @@ package object codecs extends lowerprioritycodecs {
     )
 
   def localStreamRemoteDecoder: Decoder[LocalStream[Any]] =
-      utf8.map( tag => LocalStream(null, None, tag))
+      utf8.map( tag => LocalStream(Process.empty, None, tag)) // Insert empty stream the actual Stream will come later
 
   def refCodec[A]: Codec[Ref[A]] = utf8.as[Ref[A]]
 
