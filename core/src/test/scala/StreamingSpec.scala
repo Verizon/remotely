@@ -19,7 +19,7 @@ package remotely
 
 import java.net.InetSocketAddress
 
-import org.scalatest.{Matchers, FlatSpec}
+import org.scalatest.{BeforeAndAfterAll, Matchers, FlatSpec}
 import remotely.Remote.implicits._
 import remotely.transport.netty.NettyTransport
 import remotely.codecs._
@@ -28,10 +28,8 @@ import scalaz.concurrent.Task
 import scalaz.stream._
 
 import scalaz.stream.async
-import utils._
-import scala.concurrent.duration._
 
-class StreamingSpec extends FlatSpec with Matchers {
+class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   behavior of "Streaming"
   // on server, populate environment with codecs and values
   val env = Environment.empty
@@ -40,46 +38,35 @@ class StreamingSpec extends FlatSpec with Matchers {
     .populate { _
     // It would be nice if this could fail to compile...
     .declare("download", (n: Int) => Response.stream { Process[Byte](1,2,3,4) } )
-    .declare("continuous", (p: Process[Task, Byte]) => Response.stream { p.map(_ + 1)} )
+    .declare("continuous", (p: Process[Task, Int]) => Response.stream { p.map(_ + 1)} )
   }
 
   val addr = new InetSocketAddress("localhost", 8091)
 
   val download = Remote.ref[Int => Process[Task,Byte]]("download")
 
-  val continuous = Remote.ref[Process[Task,Byte] => Process[Task, Int]]("continuous")
+  val continuous = Remote.ref[Process[Task,Int] => Process[Task, Int]]("continuous")
 
   val serverShutdown = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
 
   val transport = NettyTransport.single(addr).run
   val loc: Endpoint = Endpoint.single(transport)
 
-  it should "work for a function that returns a Stream" in {
+  ignore should "work for a function that returns a Stream" in {
     val expr: Remote[Process[Task, Byte]] = download(10)
-    val loc: Endpoint = Endpoint.single(transport)
     val result: Process[Task, Byte] = expr.run(loc, M = Monitoring.consoleLogger("[client]"))
 
     result.runLog.run shouldEqual(Seq(1,2,3,4))
-
-    transport.shutdown.run
-    serverShutdown.run
   }
-  ignore should "work for a function that takes a stream and returns a Stream" in {
-    val byteStream: Process[Task, Byte] = Process(3,4,5)
+  it should "work for a function that takes a stream and returns a Stream" in {
+    val byteStream: Process[Task, Int] = Process(3,4)
 
     val continuousResult = continuous.apply(byteStream).run(loc, M = Monitoring.consoleLogger("[client]"))
 
     continuousResult.runLog.run shouldEqual(List(4,5,6))
-
-    transport.shutdown.run
-    serverShutdown.run
   }
   ignore should "work (mutable)" in {
-    val expr: Remote[Process[Task, Byte]] = download(10)
-    val loc: Endpoint = Endpoint.single(transport)
-    val result: Process[Task, Byte] = expr.run(loc, M = Monitoring.consoleLogger("[client]"))
-
-    val q = async.unboundedQueue[Byte]
+    val q = async.unboundedQueue[Int]
     val byteStream = q.dequeue
 
     //upload.stream(byteStream).runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
@@ -88,15 +75,17 @@ class StreamingSpec extends FlatSpec with Matchers {
 
     continuousResult.map(_.toString).to(io.stdOut)
 
-    q.enqueue(9)
+    q.enqueueOne(9).run
     //continuousResult(0).timed(1.second).run shouldEqual(10)
 
-    q.enqueue(19)
+    q.enqueueOne(19).run
     //continuousResult(1).timed(1.second).run shouldEqual(20)
 
-    q.enqueue(29)
+    q.enqueueOne(29).run
     //continuousResult(2).timed(1.second).run shouldEqual(30)
+  }
 
+  override def afterAll() = {
     transport.shutdown.run
     serverShutdown.run
   }
