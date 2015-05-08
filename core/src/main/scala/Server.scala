@@ -54,8 +54,11 @@ object Server {
           val missing = unknown.mkString("\n")
           fail(s"[validation] server values: <" + env.values.keySet + s"> does not have referenced values:\n $missing")
         }
-        else // we are good to try executing the request
-          eval(env)(r)(request.tail)(ctx).flatMap {
+        else {
+          // we are good to try executing the request
+          val (response, isStream) = eval(env)(r)(request.tail)
+          val resultStream = if (isStream) Process.await(response(ctx))(_.asInstanceOf[Process[Task, Any]]) else Process.await(response(ctx))(Process.emit(_))
+          resultStream.flatMap {
             a =>
               val deltaNanos = System.nanoTime - startNanos
               val delta = Duration.fromNanos(deltaNanos)
@@ -71,6 +74,7 @@ object Server {
               monitoring.handled(ctx, r, expected, left(e), delta)
               Process.fail(e)
           }
+        }
       }
     }.onFailure {
       e => codecs.responseEncoder(codecs.utf8).encode(Failure(Err(formatThrowable(e)))).toProcess
@@ -80,26 +84,35 @@ object Server {
   val P = Process
 
   /** Evaluate a remote expression, using the given (untyped) environment. */
-  def eval(env: Environment[_])(r: Remote[Any])(userStream: Process[Task, BitVector]): StreamResponse[Any] = {
+  def eval(env: Environment[_])(r: Remote[Any])(userStream: Process[Task, BitVector]): (Response[Any], Boolean) = {
+    def evalSub(r: Remote[Any]) = eval(env)(r)(userStream)._1
     val values = env.values.values
     import Remote._
     r match {
-      case Local(a,_,_) => Response.now(a).toStream
+      case Local(a,_,_) => (Response.now(a), false)
       case LocalStream(_, _,tag) =>
         env.codecs.get(tag).map { decoder =>
           val decodedStream: Process[Task, Any] = userStream.map(bits => decoder.complete.decode(bits).map(_.value)).flatMap(_.toProcess)
-          Response.stream(decodedStream)
-        }.getOrElse(StreamResponse.fail(new Error(s"[decoding] server does not have deserializers for:\n$tag")))
+          (Response.now(decodedStream), true)
+        }.getOrElse((Response.fail(new Error(s"[decoding] server does not have deserializers for:\n$tag")), false))
       case Ref(name) => values.lift(name) match {
-        case None => Response.delay { sys.error("Unknown name on server: " + name) }.toStream
-        case Some(a) => a().toStream
+        case None => (Response.delay { sys.error("Unknown name on server: " + name) }, false)
+        case Some(a) => (a(), a.isStream)
       }
       // on the server, only concern ourselves w/ tree of fully saturated calls
-      case Ap1(Ref(f),a) => eval(env)(a)(userStream).toStream.flatMap(values(f)(_).toStream)
-      case Ap2(Ref(f),a,b) => Monad[StreamResponse].tuple2(eval(env)(a)(userStream), eval(env)(b)(userStream)).flatMap{case (a,b) => values(f)(a,b).toStream}
-      case Ap3(Ref(f),a,b,c) => Monad[StreamResponse].tuple3(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream)).flatMap{case (a,b,c) => values(f)(a,b,c).toStream}
-      case Ap4(Ref(f),a,b,c,d) => Monad[StreamResponse].tuple4(eval(env)(a)(userStream), eval(env)(b)(userStream), eval(env)(c)(userStream), eval(env)(d)(userStream)).flatMap{case (a,b,c,d) => values(f)(a,b,c,d).toStream}
-      case _ => StreamResponse { _ => sys.error("unable to interpret remote expression of form: " + r) }
+      case Ap1(Ref(f),a) =>
+        val value = values(f)
+        (eval(env)(a)(userStream)._1.flatMap{value(_)}, value.isStream)
+      case Ap2(Ref(f),a,b) =>
+        val value = values(f)
+        (Monad[Response].tuple2(evalSub(a), evalSub(b)).flatMap{case (a,b) => value(a,b)}, value.isStream)
+      case Ap3(Ref(f),a,b,c) =>
+        val value = values(f)
+        (Monad[Response].tuple3(evalSub(a), evalSub(b), evalSub(c)).flatMap{case (a,b,c) => value(a,b,c)}, value.isStream)
+      case Ap4(Ref(f),a,b,c,d) =>
+        val value = values(f)
+        (Monad[Response].tuple4(evalSub(a), evalSub(b), evalSub(c), evalSub(d)).flatMap{case (a,b,c,d) => value(a,b,c,d)}, value.isStream)
+      case _ => (Response.delay { sys.error("unable to interpret remote expression of form: " + r) }, false)
     }
   }
 

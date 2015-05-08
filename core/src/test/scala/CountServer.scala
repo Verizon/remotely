@@ -23,8 +23,8 @@ import codecs._
 trait CountServerBase {
   import Codecs._
 
-  def ping: Int => SingleResponse[Int]
-  def describe: SingleResponse[List[Signature]]
+  def ping: Int => Response[Int]
+  def describe: Response[List[Signature]]
 
   def environment = Environment(
     Codecs.empty.codec[Int],
@@ -39,12 +39,12 @@ trait CountServerBase {
 class CountServer extends CountServerBase {
   implicit val intcodec = int32
   val count: AtomicInteger = new AtomicInteger(0)
-  def ping: Int => SingleResponse[Int] = { _ =>
+  def ping: Int => Response[Int] = { _ =>
     val r = count.incrementAndGet()
     Response.delay(r)
   }
 
-  def describe: SingleResponse[List[Signature]] = Response.now(List(Signature("describe", "describe: scala.List[Signature]", Nil, "scala.List[Signature]"),
+  def describe: Response[List[Signature]] = Response.now(List(Signature("describe", "describe: scala.List[Signature]", Nil, "scala.List[Signature]"),
                                                               Signature("ping", "ping: Int => Int", List("Int"), "Int")))
 }
 

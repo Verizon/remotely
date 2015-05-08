@@ -67,7 +67,7 @@ object Remote {
 
   implicit class RunSyntaxForStreaming[A](self: Remote[Process[Task,A]]) {
     /** Call `self.run(at, M).apply(ctx)` to get back a `Task[A]`. */
-    def run(at: Endpoint, ctx: Response.Context = Response.Context.empty, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Process[Task,A] =
+    def run(at: Endpoint, ctx: Response.Context = Response.Context.empty, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Task[Process[Task,A]] =
       evaluateStream(at,M)(self).apply(ctx)
   }
 
@@ -77,7 +77,7 @@ object Remote {
      * Run this `Remote[A]` at the given `Endpoint`. We require a `TypeTag[A]` and
      * `Codec[A]` in order to deserialize the response and check that it has the expected type.
      */
-    def run(at: Endpoint, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): SingleResponse[A] =
+    def run(at: Endpoint, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Response[A] =
       evaluate(at, M)(self)
 
     /** Call `self.run(at, M).apply(ctx)` to get back a `Task[A]`. */

@@ -38,8 +38,8 @@ object Streaming {
     .codec[Float]
     .codec[List[Int]]
     .codec[List[String]].populate { _
-    .declare("download", (n: Int) => Response.stream { Process[Byte](1,2,3,4) } )
-    .declare("continuous", (p: Process[Task, Byte]) => Response.stream { p.map(_ + 1)} )
+    .declareStream("download", (n: Int) => Response.now { Process[Byte](1,2,3,4) } )
+    .declareStream("continuous", (p: Process[Task, Byte]) => Response.now { p.map(_ + 1)} )
   }
 
   val addr = new InetSocketAddress("localhost", 8083)
@@ -78,7 +78,7 @@ object StreamingMain extends App {
   val expr: Remote[Process[Task, Byte]] = download(10)
   val loc: Endpoint = Endpoint.single(transport)
   val result: Process[Task, Byte] = expr
-    .run(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte)
+    .run(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte).run
 
   val task = result.map(_.toString).to(io.stdOut).run
 
@@ -87,7 +87,7 @@ object StreamingMain extends App {
   //upload.stream(byteStream).runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
   val continuousResult = continuous(byteStream)
-    .run(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte)
+    .run(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte).run
 
   val task1 = continuousResult.map(_.toString).to(io.stdOut).run
 

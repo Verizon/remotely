@@ -37,8 +37,8 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     .codec[Int]
     .populate { _
     // It would be nice if this could fail to compile...
-    .declare("download", (n: Int) => Response.stream { Process[Byte](1,2,3,4) } )
-    .declare("continuous", (p: Process[Task, Int]) => Response.stream { p.map(_ + 1)} )
+    .declareStream("download", (n: Int) => Response.now { Process[Byte](1,2,3,4) } )
+    .declareStream("continuous", (p: Process[Task, Int]) => Response.now { p.map(_ + 1)} )
   }
 
   val addr = new InetSocketAddress("localhost", 8091)
@@ -54,14 +54,14 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   ignore should "work for a function that returns a Stream" in {
     val expr: Remote[Process[Task, Byte]] = download(10)
-    val result: Process[Task, Byte] = expr.run(loc, M = Monitoring.consoleLogger("[client]"))
+    val result: Process[Task, Byte] = expr.run(loc, M = Monitoring.consoleLogger("[client]")).run
 
     result.runLog.run shouldEqual(Seq(1,2,3,4))
   }
   it should "work for a function that takes a stream and returns a Stream" in {
     val byteStream: Process[Task, Int] = Process(3,4)
 
-    val continuousResult = continuous.apply(byteStream).run(loc, M = Monitoring.consoleLogger("[client]"))
+    val continuousResult = continuous.apply(byteStream).run(loc, M = Monitoring.consoleLogger("[client]")).run
 
     continuousResult.runLog.run shouldEqual(List(4,5,6))
   }
@@ -71,7 +71,7 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     //upload.stream(byteStream).runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
-    val continuousResult = continuous(byteStream).run(loc, M = Monitoring.consoleLogger("[client]"))
+    val continuousResult = continuous(byteStream).run(loc, M = Monitoring.consoleLogger("[client]")).run
 
     continuousResult.map(_.toString).to(io.stdOut)
 

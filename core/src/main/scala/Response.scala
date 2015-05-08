@@ -23,130 +23,113 @@ import scalaz.{Applicative,Catchable,Functor,Monad,Nondeterminism}
 import scalaz.concurrent.Task
 import scalaz.\/
 import scalaz.\/.{left,right}
-import scalaz.stream.Process
 
 import Response.Context
 
 /** The result type for a remote computation. */
 sealed trait Response[+A] {
-  def toStream: StreamResponse[Any]
-}
-sealed trait StreamResponse[+A] extends Response[Process[Task,A]]{
-  def apply(c: Context): Process[Task,A]
-
-  def flatMap[B](f: A => StreamResponse[B]): StreamResponse[B] =
-    StreamResponse { ctx => Process.suspend(this(ctx).flatMap(f andThen (_(ctx)))) }
-
-  def map[B](f: A => B): StreamResponse[B] =
-    StreamResponse { ctx => this(ctx) map f }
-
-  def attempt: StreamResponse[Throwable \/ A] =
-    StreamResponse { ctx => this(ctx).attempt() }
-
-  /** Modify the asychronous result of this `Response`. */
-  def edit[B](f: Process[Task,A] => Process[Task,B]): StreamResponse[B] =
-    StreamResponse { ctx => f(this.apply(ctx)) }
-
-  def toStream = this
-}
-sealed trait SingleResponse[+A] extends Response[A]{
   def apply(c: Context): Task[A]
 
-  def flatMap[B](f: A => SingleResponse[B]): SingleResponse[B] =
-    SingleResponse { ctx => Task.suspend(this(ctx).flatMap(f andThen (_(ctx)))) }
+  def flatMap[B](f: A => Response[B]): Response[B] =
+    Response { ctx => Task.suspend { this(ctx).flatMap(f andThen (_(ctx))) }}
 
-  def map[B](f: A => B): SingleResponse[B] =
-    SingleResponse { ctx => this(ctx) map f }
+  def map[B](f: A => B): Response[B] =
+    Response { ctx => Task.suspend { this(ctx) map f }}
 
-  def attempt: SingleResponse[Throwable \/ A] =
-    SingleResponse { ctx => this(ctx).attempt }
+  def attempt: Response[Throwable \/ A] =
+    Response { ctx => Task.suspend { this(ctx).attempt }}
 
-  /** Modify the asychronous result of this `Response`. */
-  def edit[B](f: Task[A] => Task[B]): SingleResponse[B] =
-    SingleResponse { ctx => f(this.apply(ctx)) }
-
-  def toStream: StreamResponse[A] =
-    StreamResponse( ctx => Process.eval(this(ctx)))
-}
-
-object SingleResponse {
-  /** Monad instance for `SingleResponse`. */
-  implicit val instance = new Monad[SingleResponse] with Catchable[SingleResponse] {
-    def point[A](a: => A): SingleResponse[A] = {
-      lazy val result = a // memoized - `point` should not be used for side effects
-      SingleResponse(_ => Task.now(result))
-    }
-    def bind[A,B](a: SingleResponse[A])(f: A => SingleResponse[B]): SingleResponse[B] = a.flatMap(f)
-    def attempt[A](a: SingleResponse[A]): SingleResponse[Throwable \/ A] = a.attempt
-    def fail[A](err: Throwable): SingleResponse[A] = SingleResponse(_ => Task.fail(err))
-  }
-
-  def apply[A](f: Context => Task[A]): SingleResponse[A] = new SingleResponse[A] {
-    def apply(c: Context): Task[A] = f(c)
-  }
-
-  /** Obtain the current `Context`. */
-  def ask: SingleResponse[Context] = SingleResponse { ctx => Task.now(ctx) }
-
-  def scope[A](resp: SingleResponse[A]): SingleResponse[A] =
-    SingleResponse(ctx => resp(ctx.push(Response.fresh)))
-
-  def fail(t: Throwable): SingleResponse[Nothing] = SingleResponse(_ => Task.fail(t))
-
-  def suspend[A](resp: SingleResponse[A]) =
-    SingleResponse { ctx => Task.suspend(resp(ctx))}
-}
-
-object StreamResponse {
-  /** Monad instance for `StreamResponse`. */
-  implicit val instance = new Monad[StreamResponse] with Catchable[StreamResponse] {
-    def point[A](a: => A): StreamResponse[A] = {
-      lazy val result = a // memoized - `point` should not be used for side effects
-      StreamResponse(_ => Process.emit(result))
-    }
-    def bind[A,B](a: StreamResponse[A])(f: A => StreamResponse[B]): StreamResponse[B] = a.flatMap(f)
-    def attempt[A](a: StreamResponse[A]): StreamResponse[Throwable \/ A] = a.attempt
-    def fail[A](err: Throwable): StreamResponse[A] = StreamResponse(_ => Process.fail(err))
-  }
-
-  def apply[A](f: Context => Process[Task,A]): StreamResponse[A] = new StreamResponse[A] {
-    def apply(c: Context): Process[Task,A] = f(c)
-  }
-
-  /** Obtain the current `Context`. */
-  def ask: StreamResponse[Context] = StreamResponse { ctx => Process.emit(ctx) }
-
-  def scope[A](resp: StreamResponse[A]): StreamResponse[A] =
-    StreamResponse(ctx => resp(ctx.push(Response.fresh)))
-
-  def fail(t: Throwable): StreamResponse[Nothing] = StreamResponse(_ => Process.fail(t))
+  /** Modify the asynchronous result of this `Response`. */
+  def edit[B](f: Task[A] => Task[B]): Response[B] =
+    Response { ctx => Task.suspend { f(this.apply(ctx))} }
 }
 
 object Response {
 
-  /** Produce a `Response[A]` from a strict value. */
-  def now[A](a: A): SingleResponse[A] = SingleResponse { _ => Task.now(a) }
+  /** Create a `Response[A]` from a `Context => Task[A]`. */
+  def apply[A](f: Context => Task[A]): Response[A] = new Response[A] {
+    def apply(c: Context): Task[A] = f(c)
+  }
 
-  def stream[A](stream: Process[Task, A]): StreamResponse[A] = StreamResponse { _ => stream }
+  /** Monad instance for `Response`. */
+  implicit val responseInstance = new Monad[Response] with Catchable[Response] with Nondeterminism[Response] {
+    def point[A](a: => A): Response[A] = {
+      lazy val result = a // memoized - `point` should not be used for side effects
+      Response(_ => Task.now(a))
+    }
+    def bind[A,B](a: Response[A])(f: A => Response[B]): Response[B] =
+      Response { ctx => Task.suspend { a(ctx).flatMap(f andThen (_(ctx))) }}
+    def attempt[A](a: Response[A]): Response[Throwable \/ A] = a.attempt
+    def fail[A](err: Throwable): Response[A] = Response.fail(err)
+
+    def chooseAny[A](head: Response[A], tail: Seq[Response[A]]): Response[(A, Seq[Response[A]])] =
+      Response { ctx => Nondeterminism[Task].chooseAny(head(ctx), tail.map(_(ctx))).map {
+        case (a, rem) => (a, rem.map(Response.async(_))) }
+      }
+
+    override def gatherUnordered[A](rs: Seq[Response[A]]): Response[List[A]] = Response { ctx =>
+      Task.suspend { Nondeterminism[Task].gatherUnordered(rs.map(_(ctx))) }
+    }
+  }
+
+  /** Gather the results of multiple responses in parallel, preserving the order of the results. */
+  def gather[A](rs: Seq[Response[A]]): Response[List[A]] =
+    Nondeterminism[Response].gather(rs)
+
+  /** An `Applicative[Response]` in which `apply2`, `apply3`, etc compute results in parallel. */
+  val par: Applicative[Response] = new Applicative[Response] {
+    def point[A](a: => A): Response[A] = Response.now(a)
+    def ap[A,B](a: => Response[A])(f: => Response[A => B]): Response[B] = apply2(f,a)(_(_))
+    override def apply2[A,B,C](a: => Response[A], b: => Response[B])(f: (A,B) => C): Response[C] =
+      Nondeterminism[Response].mapBoth(a, b)(f)
+  }
+
+  /** Fail with the given `Throwable`. */
+  def fail(err: Throwable): Response[Nothing] = Response { _ => Task.fail(err) }
+
+  /** Produce a `Response[A]` from a strict value. */
+  def now[A](a: A): Response[A] = Response { _ => Task.now(a) }
 
   /**
    * Produce a `Response[A]` from a nonstrict value, whose result
    * will not be cached if this `Response` is used more than once.
    */
-  def delay[A](a: => A): SingleResponse[A] = SingleResponse { _ => Task.delay(a) }
+  def delay[A](a: => A): Response[A] = Response { _ => Task.delay(a) }
+
+  /** Produce a `Response` nonstrictly. Do not cache the produced `Response`. */
+  def suspend[A](a: => Response[A]): Response[A] =
+    Response { ctx => Task.suspend { a(ctx) } }
+
+  /** Obtain the current `Context`. */
+  def ask: Response[Context] = Response { ctx => Task.now(ctx) }
+
+  /** Obtain a portion of the current `Context`. */
+  def asks[A](f: Context => A): Response[A] = Response { ctx => Task.delay(f(ctx)) }
+
+  /** Apply the given function to the `Context` before passing it to `a`. */
+  def local[A](f: Context => Context)(a: Response[A]): Response[A] =
+    Response { ctx => Task.suspend { a(f(ctx)) }}
+
+  /** Apply the given effectful function to the `Context` before passing it to `a`. */
+  def localF[A](f: Response[Context])(a: Response[A]): Response[A] =
+    f flatMap { ctx => local(_ => ctx)(a) }
+
+  /** Push a fresh `ID` onto the tracing stack before invoking `a`. */
+  def scope[A](a: Response[A]): Response[A] =
+    localF(fresh.flatMap(id => ask.map(_ push id)))(a)
 
   /**
    * Create a response by registering a completion callback with the given
    * asynchronous function, `register`.
    */
-  def async[A](register: ((Throwable \/ A) => Unit) => Unit): SingleResponse[A] =
-    SingleResponse { _ => Task.async { register }}
+  def async[A](register: ((Throwable \/ A) => Unit) => Unit): Response[A] =
+    Response { _ => Task.async { register }}
 
   /** Create a `Response[A]` from a `Task[A]`. */
-  def async[A](a: Task[A]): SingleResponse[A] = SingleResponse { _ => a }
+  def async[A](a: Task[A]): Response[A] = Response { _ => a }
 
   /** Alias for [[remotely.Response.fromFuture]]. */
-  def async[A](f: scala.concurrent.Future[A])(implicit E: scala.concurrent.ExecutionContext): SingleResponse[A] =
+  def async[A](f: scala.concurrent.Future[A])(implicit E: scala.concurrent.ExecutionContext): Response[A] =
     fromFuture(f)
 
   /**
@@ -154,7 +137,7 @@ object Response {
    * result, it is not safe to reuse this `Response` to repeat the same
    * computation.
    */
-  def fromFuture[A](f: scala.concurrent.Future[A])(implicit E: scala.concurrent.ExecutionContext): SingleResponse[A] =
+  def fromFuture[A](f: scala.concurrent.Future[A])(implicit E: scala.concurrent.ExecutionContext): Response[A] =
     async { cb => f.onComplete {
       case Success(a) => cb(right(a))
       case Failure(e) => cb(left(e))
@@ -180,7 +163,7 @@ object Response {
   }
 
   /** Create a new `ID`, guaranteed to be globally unique. */
-  def fresh: ID = new ID { val get = UUID.randomUUID }
+  def fresh: Response[ID] = async { Task.delay { new ID { val get = UUID.randomUUID } } }
 
   /**
    * An environment used when generating a response.

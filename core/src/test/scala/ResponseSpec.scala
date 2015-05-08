@@ -28,13 +28,13 @@ object ResponseSpec extends Properties("Response") {
     import ExecutionContext.Implicits.global
     // TODO: Figure out if it's possible to bring up this number to it's original 100 000
     val N = 1000
-    val responses = (0 until N).map(Monad[SingleResponse].pure(_))
+    val responses = (0 until N).map(Monad[Response].pure(_))
     val responses2 = (0 until N).map(i => Response.async(Future(i)))
 
-    def leftFold(responses: Seq[SingleResponse[Int]]): SingleResponse[Int] =
-      responses.foldLeft(Monad[SingleResponse].pure(0))(Monad[SingleResponse].apply2(_,_)(_ + _))
-    def rightFold(responses: Seq[SingleResponse[Int]]): SingleResponse[Int] =
-      responses.reverse.foldLeft(Monad[SingleResponse].pure(0))((tl,hd) => Monad[SingleResponse].apply2(hd,tl)(_ + _))
+    def leftFold(responses: Seq[Response[Int]]): Response[Int] =
+      responses.foldLeft(Monad[Response].pure(0))(Monad[Response].apply2(_,_)(_ + _))
+    def rightFold(responses: Seq[Response[Int]]): Response[Int] =
+      responses.reverse.foldLeft(Monad[Response].pure(0))((tl,hd) => Monad[Response].apply2(hd,tl)(_ + _))
 
     val ctx = Response.Context.empty
     val expected = (0 until N).sum
