@@ -28,18 +28,13 @@ import scala.reflect.runtime.universe._
 
 object Streaming {
 
-  def foo(i: Int): String = "BONUS"
-
   // on server, populate environment with codecs and values
   val env = Environment.empty
     .codec[Int]
-    .codec[String]
-    .codec[Double]
-    .codec[Float]
-    .codec[List[Int]]
-    .codec[List[String]].populate { _
-    .declareStream("download", (n: Int) => Response.now { Process[Byte](1,2,3,4) } )
-    .declareStream("continuous", (p: Process[Task, Byte]) => Response.now { p.map(_ + 1)} )
+    .populate { _
+    .declareStream("download", (n: Int) => Response.now { Process[Int](1,2,3,4) } )
+    .declareStream("continuous", (p: Process[Task, Int]) => Response.now { p.map(_ + 1)} )
+    .declare("upload", (p: Process[Task, Int]) => Response.async(p.runLog.map(_.sum)))
   }
 
   val addr = new InetSocketAddress("localhost", 8083)
@@ -51,45 +46,37 @@ object Streaming {
 
   // Let's no try and do this one right now
   //val upload = Remote.ref[ByteVector => Int]("upload")
-  val download = Remote.ref[Int => Process[Task,Byte]]("download")
+  val download = Remote.ref[Int => Process[Task,Int]]("download")
+  val upload = Remote.ref[Process[Task, Int] => Int]("upload")
   // Let's not try and do this one right now
   //val analyze = Remote.ref[ByteVector => Process[Task, String]]("analyze")
-  val continuous = Remote.ref[Process[Task,Byte] => Process[Task, Byte]]("continuous")
-
-  // And actual client code uses normal looking function calls
-  val bytes = ByteVector(4,3,2,1)
-  //val ar = upload(localToRemote(bytes)(scodec.codecs.bytes, implicitly[TypeTag[ByteVector]]))
-  //val ar1 = analyze(localToRemote(bytes)(scodec.codecs.bytes, implicitly[TypeTag[ByteVector]]))
-  val ar3 = download.apply(localToRemote(10)(scodec.codecs.int(8), implicitly[TypeTag[Int]]))
-  //val ar2: Remote[Int] = ar
-  val r: Remote[Process[Task, Byte]] = ar3
+  val continuous = Remote.ref[Process[Task,Int] => Process[Task, Int]]("continuous")
 }
 
 object StreamingMain extends App {
-  import Streaming.{env,addr,download, continuous}
+  import Streaming.{env,addr,download, continuous, upload}
   import Remote.implicits._
 
   println(env)
 
   // create a server for this environment
-  val server = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
+  val server = env.serve(addr).run
 
   val transport = NettyTransport.single(addr).run
-  val expr: Remote[Process[Task, Byte]] = download(10)
+  val expr: Remote[Process[Task, Int]] = download(10)
   val loc: Endpoint = Endpoint.single(transport)
-  val result: Process[Task, Byte] = expr
-    .run(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte).run
+  val result: Process[Task, Int] = expr.run(loc).run
 
   val task = result.map(_.toString).to(io.stdOut).run
 
-  val byteStream: Process[Task, Byte] = Process(1,2,3,4)
+  val stream: Process[Task, Int] = Process(1,2,3,4)
 
-  //upload.stream(byteStream).runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
+  upload(stream).runWithoutContext(loc)
 
-  val continuousResult = continuous(byteStream)
-    .run(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))(implicitly[TypeTag[Byte]], scodec.codecs.byte).run
+  val continuousResult = continuous(stream).run(loc).run
 
   val task1 = continuousResult.map(_.toString).to(io.stdOut).run
 
-  Task.gatherUnordered(Seq(task,task1)).runAsync{_ => transport.shutdown.run; server.run}
+  Task.gatherUnordered(Seq(task,task1)).run
+  transport.shutdown.run; server.run
 }
