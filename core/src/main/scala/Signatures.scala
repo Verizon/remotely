@@ -21,12 +21,14 @@ import scala.reflect.runtime.universe.TypeTag
 import codecs._
 import scodec.{Codec,Encoder,Err}
 import scodec.bits.BitVector
+import scalaz.concurrent.Task
+import scalaz.stream.Process
 import scalaz.{\/,Foldable,NonEmptyList}
 import scalaz.std.list._
 import scalaz.std.string._
 import shapeless._
 
-case class Signature(name: String, tag: String, inTypes: List[String], outType: String) {
+case class Signature(name: String, tag: String, inTypes: List[String], outType: String, isStream: Boolean) {
   /** returns a string in the form "Type, Type => Response[Type]",
     *  wrapping Response around the return type def
     */
@@ -44,25 +46,40 @@ case class Signature(name: String, tag: String, inTypes: List[String], outType: 
 }
 
 object Signature {
-  implicit val signatureCodec: Codec[Signature] = (utf8 ~~ utf8 ~~ list(utf8) ~~ utf8).widenAs[Signature](Signature.apply, Signature.unapply)
+  implicit val signatureCodec: Codec[Signature] = (utf8 ~~ utf8 ~~ list(utf8) ~~ utf8 ~~ bool).widenAs[Signature](Signature.apply, Signature.unapply)
 }
 
 case class Signatures(signatures: Set[Signature]) {
 
   def specify0[A: TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[A](name), List(), Remote.toTag[A]))
+    Signatures(signatures + Signature(name, Remote.nameToTag[A](name), List(), Remote.toTag[A], false))
+
+  def specifyStream0[A: TypeTag](name: String): Signatures =
+    Signatures(signatures + Signature(name, Remote.nameToTag[Process[Task,A]](name), List(), Remote.toTag[A], true))
 
   def specify1[A:TypeTag,B:TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[A=>B](name), List(Remote.toTag[A]), Remote.toTag[B]))
+    Signatures(signatures + Signature(name, Remote.nameToTag[A=>B](name), List(Remote.toTag[A]), Remote.toTag[B], false))
+
+  def specifyStream1[A:TypeTag,B:TypeTag](name: String): Signatures =
+    Signatures(signatures + Signature(name, Remote.nameToTag[A=>Process[Task,B]](name), List(Remote.toTag[A]), Remote.toTag[B], true))
 
   def specify2[A:TypeTag,B:TypeTag,C:TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B)=>C](name), List(Remote.toTag[A], Remote.toTag[B]), Remote.toTag[C]))
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B)=>C](name), List(Remote.toTag[A], Remote.toTag[B]), Remote.toTag[C], false))
+
+  def specifyStream2[A:TypeTag,B:TypeTag,C:TypeTag](name: String): Signatures =
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B)=>Process[Task,C]](name), List(Remote.toTag[A], Remote.toTag[B]), Remote.toTag[C], true))
 
   def specify3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C)=>D](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C]), Remote.toTag[D]))
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C)=>D](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C]), Remote.toTag[D], false))
+
+  def specifyStream3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String): Signatures =
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C)=>Process[Task,D]](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C]), Remote.toTag[D], true))
 
   def specify4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C,D)=>D](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C], Remote.toTag[D]), Remote.toTag[E]))
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C,D)=>D](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C], Remote.toTag[D]), Remote.toTag[E], false))
+
+  def specifyStream4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String): Signatures =
+    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C,D)=>Process[Task,D]](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C], Remote.toTag[D]), Remote.toTag[E], true))
 
   def pretty: String = "Signatures.empty\n" +
   signatures.map(s => Signatures.split(s.tag) match { case (name,tname) =>
@@ -73,12 +90,14 @@ case class Signatures(signatures: Set[Signature]) {
 
 object Signatures {
   val Arrow = "(.*)=>(.*)".r
-  private[remotely] def wrapResponse(typename: String): String = typename match {
+  private[remotely] def wrapResponse(typename: String, isStream: Boolean): String = typename match {
+    case Arrow(l,r) if isStream => s"$l=> Response[Process[Task,${r.trim}]]"
     case Arrow(l,r) => s"$l=> Response[${r.trim}]"
+    case _ if isStream => s"Response[Process[Task,$typename]]"
     case _ => s"Response[$typename]"
   }
 
-  val empty = Signatures(Set(Signature("describe", "describe: List[remotely.Signature]", List(), "List[Remotely.Signature]")))
+  val empty = Signatures(Set(Signature("describe", "describe: List[remotely.Signature]", List(), "List[Remotely.Signature]", false)))
 
   // converts "sum: List[Int] => Int" to ("sum", "List[Int] => Int")
   private[remotely] def split(typedName: String): (String,String) = {

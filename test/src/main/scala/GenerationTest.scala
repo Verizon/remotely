@@ -18,12 +18,19 @@
 package remotely
 package test
 
-import DescribeTestNewerProtocol._
+import scodec.Codec
 
-@GenServer(remotely.test.DescribeTestOlderProtocol.definition) abstract class DescribeTestOlderServer
-@GenServer(remotely.test.DescribeTestNewerProtocol.definition) abstract class DescribeTestNewerServer
-@GenClient(remotely.test.DescribeTestOlderProtocol.definition.signatures) object DescribeTestOlderClient
-@GenClient(remotely.test.DescribeTestNewerProtocol.definition.signatures) object DescribeTestNewerClient
+object GenerationTest {
+  implicit lazy val fooCodec: Codec[Foo] = codecs.int32.as[Foo]
+  implicit lazy val barCodec: Codec[Bar] = codecs.int32.as[Bar]
+  implicit lazy val sigCodec: Codec[List[Signature]] = codecs.list(Signature.signatureCodec)
 
-@GenServer(remotely.test.GenerationTest.definition) abstract class TestGenerationServer
-@GenClient(remotely.test.GenerationTest.definition.signatures) object TestGenerationClient
+  val definition = Protocol.empty
+    .codec[Foo]
+    .codec[Bar]
+    .specify0[Foo]("foo")
+    .specify1[Foo, Foo]("fooId")
+    .specify1[Foo, Bar]("foobar")
+    .specifyStream2[Foo, Bar, Bar]("streamBar")
+}
+

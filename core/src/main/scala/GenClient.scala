@@ -38,7 +38,7 @@ object GenClient extends MacrosCompatibility {
   def liftSignature(c: Context)(signature: Signature): c.universe.Tree = {
     import c.universe._
     val s = signature
-    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType})"
+    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType}, ${s.isStream})"
     t
   }
 
@@ -65,9 +65,7 @@ object GenClient extends MacrosCompatibility {
     // expecting any server to support. This will be baked into the
     // generated client as an expectedSignatures val.
     val esSet = {
-      val sigs = s.signatures.map { sig =>
-        q"_root_.remotely.Signature(${sig.name}, ${sig.tag}, ${sig.inTypes}, ${sig.outType})"
-      }
+      val sigs = s.signatures.map { liftSignature(c)(_) }
       c.Expr[Set[Signature]](q"Set[Signature]( ..${sigs.toList} )")
     }
 

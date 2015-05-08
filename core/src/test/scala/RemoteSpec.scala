@@ -37,10 +37,10 @@ object RemoteSpec extends Properties("Remote") {
     .populate { _
                  .declare("sum", (d: List[Int]) => Response.now(d.sum))
                  .declare("add3", (a: Int, b: Int, c: Int) => Response.now(a + b + c))
-                 .declare("describe", Response.now(List(Signature("sum", "sum: List[Double] => Double", List("List[Double]"), "Double"),
-                                                        Signature("sum", "sum: List[Int] => Int", List("List[Int]"), "Int"),
-                                                        Signature("add1", "add1: List[Int] => List[Int]", List("List[Int]"), "List[Int]"),
-                                                        Signature("describe", "describe: List[Signature]", Nil, "List[Signature]"))))
+                 .declare("describe", Response.now(List(Signature("sum", "sum: List[Double] => Double", List("List[Double]"), "Double", false),
+                                                        Signature("sum", "sum: List[Int] => Int", List("List[Int]"), "Int", false),
+                                                        Signature("add1", "add1: List[Int] => List[Int]", List("List[Int]"), "List[Int]", false),
+                                                        Signature("describe", "describe: List[Signature]", Nil, "List[Signature]", false))))
                                                                   
       .declare("sum", (d: List[Double]) => Response.now(d.sum))
       .declare("add1", (d: List[Int]) => Response.now(d.map(_ + 1):List[Int]))

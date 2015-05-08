@@ -41,7 +41,7 @@ object GenServer extends MacrosCompatibility {
 
   def liftSignature(c: Context)(s: Signature): c.universe.Tree = {
     import c.universe._
-    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType})"
+    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType}, ${s.isStream})"
     t
   }
 
@@ -66,12 +66,12 @@ object GenServer extends MacrosCompatibility {
     // Creates name/type pairs from the signatures in the protocol.
     val signatures = p.signatures.signatures.map { s =>
       val (n, t) = Signatures.split(s.tag)
-      val typ = parseType(c)(Signatures.wrapResponse(t))
-      (n, typ)
+      val typ = parseType(c)(Signatures.wrapResponse(t, s.isStream))
+      (n, typ, s.isStream)
     }
 
     // Generates the method defs for the generated class.
-    val sigDefs = signatures.collect { case (n,t) if n != "describe" =>
+    val sigDefs = signatures.collect { case (n,t, isStream) if n != "describe" =>
       genSig(n, t)
     }
 
@@ -103,7 +103,8 @@ object GenServer extends MacrosCompatibility {
 
              private def populateDeclarations(env: Values): Values =
                 ${ signatures.foldLeft(q"env":c.Tree)((e,s) =>
-                    q"$e.declare(${Literal(Constant(s._1))},${Ident(createTermName(c)(s._1))})"
+                    if (s._3)  q"$e.declareStream(${Literal(Constant(s._1))},${Ident(createTermName(c)(s._1))})"
+                    else q"$e.declare(${Literal(Constant(s._1))},${Ident(createTermName(c)(s._1))})"
                   )}
 
               ..$body
