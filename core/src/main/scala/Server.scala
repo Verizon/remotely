@@ -56,7 +56,8 @@ object Server {
         }
         else {
           // we are good to try executing the request
-          val (response, isStream) = eval(env)(r)(request.tail)
+          // Why is it not request.tail?????
+          val (response, isStream) = eval(env)(r)(request)
           val resultStream = if (isStream) Process.await(response(ctx))(_.asInstanceOf[Process[Task, Any]]) else Process.await(response(ctx))(Process.emit(_))
           resultStream.flatMap {
             a =>

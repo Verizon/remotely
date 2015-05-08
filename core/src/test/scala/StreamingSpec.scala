@@ -39,6 +39,7 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     // It would be nice if this could fail to compile...
     .declareStream("download", (n: Int) => Response.now { Process[Byte](1,2,3,4) } )
     .declareStream("continuous", (p: Process[Task, Int]) => Response.now { p.map(_ + 1)} )
+    .declare("upload", (p: Process[Task, Int]) => Response.async[Int](p.runLog.map(_.sum)))
   }
 
   val addr = new InetSocketAddress("localhost", 8091)
@@ -47,23 +48,32 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
   val continuous = Remote.ref[Process[Task,Int] => Process[Task, Int]]("continuous")
 
+  val upload = Remote.ref[Process[Task, Int] => Int]("upload")
+
   val serverShutdown = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
 
   val transport = NettyTransport.single(addr).run
   val loc: Endpoint = Endpoint.single(transport)
 
-  ignore should "work for a function that returns a Stream" in {
+  it should "work for a function that returns a Stream" in {
     val expr: Remote[Process[Task, Byte]] = download(10)
-    val result: Process[Task, Byte] = expr.run(loc, M = Monitoring.consoleLogger("[client]")).run
+    val result: Process[Task, Byte] = expr.run(loc).run
 
     result.runLog.run shouldEqual(Seq(1,2,3,4))
   }
   it should "work for a function that takes a stream and returns a Stream" in {
     val byteStream: Process[Task, Int] = Process(3,4)
 
-    val continuousResult = continuous.apply(byteStream).run(loc, M = Monitoring.consoleLogger("[client]")).run
+    val continuousResult = continuous.apply(byteStream).run(loc).run
 
-    continuousResult.runLog.run shouldEqual(List(4,5,6))
+    continuousResult.runLog.run shouldEqual(List(4,5))
+  }
+  it should "work for a function that takes a stream and returns an ordinary value" in {
+    val byteStream: Process[Task, Int] = Process(4,5,6)
+
+    val uploadResult = upload(byteStream).runWithoutContext(loc)
+
+    uploadResult.run shouldEqual(15)
   }
   ignore should "work (mutable)" in {
     val q = async.unboundedQueue[Int]
@@ -71,7 +81,7 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
 
     //upload.stream(byteStream).runWithContext(loc, Response.Context.empty, Monitoring.consoleLogger("[client]"))
 
-    val continuousResult = continuous(byteStream).run(loc, M = Monitoring.consoleLogger("[client]")).run
+    val continuousResult = continuous(byteStream).run(loc).run
 
     continuousResult.map(_.toString).to(io.stdOut)
 
