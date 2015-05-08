@@ -177,7 +177,7 @@ class ServerDeframedHandler(handler: Handler, strategy: Strategy, logger: Monito
     case None =>
       logger.negotiating(Option(ctx.channel.remoteAddress), "creating queue", None)
       val queue1 = async.unboundedQueue[BitVector](strategy)
-      val queue = Some(queue1)
+      queue = Some(queue1)
       val stream = queue1.dequeue
 
       val framed = handler(stream) map (Bits(_)) fby Process.emit(EOS)
@@ -187,11 +187,9 @@ class ServerDeframedHandler(handler: Handler, strategy: Strategy, logger: Monito
         }
       }.run.flatMap { _ => Task.delay{ctx.flush(); ()} }
 
-      write.runAsync { e =>
-        e match {
-          case -\/(e) => fail(s"uncaught exception in connection-processing logic: $e", ctx)
-          case _ =>
-        }
+      write.runAsync {
+        case -\/(e) => fail(s"uncaught exception in connection-processing logic: $e", ctx)
+        case _ =>
       }
       queue1
     case Some(q) => q
