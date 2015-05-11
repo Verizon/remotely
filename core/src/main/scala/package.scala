@@ -71,7 +71,7 @@ package object remotely {
    * In the actual implementation, we don't really care what type of Remote we receive. In any case, it is
    * going to become a stream of bits and produce wtv is the expected result unless there is a decoding error.
    */
-  def evaluateImpl[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty, isStream: Boolean)(r: Remote[Any])(remoteTag: String): Response[Any] = {
+  def evaluateImpl[A:Decoder:TypeTag, B](e: Endpoint, M: Monitoring = Monitoring.empty, isStream: Boolean)(r: Remote[B])(remoteTag: String): Response[B] = {
     Response.scope { Response { ctx =>
       val refs = Remote.refs(r)
 
@@ -115,7 +115,7 @@ package object remotely {
         }
       }
       // We assume that if it's not conceptually a stream, we encoded it on the server as a one element stream
-      if (isStream) Task.now(resultStream) else resultStream.runLast.map(_.get)
+      (if (isStream) Task.now(resultStream) else resultStream.runLast.map(_.get)).asInstanceOf[Task[B]]
     }}
   }
 
