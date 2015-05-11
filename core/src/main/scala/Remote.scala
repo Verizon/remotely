@@ -88,8 +88,8 @@ object Remote {
       run(at, M).apply(ctx)
 
     /** Run this with an empty context */
-    def runWithoutContext(at: Endpoint)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
-      runWithContext(at, Response.Context.empty)
+    def runWithoutContext(at: Endpoint, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
+      runWithContext(at, Response.Context.empty, M)
   }
   implicit class Ap1Syntax[A,B](self: Remote[A => B]) {
     def apply(a: Remote[A]): Remote[B] =
