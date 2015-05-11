@@ -40,6 +40,9 @@ sealed trait Remote[+A] {
     Remote.refs(this).mkString("\n  ") + "\n  " +
     toString + "\n}"
 
+  /**
+   * Builds a List by applying a partial function to all children of this Remote on which the function is defined.
+   */
   def collect[B](partial: PartialFunction[Remote[Any],B]): List[B] = {
     val me = partial.lift(this).toList
     val rest = this match {
