@@ -85,7 +85,6 @@ object Remote {
 
     /** Call `self.run(at, M).apply(ctx)` to get back a `Task[A]`. */
     def runWithContext(at: Endpoint, ctx: Response.Context, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
-      // We can call get here because we know there is one element (unless there is a bug in Remotely)
       run(at, M).apply(ctx)
 
     /** Run this with an empty context */
