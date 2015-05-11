@@ -1,5 +1,7 @@
 package remotely
 
+import java.util.NoSuchElementException
+
 import remotely.codecs.DecodingFailure
 import scodec.Attempt.{Successful, Failure}
 import scodec.{Attempt, Err}
@@ -26,10 +28,9 @@ package object utils {
   }
 
   implicit class AugmentedProcess[A](p: Process[Task, A]) {
-    def head: Task[A] = (p pipe Process.await1).runLast.map(_.get)
-    def apply(index: Int) = p.drop(index).head
     def flatten[B](implicit conv: A => Process[Task,B]): Process[Task,B] =
       p.flatMap(conv)
+    def uncons: Task[(A, Process[Task, A])] = (p pipe Process.await1).runLastOr(throw new NoSuchElementException).map(a => (a, p))
   }
   implicit def errToE(err: Err) = new DecodingFailure(err)
   implicit class AugmentedAttempt[A](a: Attempt[A]) {

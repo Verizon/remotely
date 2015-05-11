@@ -114,7 +114,8 @@ package object remotely {
           ).flatten
         }
       }
-      if (isStream) Task.now(resultStream) else resultStream.head
+      // We assume that if it's not conceptually a stream, we encoded it on the server as a one element stream
+      if (isStream) Task.now(resultStream) else resultStream.runLast.map(_.get)
     }}
   }
 

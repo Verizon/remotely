@@ -42,10 +42,10 @@ object Server {
    */
   def handle(env: Environment[_])(request: Process[Task, BitVector])(monitoring: Monitoring): Process[Task,BitVector] = {
     Process.await(Task.delay(System.nanoTime)) { startNanos =>
-      Process.await(request.head) { initialRequest =>
+      Process.await(request.uncons) { case (initialRequestBits, userStreamBits) =>
         // decode the request from the environment
         val (respEncoder, ctx, r) =
-          codecs.requestDecoder(env).complete.decode(initialRequest).map(_.value)
+          codecs.requestDecoder(env).complete.decode(initialRequestBits).map(_.value)
             .fold(e => throw new Error(e.messageWithContext), identity)
         val expected = Remote.refs(r)
         val unknown = (expected -- env.values.keySet).toList
@@ -57,7 +57,7 @@ object Server {
         else {
           // we are good to try executing the request
           // Why is it not request.tail?????
-          val (response, isStream) = eval(env)(r)(request)
+          val (response, isStream) = eval(env)(r)(userStreamBits)
           val resultStream = if (isStream) Process.await(response(ctx))(_.asInstanceOf[Process[Task, Any]]) else Process.await(response(ctx))(Process.emit(_))
           resultStream.flatMap {
             a =>
