@@ -18,12 +18,14 @@
 package remotely
 
 import java.net.InetSocketAddress
+import java.util.NoSuchElementException
 
 import org.scalatest.{BeforeAndAfterAll, Matchers, FlatSpec}
 import remotely.Remote.implicits._
 import remotely.transport.netty.NettyTransport
 import remotely.codecs._
 
+import scalaz.-\/
 import scalaz.concurrent.Task
 import scalaz.stream._
 
@@ -40,6 +42,7 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     .declareStream("download", (n: Int) => Response.now { Process[Byte](1,2,3,4) } )
     .declareStream("continuous", (p: Process[Task, Int]) => Response.now { p.map(_ + 1)} )
     .declare("upload", (p: Process[Task, Int]) => Response.async[Int](p.runLog.map(_.sum)))
+    .declareStream("failDownload", (n: Int) => Response.now { Process[Byte](1,2) ++ Process.fail(new NoSuchElementException)})
   }
 
   val addr = new InetSocketAddress("localhost", 8091)
@@ -49,6 +52,8 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   val continuous = Remote.ref[Process[Task,Int] => Process[Task, Int]]("continuous")
 
   val upload = Remote.ref[Process[Task, Int] => Int]("upload")
+
+  val downloadFail = Remote.ref[Int => Process[Task, Byte]]("failDownload")
 
   val serverShutdown = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
 
@@ -74,6 +79,10 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     val uploadResult = upload(byteStream).runWithoutContext(loc)
 
     uploadResult.run shouldEqual(15)
+  }
+  it should "fail client side stream if server fails outbound stream on server" in {
+    val result: Process[Task, Byte] = downloadFail(10).run(loc).run
+    result.run.attempt.run shouldBe a [-\/[NoSuchElementException]]
   }
   ignore should "work (mutable)" in {
     val q = async.unboundedQueue[Int]
