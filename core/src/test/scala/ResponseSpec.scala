@@ -26,8 +26,7 @@ object ResponseSpec extends Properties("Response") {
 
   property("stack safety") = {
     import ExecutionContext.Implicits.global
-    // TODO: Figure out if it's possible to bring up this number to it's original 100 000
-    val N = 1000
+    val N = 100000
     val responses = (0 until N).map(Monad[Response].pure(_))
     val responses2 = (0 until N).map(i => Response.async(Future(i)))
 
