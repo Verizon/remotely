@@ -140,7 +140,7 @@ object Remote {
     override def toString = name.takeWhile(_ != ':')
   }
 
-  private[remotely] abstract class Ap[A](val f: Remote[Any],val args: List[Remote[Any]]) extends Remote[A] {
+  private[remotely] sealed abstract class Ap[A](val f: Remote[Any],val args: List[Remote[Any]]) extends Remote[A] {
     override def toString = s"""$f({$args.mkString(","})"""
   }
 
