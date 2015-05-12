@@ -34,7 +34,7 @@ class TestServerImpl extends TestGenerationServer {
   def streamBar = (foo: Foo, bar: Bar) => Response.now(Process(bar))
 }
 
-class DescribeSpec extends FlatSpec
+class GenerationSpec extends FlatSpec
     with Matchers
     with BeforeAndAfterAll {
 
