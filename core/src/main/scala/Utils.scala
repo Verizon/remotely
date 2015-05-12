@@ -1,11 +1,11 @@
 package remotely
 
-import java.util.NoSuchElementException
-
 import remotely.codecs.DecodingFailure
 import scodec.Attempt.{Successful, Failure}
 import scodec.{Attempt, Err}
 
+import scalaz.stream.Cause.{End, EarlyCause}
+import scalaz.stream.Process.{Halt, Await, Emit, Step}
 import scalaz.{\/-, -\/, \/}
 import scalaz.concurrent.Task
 import scalaz.stream.Process
@@ -30,7 +30,23 @@ package object utils {
   implicit class AugmentedProcess[A](p: Process[Task, A]) {
     def flatten[B](implicit conv: A => Process[Task,B]): Process[Task,B] =
       p.flatMap(conv)
-    def uncons: Task[(A, Process[Task, A])] = (p pipe Process.await1).runLastOr(throw new NoSuchElementException).map(a => (a, p))
+    def uncons: Task[(A, Process[Task, A])] = p.step match {
+      case Step(head, next) => head match {
+        case Emit(as) => as.headOption.map(x =>
+          Task.now((x, Process.emitAll(as drop 1) +: next))) getOrElse
+          Task.fail(new scala.NoSuchElementException)
+        case Await(task, k) => for {
+          e <- task.attempt
+          as <- Task.delay(k(EarlyCause.fromTaskResult(e)).run)
+          //as <- new Task(toFuture[Process[Task, A]](k(EarlyCause.fromTaskResult(e))))
+          u <- as.uncons
+        } yield u
+      }
+      case Halt(cause) => cause match {
+        case End => Task.fail(new scala.NoSuchElementException)
+        case _ : EarlyCause => Task.fail(cause.asThrowable)
+      }
+    }
   }
   implicit def errToE(err: Err) = new DecodingFailure(err)
   implicit class AugmentedAttempt[A](a: Attempt[A]) {
