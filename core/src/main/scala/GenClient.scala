@@ -43,9 +43,7 @@ object GenClient extends MacrosCompatibility {
 
     // Generate the val-defs that get inserted into the object declaration
     val signatures : Set[Tree] = s.signatures.map { sig =>
-        // Fairly convinced, we can get rid of this
-        val (name, typ) = Signatures.split(sig.tag)
-        c.parse(s"""val $name = Remote.ref[$typ]("$name")""")
+        c.parse(s"""val ${sig.name} = Remote.ref[${sig.typeString}]("${sig.name}")""")
     }
 
 

@@ -56,9 +56,8 @@ object GenServer extends MacrosCompatibility {
 
     // Creates name/type pairs from the signatures in the protocol.
     val signatures = p.signatures.signatures.map { s =>
-      val (n, t) = Signatures.split(s.tag)
-      val typ = parseType(c)(Signatures.wrapResponse(t))
-      (n, typ)
+      val typ = parseType(c)(Signatures.wrapResponse(s.typeString))
+      (s.name, typ)
     }
 
     // Generates the method defs for the generated class.

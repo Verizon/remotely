@@ -41,8 +41,10 @@ case class Signature(name: String, params: List[Field[Any]], out: Field[Any]) {
 
   private def lhsWithArrow = if (params.isEmpty) "" else s"$lhs => "
 
+  def typeString = lhsWithArrow + out.typeString
+
   def tag = {
-    s"$name: $lhsWithArrow${out.typeString}"
+    s"$name: $typeString"
   }
 
 }
@@ -71,9 +73,9 @@ case class Signatures(signatures: Set[Signature]) {
     Signatures(signatures + Signature(name, List(in1, in2, in3, in4), out))
 
   def pretty: String = "Signatures.empty\n" +
-  signatures.map(s => Signatures.split(s.tag) match { case (name,tname) =>
-                   s"""  .specify[$tname]("$name")"""
-                 }).mkString("\n")
+                        signatures.map(s =>
+                           s"""  .specify[${s.typeString}]("${s.name}")"""
+                         ).mkString("\n")
 
 }
 
@@ -85,15 +87,6 @@ object Signatures {
   }
 
   val empty = Signatures(Set(Signature("describe", List(), Field("signatures", "List[remotely.Signature]"))))
-
-  // converts "sum: List[Int] => Int" to ("sum", "List[Int] => Int")
-  // I am fairly convinced that it would be better to get rid of this
-  private[remotely] def split(typedName: String): (String,String) = {
-    val parts = typedName.split(':').toIndexedSeq
-    val name = parts.init.mkString(":").trim
-    val typename = parts.last.trim
-    (name, typename)
-  }
 
   private[remotely] def indent(by: String)(s: String): String =
     by + s.replace("\n", "\n" + by)
