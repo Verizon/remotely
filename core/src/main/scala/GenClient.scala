@@ -29,19 +29,6 @@ class GenClient(sigs: Signatures) extends StaticAnnotation {
 }
 
 object GenClient extends MacrosCompatibility {
-  /**
-    * this just allows us to put a $signature into a quasi-quote.
-    * implemented this way instead of by providing Liftable[Signature]
-    * only because I gave up on trying to figure out the complex cake
-    * of path-dependant types which is the current reflection api.
-    */
-  def liftSignature(c: Context)(signature: Signature): c.universe.Tree = {
-    import c.universe._
-    val s = signature
-    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType})"
-    t
-  }
-
   def impl(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
     import Flag._
@@ -50,12 +37,13 @@ object GenClient extends MacrosCompatibility {
     // and evaluate it at compile-time.
     val s: Signatures = c.prefix.tree match {
       case q"new $name($sig)" =>
-        c.eval(c.Expr[Signatures](resetLocalAttrs(c)(q"{import remotely.codecs._; $sig}")))
+        c.eval(c.Expr[Signatures](resetLocalAttrs(c)(q"{import remotely.codecs._; import remotely.Field; $sig}")))
       case _ => c.abort(c.enclosingPosition, "GenClient must be used as an annotation.")
     }
 
     // Generate the val-defs that get inserted into the object declaration
     val signatures : Set[Tree] = s.signatures.map { sig =>
+        // Fairly convinced, we can get rid of this
         val (name, typ) = Signatures.split(sig.tag)
         c.parse(s"""val $name = Remote.ref[$typ]("$name")""")
     }
@@ -65,9 +53,7 @@ object GenClient extends MacrosCompatibility {
     // expecting any server to support. This will be baked into the
     // generated client as an expectedSignatures val.
     val esSet = {
-      val sigs = s.signatures.map { sig =>
-        q"_root_.remotely.Signature(${sig.name}, ${sig.tag}, ${sig.inTypes}, ${sig.outType})"
-      }
+      val sigs = s.signatures.map { Gen.liftSignature(c)(_) }
       c.Expr[Set[Signature]](q"Set[Signature]( ..${sigs.toList} )")
     }
 
