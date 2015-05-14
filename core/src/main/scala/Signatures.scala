@@ -21,11 +21,11 @@ import scala.reflect.runtime.universe.TypeTag
 import codecs._
 import scodec.Codec
 
-case class Field[+A](name: String, typeString: String)
+case class Field[+A]private[remotely](name: String, typeString: String)
 object Field {
   def strict[A:TypeTag](name: String) = Field[A](name, Remote.toTag[A])
 }
-case class Type[+A](name: String)
+case class Type[+A]private[remotely](name: String)
 object Type {
   def apply[A:TypeTag]: Type[A] = Type[A](Remote.toTag[A])
 }
