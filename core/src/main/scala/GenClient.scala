@@ -37,7 +37,7 @@ object GenClient extends MacrosCompatibility {
     // and evaluate it at compile-time.
     val s: Signatures = c.prefix.tree match {
       case q"new $name($sig)" =>
-        c.eval(c.Expr[Signatures](resetLocalAttrs(c)(q"{import remotely.codecs._; import remotely.Field; $sig}")))
+        c.eval(c.Expr[Signatures](resetLocalAttrs(c)(q"{import remotely.codecs._; import remotely.Field; import remotely.Type; $sig}")))
       case _ => c.abort(c.enclosingPosition, "GenClient must be used as an annotation.")
     }
 

@@ -10,7 +10,7 @@ private[remotely] object Gen extends MacrosCompatibility {
   def liftSignature(c: Context)(signature: Signature): c.universe.Tree = {
     import c.universe._
     val s = signature
-    val t: Tree = q"_root_.remotely.Signature(${s.name}, List(..${s.params.map(liftField(c)(_))}), ${liftField(c)(s.out)})"
+    val t: Tree = q"_root_.remotely.Signature(${s.name}, List(..${s.params.map(liftField(c)(_))}), ${s.outType})"
     t
   }
 

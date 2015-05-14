@@ -44,7 +44,7 @@ object GenServer extends MacrosCompatibility {
     // and evaluate it at compile-time.
     val p:Protocol[_] = c.prefix.tree match {
       case q"new $name($protocol)" =>
-        c.eval(c.Expr[Protocol[_]](resetLocalAttrs(c)(q"{import remotely.codecs._; import remotely.Field; $protocol}")))
+        c.eval(c.Expr[Protocol[_]](resetLocalAttrs(c)(q"{import remotely.codecs._; import remotely.Field; import remotely.Type; $protocol}")))
       case _ => c.abort(c.enclosingPosition, "GenServer must be used as an annotation.")
     }
 

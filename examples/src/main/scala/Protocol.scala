@@ -22,12 +22,12 @@ import remotely.codecs._
 
 // NB: The GenServer macro needs to receive the FQN of all types, or import them
 // explicitly. The target of the macro needs to be an abstract class.
-@GenServer(remotely.Protocol.empty.codec[Int].specify1("fac", Field.strict[Int]("in"), Field.strict[Int]("out")))
+@GenServer(remotely.Protocol.empty.codec[Int].specify1("fac", Field.strict[Int]("in"), Type[Int]))
   abstract class FacServer
 
 // The `GenClient` macro needs to receive the FQN of all types, or import them
 // explicitly. The target needs to be an object declaration.
-@GenClient(remotely.Protocol.empty.codec[Int].specify1[Int,Int]("fac", Field.strict[Int]("in"), Field.strict[Int]("out")).signatures)
+@GenClient(remotely.Protocol.empty.codec[Int].specify1[Int,Int]("fac", Field.strict[Int]("in"), Type[Int]).signatures)
   object FacClient
 
 // TODO(ahjohannessen): @stew <- Compiling Foo fails somehow?

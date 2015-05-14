@@ -21,27 +21,27 @@ import shapeless._
 import shapeless.ops.hlist.Selector
 
 import scala.reflect.runtime.universe.TypeTag
-import scodec.{Codec,Decoder,Encoder}
+import scodec.Codec
 
 case class Protocol[H <: HList](codecs: Codecs[H], signatures: Signatures) {
 
   def codec[A:TypeTag:Codec]: Protocol[A :: H] =
     this.copy(codecs = codecs.codec[A])
 
-  def specify0[O](name: String, out: Field[O])(implicit evidenceA : Selector[H, O]): Protocol[H] =
-    this.copy(signatures = signatures.specify0(name, out))
+  def specify0[O](name: String, out: Type[O])(implicit evidenceA : Selector[H, O]): Protocol[H] =
+    this.copy(signatures = signatures.specify0(name, out.name))
 
-  def specify1[A,O](name: String, in: Field[A], out: Field[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, O]): Protocol[H] =
-    this.copy(signatures = signatures.specify1(name, in, out))
+  def specify1[A,O](name: String, in: Field[A], out: Type[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, O]): Protocol[H] =
+    this.copy(signatures = signatures.specify1(name, in, out.name))
 
-  def specify2[A,B,O](name: String, in1: Field[A], in2: Field[B], out: Field[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, O]): Protocol[H] =
-    this.copy(signatures = signatures.specify2(name, in1, in2, out))
+  def specify2[A,B,O](name: String, in1: Field[A], in2: Field[B], out: Type[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, O]): Protocol[H] =
+    this.copy(signatures = signatures.specify2(name, in1, in2, out.name))
 
-  def specify3[A,B,C,O](name: String, in1: Field[A], in2: Field[B], in3: Field[C], out: Field[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C], evidenceD: Selector[H, O]): Protocol[H] =
-    this.copy(signatures = signatures.specify3(name, in1, in2, in3, out))
+  def specify3[A,B,C,O](name: String, in1: Field[A], in2: Field[B], in3: Field[C], out: Type[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C], evidenceD: Selector[H, O]): Protocol[H] =
+    this.copy(signatures = signatures.specify3(name, in1, in2, in3, out.name))
 
-  def specify4[A,B,C,D,O](name: String, in1: Field[A], in2: Field[B], in3: Field[C], in4: Field[D], out: Field[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C], evidenceD: Selector[H, D], evidenceE: Selector[H, O]): Protocol[H] =
-    this.copy(signatures = signatures.specify4(name, in1, in2, in3, in4, out))
+  def specify4[A,B,C,D,O](name: String, in1: Field[A], in2: Field[B], in3: Field[C], in4: Field[D], out: Type[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C], evidenceD: Selector[H, D], evidenceE: Selector[H, O]): Protocol[H] =
+    this.copy(signatures = signatures.specify4(name, in1, in2, in3, in4, out.name))
 
   def pretty: String =
     "Protocol(\n" +

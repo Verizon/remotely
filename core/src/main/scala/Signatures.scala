@@ -19,29 +19,28 @@ package remotely
 
 import scala.reflect.runtime.universe.TypeTag
 import codecs._
-import scodec.{Codec,Encoder,Err}
-import scodec.bits.BitVector
-import scalaz.{\/,Foldable,NonEmptyList}
-import scalaz.std.list._
-import scalaz.std.string._
-import shapeless._
+import scodec.Codec
 
 case class Field[+A](name: String, typeString: String)
 object Field {
   def strict[A:TypeTag](name: String) = Field[A](name, Remote.toTag[A])
 }
-case class Signature(name: String, params: List[Field[Any]], out: Field[Any]) {
+case class Type[+A](name: String)
+object Type {
+  def apply[A:TypeTag]: Type[A] = Type[A](Remote.toTag[A])
+}
+case class Signature(name: String, params: List[Field[Any]], outType: String) {
   /** returns a string in the form "Type, Type => Response[Type]",
     *  wrapping Response around the return type def
     */
   def wrapResponse: String =
-    s"${lhsWithArrow}Response[${out.typeString}]"
+    s"${lhsWithArrow}Response[${outType}]"
 
   private def lhs = params.map(_.typeString).mkString(",")
 
   private def lhsWithArrow = if (params.isEmpty) "" else s"$lhs => "
 
-  def typeString = lhsWithArrow + out.typeString
+  def typeString = lhsWithArrow + outType
 
   def tag = {
     s"$name: $typeString"
@@ -52,25 +51,28 @@ case class Signature(name: String, params: List[Field[Any]], out: Field[Any]) {
 object Signature {
   // What is the difference between ~ and ~~ ?
   implicit val fieldCodec: Codec[Field[Any]] = (utf8 ~~ utf8).widenAs[Field[Any]](Field.apply, Field.unapply)
-  implicit val signatureCodec: Codec[Signature] = (utf8  ~~ list(fieldCodec) ~~ fieldCodec).widenAs[Signature](Signature.apply, Signature.unapply)
+  implicit val signatureCodec: Codec[Signature] = (utf8  ~~ list(fieldCodec) ~~ utf8).widenAs[Signature](Signature.apply, Signature.unapply)
 }
 
 case class Signatures(signatures: Set[Signature]) {
 
-  def specify0(name: String, out: Field[Any]): Signatures =
-    Signatures(signatures + Signature(name, List(), out))
+  def specify(name: String, in: List[Field[Any]], outType: String) =
+    Signatures(signatures + Signature(name, in, outType))
 
-  def specify1(name: String, in: Field[Any], out: Field[Any]): Signatures =
-    Signatures(signatures + Signature(name, List(in), out))
+  def specify0(name: String, out: String): Signatures =
+    specify(name, Nil, out)
 
-  def specify2(name: String, in1: Field[Any], in2: Field[Any], out: Field[Any]): Signatures =
-    Signatures(signatures + Signature(name, List(in1, in2), out))
+  def specify1(name: String, in: Field[Any], out: String): Signatures =
+    specify(name, List(in), out)
 
-  def specify3(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], out: Field[Any]): Signatures =
-    Signatures(signatures + Signature(name, List(in1, in2, in3), out))
+  def specify2(name: String, in1: Field[Any], in2: Field[Any], out: String): Signatures =
+    specify(name, List(in1, in2), out)
 
-  def specify4(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], in4: Field[Any], out: Field[Any]): Signatures =
-    Signatures(signatures + Signature(name, List(in1, in2, in3, in4), out))
+  def specify3(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], out: String): Signatures =
+    specify(name, List(in1, in2, in3), out)
+
+  def specify4(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], in4: Field[Any], out: String): Signatures =
+    specify(name, List(in1, in2, in3, in4), out)
 
   def pretty: String = "Signatures.empty\n" +
                         signatures.map(s =>
@@ -86,7 +88,7 @@ object Signatures {
     case _ => s"Response[$typename]"
   }
 
-  val empty = Signatures(Set(Signature("describe", List(), Field("signatures", "List[remotely.Signature]"))))
+  val empty = Signatures(Set(Signature("describe", List(), "List[remotely.Signature]")))
 
   private[remotely] def indent(by: String)(s: String): String =
     by + s.replace("\n", "\n" + by)
