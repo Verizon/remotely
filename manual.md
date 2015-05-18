@@ -16,7 +16,22 @@ One of the most important elements of *Remotely* is its fast, lightweight serial
 
 By default, *Remotely* ships with the ability to serialise / deserialise the following "primitive" types:
 
-* `A \/ B` (scalaz.\/, otherwise known as a disjunction)* `Array[Byte]`* `Boolean`* `Double`* `Either[A,B]`* `Float`* `IndexedSeq[A]`* `Int` (both 32 and 64)* `List[A]`* `Map[A,B]`* `Option[A]`* `Set[A]`* `SortedMap[A,B]`* `SortedSet[A]`* `String` (encoded with UTF8)* `Tuple2...7`
+* `A \/ B` (scalaz.\/, otherwise known as a disjunction)
+* `Array[Byte]`
+* `Boolean`
+* `Double`
+* `Either[A,B]`
+* `Float`
+* `IndexedSeq[A]`
+* `Int` (both 32 and 64)
+* `List[A]`
+* `Map[A,B]`
+* `Option[A]`
+* `Set[A]`
+* `SortedMap[A,B]`
+* `SortedSet[A]`
+* `String` (encoded with UTF8)
+* `Tuple2...7`
 * `remotely.Response.Context`
 
 Often these built-in defaults will be all you need, but there might be times where it feels like it would be more appropriate do provide a "wire type" (that is, a datatype that represents the external wire API - **NOT** a data type that forms part of your core domain model). Typically this happens when you have a convoluted structure or a very "stringly-typed" interface (e.g. `Map[String, Map[String, Int]]` - who knows what on earth the author intended here!). In this cases, implementing custom codecs for your protocol seems attractive, and fortunatly its really simple to do:

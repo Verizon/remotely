@@ -97,17 +97,17 @@ libraryDependencies += "oncue.svc.remotely" %% "core" % "x.x.+"
 
 The first thing that *Remotely* needs is to define a "protocol". A protocol is essentially a definition of the runtime contracts this server should enforce on callers. Consider this example from `rpc-protocol/src/main/scala/protocol.scala`:
 
-```
-package oncue.svc.example
+```scala
+scala> import remotely._, codecs._
+import remotely._
+import codecs._
 
-import remotely._, codecs._
-
-object protocol {
-  val definition = Protocol.empty
-    .codec[Int]
-    .specify1[Int, Int]("factorial")
-}
-
+scala> object protocol {
+     |   val definition = Protocol.empty
+     |     .codec[Int]
+     |     .specify1[Int, Int]("factorial")
+     | }
+defined module protocol
 ```
 
 Protocols are the core of the remotely project. They represent the contract between the client and the server, and then define all the plumbing constrains needed to make that service work properly. The protocol object supports the following operations:
@@ -187,7 +187,9 @@ object Main {
 
     val env = service.environment
 
-    val shutdown = env.serve(address)(Monitoring.empty)
+    val startServer = env.serve(address)
+
+    val shutdown = startServer.run
 
   }
 }
@@ -201,7 +203,9 @@ This is super straightforward, but lets step through the values one by one.
 
 * `env`: For any given service implementation, an `Environment` can be derived from it. Unlike the protocol implementation itself, `Environment` is a concrete thing that can be bound and executed at runtime, where as `Protocol` is primarily a compile-time artifact.
 
-* `shutdown`: Upon calling `env.serve(...)` the process will bind to the specified address and yield a `() => Unit` function that can be used to shutdown the process if needed.
+* `startServer`: Calling `env.serve(...)` returns A Task that when run will start the server, binding the process to the specified address.
+
+* `shutdown`: Calling `startServer.run` returns a new Task can be later used to shutdown the server, if necessary.
 
 The client on the other hand is similar:
 
@@ -221,7 +225,7 @@ object Main {
 
     val transport = NettyTransport.single(address)
 
-    val endpoint = Endpoint.single(transport)
+    val endpoint = Endpoint.single(transport).run
 
     val f: Remote[Int] = FactorialClient.reduce(2 :: 4 :: 8 :: Nil)
 
