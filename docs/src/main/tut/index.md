@@ -39,12 +39,12 @@ Using remotely is straightforward, and getting started on a new project could no
 Remotely has the following dependencies:
 
 * `Scalaz 7.1.0`
-* `Scalaz Stream 0.6a`
-* `Scodec 1.5.0`
+* `Scalaz Stream 0.7a`
+* `Scodec 1.7.0`
 * `Apache Commons Pool 2.2`
-* `Netty 3.6.6 Final`
+* `Netty 4.0.25.Final`
 * `Macro Paradise 2.0.1`
-* `Shapeless 2.0.0` (transitively via scodec)
+* `Shapeless 2.1.0`
 
 This is an important factor to keep in mind, as if you have clashing versions of these libraries on your classpath you will encounter strange runtime failures due to binary incompatibility.
 
