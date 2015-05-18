@@ -19,55 +19,65 @@ package remotely
 
 import scala.reflect.runtime.universe.TypeTag
 import codecs._
-import scodec.{Codec,Encoder,Err}
-import scodec.bits.BitVector
-import scalaz.{\/,Foldable,NonEmptyList}
-import scalaz.std.list._
-import scalaz.std.string._
-import shapeless._
+import scodec.Codec
 
-case class Signature(name: String, tag: String, inTypes: List[String], outType: String) {
+case class Field[+A]private[remotely](name: String, typeString: String)
+object Field {
+  def strict[A:TypeTag](name: String) = Field[A](name, Remote.toTag[A])
+}
+case class Type[+A]private[remotely](name: String)
+object Type {
+  def apply[A:TypeTag]: Type[A] = Type[A](Remote.toTag[A])
+}
+case class Signature(name: String, params: List[Field[Any]], outType: String) {
   /** returns a string in the form "Type, Type => Response[Type]",
     *  wrapping Response around the return type def
     */
+  def wrapResponse: String =
+    s"${lhsWithArrow}Response[${outType}]"
 
-  def wrapResponse: String = {
-    val resp = s"Response[$outType]"
-    inTypes match {
-      case Nil => resp
-      case h =>
-        val in = Foldable[List].intercalate(inTypes, ",")
-        s"$in => $resp"
-    }
+  private def lhs = params.map(_.typeString).mkString(",")
+
+  private def lhsWithArrow = if (params.isEmpty) "" else s"$lhs => "
+
+  def typeString = lhsWithArrow + outType
+
+  def tag = {
+    s"$name: $typeString"
   }
 
 }
 
 object Signature {
-  implicit val signatureCodec: Codec[Signature] = (utf8 ~~ utf8 ~~ list(utf8) ~~ utf8).widenAs[Signature](Signature.apply, Signature.unapply)
+  // What is the difference between ~ and ~~ ?
+  implicit val fieldCodec: Codec[Field[Any]] = (utf8 ~~ utf8).widenAs[Field[Any]](Field.apply, Field.unapply)
+  implicit val signatureCodec: Codec[Signature] = (utf8  ~~ list(fieldCodec) ~~ utf8).widenAs[Signature](Signature.apply, Signature.unapply)
 }
 
 case class Signatures(signatures: Set[Signature]) {
 
-  def specify0[A: TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[A](name), List(), Remote.toTag[A]))
+  def specify(name: String, in: List[Field[Any]], outType: String) =
+    Signatures(signatures + Signature(name, in, outType))
 
-  def specify1[A:TypeTag,B:TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[A=>B](name), List(Remote.toTag[A]), Remote.toTag[B]))
+  def specify0(name: String, out: String): Signatures =
+    specify(name, Nil, out)
 
-  def specify2[A:TypeTag,B:TypeTag,C:TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B)=>C](name), List(Remote.toTag[A], Remote.toTag[B]), Remote.toTag[C]))
+  def specify1(name: String, in: Field[Any], out: String): Signatures =
+    specify(name, List(in), out)
 
-  def specify3[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C)=>D](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C]), Remote.toTag[D]))
+  def specify2(name: String, in1: Field[Any], in2: Field[Any], out: String): Signatures =
+    specify(name, List(in1, in2), out)
 
-  def specify4[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String): Signatures =
-    Signatures(signatures + Signature(name, Remote.nameToTag[(A,B,C,D)=>D](name), List(Remote.toTag[A], Remote.toTag[B], Remote.toTag[C], Remote.toTag[D]), Remote.toTag[E]))
+  def specify3(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], out: String): Signatures =
+    specify(name, List(in1, in2, in3), out)
+
+  def specify4(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], in4: Field[Any], out: String): Signatures =
+    specify(name, List(in1, in2, in3, in4), out)
 
   def pretty: String = "Signatures.empty\n" +
-  signatures.map(s => Signatures.split(s.tag) match { case (name,tname) =>
-                   s"""  .specify[$tname]("$name")"""
-                 }).mkString("\n")
+                        signatures.map(s =>
+                           s"""  .specify[${s.typeString}]("${s.name}")"""
+                         ).mkString("\n")
 
 }
 
@@ -78,15 +88,7 @@ object Signatures {
     case _ => s"Response[$typename]"
   }
 
-  val empty = Signatures(Set(Signature("describe", "describe: List[remotely.Signature]", List(), "List[Remotely.Signature]")))
-
-  // converts "sum: List[Int] => Int" to ("sum", "List[Int] => Int")
-  private[remotely] def split(typedName: String): (String,String) = {
-    val parts = typedName.split(':').toIndexedSeq
-    val name = parts.init.mkString(":").trim
-    val typename = parts.last.trim
-    (name, typename)
-  }
+  val empty = Signatures(Set(Signature("describe", List(), "List[remotely.Signature]")))
 
   private[remotely] def indent(by: String)(s: String): String =
     by + s.replace("\n", "\n" + by)

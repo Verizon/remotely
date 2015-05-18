@@ -19,7 +19,6 @@ package remotely
 
 import scala.language.experimental.macros
 import scala.annotation.StaticAnnotation
-import scalaz.NonEmptyList
 
 /**
  * Macro annotation that generates a server interface. Usage:
@@ -30,18 +29,10 @@ class GenServer(p: Protocol[_]) extends StaticAnnotation {
 }
 
 object GenServer extends MacrosCompatibility {
-  import Signature._
-
   // Turns a `String` into a `TypeTree`.
   def parseType(c: Context)(s: String): c.universe.Tree = {
     import c.universe._
     val q"type T = $t" = c.parse(s"type T = $s")
-    t
-  }
-
-  def liftSignature(c: Context)(s: Signature): c.universe.Tree = {
-    import c.universe._
-    val t: Tree = q"_root_.remotely.Signature(${s.name}, ${s.tag}, ${s.inTypes}, ${s.outType})"
     t
   }
 
@@ -53,7 +44,7 @@ object GenServer extends MacrosCompatibility {
     // and evaluate it at compile-time.
     val p:Protocol[_] = c.prefix.tree match {
       case q"new $name($protocol)" =>
-        c.eval(c.Expr[Protocol[_]](resetLocalAttrs(c)(q"{import remotely.codecs._; $protocol}")))
+        c.eval(c.Expr[Protocol[_]](resetLocalAttrs(c)(q"{import remotely.codecs._; import remotely.Field; import remotely.Type; $protocol}")))
       case _ => c.abort(c.enclosingPosition, "GenServer must be used as an annotation.")
     }
 
@@ -65,9 +56,8 @@ object GenServer extends MacrosCompatibility {
 
     // Creates name/type pairs from the signatures in the protocol.
     val signatures = p.signatures.signatures.map { s =>
-      val (n, t) = Signatures.split(s.tag)
-      val typ = parseType(c)(Signatures.wrapResponse(t))
-      (n, typ)
+      val typ = parseType(c)(Signatures.wrapResponse(s.typeString))
+      (s.name, typ)
     }
 
     // Generates the method defs for the generated class.
@@ -98,7 +88,7 @@ object GenServer extends MacrosCompatibility {
               ..$sigDefs
 
               def describe: Response[List[Signature]] = 
-                Response.delay(${p.signatures.signatures.foldLeft[Tree](q"List.empty[Signature]")((e,s) => q"$e.::(${liftSignature(c)(s)})")})
+                Response.delay(${p.signatures.signatures.foldLeft[Tree](q"List.empty[Signature]")((e,s) => q"$e.::(${Gen.liftSignature(c)(s)})")})
 
 
              private def populateDeclarations(env: Values): Values =
