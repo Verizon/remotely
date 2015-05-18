@@ -89,6 +89,8 @@ The structure breaks down like this:
 Once you have the layout configured, using remotely is just like using any other library within SBT; simply add the dependency to your `rpc-protocol` module:
 
 ```
+resolvers += "Remotely Bintray Repo" at "http://dl.bintray.com/oncue/releases"
+
 libraryDependencies += "oncue" %% "remotely-core" % "x.x.+"
 
 ```
