@@ -59,7 +59,7 @@ object protocol {
       .codec[MediumW]
       .codec[SmallW]
       .codec[BigW]
-      .specify1[LargeW, LargeW]("identityLarge")
-      .specify1[MediumW, MediumW]("identityMedium")
-      .specify1[BigW, BigW]("identityBig")
+      .specify1("identityLarge", Field.strict[LargeW]("in"), Type[LargeW])
+      .specify1[MediumW, MediumW]("identityMedium", Field.strict[MediumW]("in"), Type[MediumW])
+      .specify1[BigW, BigW]("identityBig", Field.strict[BigW]("in"), Type[BigW])
 }

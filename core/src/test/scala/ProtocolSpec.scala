@@ -70,7 +70,9 @@ class TestServer extends TestServerBase {
   def foo: Int => Response[List[Int]] = i =>  {
     Response.now(collection.immutable.List.fill(10000)(i))
   }
-  def describe: Response[scala.List[Signature]] = Response.now(List(Signature("factorial", "factorial: Int => Int", List("Int"), "Int", false),Signature("foo", "foo: Int => List[Int]", List("Int"), "List[Int]", false),Signature("describe", "describe: List[Signature]", Nil, "List[Signature]", false)))
+  def describe: Response[scala.List[Signature]] = Response.now(List(Signature("factorial",  List(Field("a", "Int")), "Int", false),
+                                                                    Signature("foo", List(Field("a", "Int")), "List[Int]", false),
+                                                                    Signature("describe", Nil, "List[Signature]", false)))
 }
 
 object Client {

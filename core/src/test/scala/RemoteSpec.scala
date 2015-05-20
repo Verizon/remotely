@@ -37,10 +37,10 @@ object RemoteSpec extends Properties("Remote") {
     .populate { _
                  .declare("sum", (d: List[Int]) => Response.now(d.sum))
                  .declare("add3", (a: Int, b: Int, c: Int) => Response.now(a + b + c))
-                 .declare("describe", Response.now(List(Signature("sum", "sum: List[Double] => Double", List("List[Double]"), "Double", false),
-                                                        Signature("sum", "sum: List[Int] => Int", List("List[Int]"), "Int", false),
-                                                        Signature("add1", "add1: List[Int] => List[Int]", List("List[Int]"), "List[Int]", false),
-                                                        Signature("describe", "describe: List[Signature]", Nil, "List[Signature]", false))))
+                 .declare("describe", Response.now(List(Signature("sum", List(Field("xs", "List[Double]")), "Double", false),
+                                                        Signature("sum", List(Field("xs", "List[Int]")), "Int", false),
+                                                        Signature("add1", List(Field("xs", "List[Int]")), "List[Int]", false),
+                                                        Signature("describe", Nil, "List[Signature]", false))))
                                                                   
       .declare("sum", (d: List[Double]) => Response.now(d.sum))
       .declare("add1", (d: List[Int]) => Response.now(d.map(_ + 1):List[Int]))
@@ -164,7 +164,7 @@ object RemoteSpec extends Properties("Remote") {
 
   def lazily(p: => Prop): Prop = {
     lazy val pe = secure { p }
-    new Prop { def apply(p: Gen.Parameters) = pe(p) }
+    new Prop { def apply(p: org.scalacheck.Gen.Parameters) = pe(p) }
   }
 
 }

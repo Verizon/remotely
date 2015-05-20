@@ -28,8 +28,8 @@ class SignatureSpec extends FlatSpec
   behavior of "Signature"
   
   it should "be able to wrap a response type" in {
-    Signature("foo", "bar", List(), "baz", false).wrapResponse should be ("Response[baz]")
-    Signature("foo", "bar", List("baz"), "qux", false).wrapResponse should be ("baz => Response[qux]")
-    Signature("foo", "bar", List("baz", "qux"), "zod", false).wrapResponse should be ("baz,qux => Response[zod]")
+    Signature("foo",List(), "Baz", false).wrapResponse should be ("Response[Baz]")
+    Signature("foo", List(Field("baz", "Baz")), "Qux", false).wrapResponse should be ("Baz => Response[Qux]")
+    Signature("foo", List(Field("baz", "Baz"), Field("qux", "Qux"), false), "Zod").wrapResponse should be ("Baz,Qux => Response[Zod]")
   }
 }
