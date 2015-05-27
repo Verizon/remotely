@@ -6,7 +6,7 @@ crossScalaVersions in Global := Seq("2.10.5", "2.11.6")
 
 resolvers += Resolver.sonatypeRepo("releases")
 
-lazy val remotely = project.in(file(".")).aggregate(core, examples, `benchmark-server`, `benchmark-client`, test).settings(publish := {})
+lazy val remotely = project.in(file(".")).aggregate(core, examples, `benchmark-server`, `benchmark-client`, test, `test-server`).settings(publish := {})
 
 lazy val core = project
 

@@ -28,7 +28,7 @@ package object remotely {
   import scalaz.\/.{left,right}
   import scalaz.Monoid
   import scodec.bits.{BitVector,ByteVector}
-  import scodec.Decoder
+//  import scodec.Decoder
   import utils._
 
 /**
@@ -52,7 +52,7 @@ package object remotely {
    *
    * The `Monitoring` instance is notified of each request.
    */
-  def evaluateStream[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Process[Task, A]]): Response[Process[Task,A]] =
+  def evaluateStream[A:scodec.Codec:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[Process[Task, A]]): Response[Process[Task,A]] =
     evaluateImpl(e,M,true)(r)(Remote.toTag[A]).asInstanceOf[Response[Process[Task, A]]]
 
   /**
@@ -64,14 +64,14 @@ package object remotely {
    *
    * The `Monitoring` instance is notified of each request.
    */
-  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
+  def evaluate[A:scodec.Codec:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
     evaluateImpl(e,M,false)(r)(Remote.toTag[A]).asInstanceOf[Response[A]]
 
   /**
    * In the actual implementation, we don't really care what type of Remote we receive. In any case, it is
    * going to become a stream of bits and produce wtv is the expected result unless there is a decoding error.
    */
-  def evaluateImpl[A:Decoder:TypeTag, B](e: Endpoint, M: Monitoring = Monitoring.empty, isStream: Boolean)(r: Remote[B])(remoteTag: String): Response[B] = {
+  def evaluateImpl[A:scodec.Codec:TypeTag, B](e: Endpoint, M: Monitoring = Monitoring.empty, isStream: Boolean)(r: Remote[B])(remoteTag: String): Response[B] = {
     Response.scope { Response { ctx =>
       val refs = Remote.refs(r)
 
