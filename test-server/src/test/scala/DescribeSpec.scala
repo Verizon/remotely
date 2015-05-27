@@ -21,6 +21,7 @@ package test
 import org.scalatest.matchers.{Matcher,MatchResult}
 import org.scalatest.{FlatSpec,Matchers,BeforeAndAfterAll}
 import scodec.Decoder
+import codecs.list
 import transport.netty._
 import scalaz.-\/
 
@@ -56,33 +57,27 @@ class DescribeSpec extends FlatSpec
   behavior of "Describe"
 
   it should "work" in {
-    import codecs.list
-    implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
     val desc = evaluate[List[Signature]](endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
-    desc should contain (Signature("fooId", List(Field("foo", "remotely.test.Foo")), "remotely.test.Foo"))
-    desc should contain (Signature("foobar", List(Field("foo", "remotely.test.Foo")), "remotely.test.Bar"))
+    desc should contain (Signature("fooId", List(Field("in", "remotely.test.Foo")), "remotely.test.Foo"))
+    desc should contain (Signature("foobar", List(Field("in", "remotely.test.Foo")), "remotely.test.Bar"))
     desc should contain (Signature("describe", Nil, "List[Remotely.Signature]"))
   }
 
   behavior of "Client"
 
   it should "connect older to newer" in {
-    import codecs.list
     val desc = evaluate(endpointOldToNew, Monitoring.consoleLogger())(DescribeTestOlderClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
   }
 
   it should "connect newer to newer" in {
-    import codecs.list
     val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
   }
 
   it should "not connect newer to older" in {
-    import codecs.list
     val desc = evaluate(endpointNewToOld, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).attemptRun
-    println("new to old: "  + desc)
     desc match {
       case -\/(e) => e shouldBe a [IncompatibleServer]
       case e => withClue("newer client should have rejected older server")(fail())
