@@ -62,7 +62,7 @@ package object codecs extends lowerprioritycodecs {
 
   implicit def stdEither[A, B](implicit LCA: Lazy[Codec[A]], LCB: Lazy[Codec[B]]): Codec[Either[A,B]] =
     C.either(bool, Codec[A], Codec[B])
-  
+
 
   implicit def byteArray: Codec[Array[Byte]] = {
     val B = new Codec[Array[Byte]] {
@@ -70,7 +70,7 @@ package object codecs extends lowerprioritycodecs {
       def encode(b: Array[Byte]) = Attempt.successful(BitVector(b))
       def decode(b: BitVector)   = Attempt.successful(DecodeResult(b.toByteArray, BitVector.empty))
     }
-    
+
     C.variableSizeBytes(int32, B)
   }
 
@@ -100,13 +100,13 @@ package object codecs extends lowerprioritycodecs {
 
   implicit def map[K, V](implicit LCK: Lazy[Codec[K]], LCV: Lazy[Codec[V]]): Codec[Map[K,V]] =
     indexedSeq[(K,V)].xmap[Map[K,V]](
-      _.toMap, 
+      _.toMap,
       _.toIndexedSeq
     )
 
   implicit def sortedMap[K: Ordering, V](implicit LCK: Lazy[Codec[K]], LCV: Lazy[Codec[V]]): Codec[SortedMap[K,V]] =
     indexedSeq[(K,V)].xmap[SortedMap[K,V]](
-      kvs => SortedMap(kvs: _*), 
+      kvs => SortedMap(kvs: _*),
       _.toIndexedSeq
     )
 
@@ -121,7 +121,7 @@ package object codecs extends lowerprioritycodecs {
       map[String,String].encode(ctx.header) <+>
       list[String].encode(ctx.stack.map(_.toString))
   }
-  
+
   implicit def contextDecoder: Decoder[Response.Context] = for {
     header <- map[String,String]
     stackS <- list[String]
@@ -185,7 +185,7 @@ package object codecs extends lowerprioritycodecs {
   implicit def remoteEncoder[A]: Encoder[Remote[A]] =
     new Encoder[Remote[A]] {
       def sizeBound = SizeBound.unknown
-      def encode(a: Remote[A]) = remoteEncode(a) 
+      def encode(a: Remote[A]) = remoteEncode(a)
     }
 
   /**
@@ -236,10 +236,10 @@ package object codecs extends lowerprioritycodecs {
              a => bool.encode(true) <+> Encoder[A].encode(a))
   }
 
-  def fail[A](msg: Err): Decoder[A] = 
+  def fail[A](msg: Err): Decoder[A] =
     new Decoder[A] {
       def decode(bits: BitVector) = Attempt.failure(msg)
     }.asInstanceOf[Decoder[A]]
-  
+
   def succeed[A](a: A): Decoder[A] = C.provide(a)
 }

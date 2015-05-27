@@ -52,9 +52,9 @@ class DescribeSpec extends FlatSpec
   val endpointOldToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestOlderClient.expectedSignatures, monitoring = Monitoring.consoleLogger("OldToNew")).run)
   val endpointNewToOld = Endpoint.single(NettyTransport.single(addrO, DescribeTestNewerClient.expectedSignatures, monitoring = Monitoring.consoleLogger("NewToOld")).run)
   val endpointNewToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestNewerClient.expectedSignatures, monitoring = Monitoring.consoleLogger("NewToNew")).run)
-  
+
   behavior of "Describe"
-  
+
   it should "work" in {
     import codecs.list
     implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
@@ -69,22 +69,19 @@ class DescribeSpec extends FlatSpec
 
   it should "connect older to newer" in {
     import codecs.list
-    implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
-    val desc = evaluate[List[Signature]](endpointOldToNew, Monitoring.consoleLogger())(DescribeTestOlderClient.describe).apply(Response.Context.empty).run
+    val desc = evaluate(endpointOldToNew, Monitoring.consoleLogger())(DescribeTestOlderClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
   }
 
   it should "connect newer to newer" in {
     import codecs.list
-    implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
-    val desc = evaluate[List[Signature]](endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
+    val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
   }
 
   it should "not connect newer to older" in {
     import codecs.list
-    implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
-    val desc = evaluate[List[Signature]](endpointNewToOld, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).attemptRun
+    val desc = evaluate(endpointNewToOld, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).attemptRun
     println("new to old: "  + desc)
     desc match {
       case -\/(e) => e shouldBe a [IncompatibleServer]
@@ -97,4 +94,3 @@ class DescribeSpec extends FlatSpec
     shutdownO.run
   }
 }
-
