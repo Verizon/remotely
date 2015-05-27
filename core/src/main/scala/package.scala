@@ -24,7 +24,7 @@ package object remotely {
   import scalaz.\/.{left,right}
   import scalaz.Monoid
   import scodec.bits.{BitVector,ByteVector}
-  import scodec.Decoder
+//  import scodec.Decoder
   import utils._
 
 /**
@@ -48,7 +48,7 @@ package object remotely {
    *
    * The `Monitoring` instance is notified of each request.
    */
-  def evaluate[A:Decoder:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
+  def evaluate[A:scodec.Codec:TypeTag](e: Endpoint, M: Monitoring = Monitoring.empty)(r: Remote[A]): Response[A] =
   Response.scope { Response { ctx => // push a fresh ID onto the call stack
     val refs = Remote.refs(r)
 
@@ -59,7 +59,7 @@ package object remotely {
         }
         case None => Task.now(())
       }
-                                                      
+
     Task.delay { System.nanoTime } flatMap { start =>
       for {
         conn <- e.get

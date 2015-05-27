@@ -53,4 +53,3 @@ object DescribeTestNewerProtocol {
     .specify1("foobar", Field.strict[Foo]("in"), Type[Bar])
     .specify0("bar", Type[Bar])
 }
-
