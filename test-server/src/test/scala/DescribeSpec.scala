@@ -20,9 +20,8 @@ package test
 
 import org.scalatest.matchers.{Matcher,MatchResult}
 import org.scalatest.{FlatSpec,Matchers,BeforeAndAfterAll}
-import scodec.Codec
+import scodec.Decoder
 import transport.netty._
-import java.util.concurrent.Executors
 import scalaz.-\/
 
 trait ServerImpl {
@@ -38,8 +37,6 @@ class DescribeTestNewerServerImpl extends DescribeTestNewerServer with ServerImp
 class DescribeSpec extends FlatSpec
     with Matchers
     with BeforeAndAfterAll {
-
-  import DescribeTestNewerProtocol._
 
   val addrN = new java.net.InetSocketAddress("localhost", 9006)
   val addrO = new java.net.InetSocketAddress("localhost", 9007)
@@ -60,9 +57,8 @@ class DescribeSpec extends FlatSpec
   
   it should "work" in {
     import codecs.list
-    import Signature._
-    import remotely.Remote.implicits._
-    val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
+    implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
+    val desc = evaluate[List[Signature]](endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
     desc should contain (Signature("fooId", List(Field("foo", "remotely.test.Foo")), "remotely.test.Foo"))
     desc should contain (Signature("foobar", List(Field("foo", "remotely.test.Foo")), "remotely.test.Bar"))
@@ -72,17 +68,23 @@ class DescribeSpec extends FlatSpec
   behavior of "Client"
 
   it should "connect older to newer" in {
-    val desc = evaluate(endpointOldToNew, Monitoring.consoleLogger())(DescribeTestOlderClient.describe).apply(Response.Context.empty).run
+    import codecs.list
+    implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
+    val desc = evaluate[List[Signature]](endpointOldToNew, Monitoring.consoleLogger())(DescribeTestOlderClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
   }
 
   it should "connect newer to newer" in {
-    val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
+    import codecs.list
+    implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
+    val desc = evaluate[List[Signature]](endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
   }
 
   it should "not connect newer to older" in {
-    val desc = evaluate(endpointNewToOld, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).attemptRun
+    import codecs.list
+    implicit val dec: Decoder[List[remotely.Signature]] = list(Signature.signatureCodec)
+    val desc = evaluate[List[Signature]](endpointNewToOld, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).attemptRun
     println("new to old: "  + desc)
     desc match {
       case -\/(e) => e shouldBe a [IncompatibleServer]
