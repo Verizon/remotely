@@ -47,18 +47,14 @@ class DescribeSpec extends FlatSpec
   val serverN = new DescribeTestNewerServerImpl
   val serverO = new DescribeTestOlderServerImpl
 
-  val shutdownN: () => Unit = serverN.environment.serve(addrN,
-                                                           Executors.newCachedThreadPool,
-                                                           Monitoring.empty).run
+  val shutdownN = serverN.environment.serve(addrN).run
 
-  val shutdownO: () => Unit = serverO.environment.serve(addrO,
-                                                           Executors.newCachedThreadPool,
-                                                           Monitoring.empty).run
+  val shutdownO = serverO.environment.serve(addrO).run
 
-  val endpointOldToOld = Endpoint.single(NettyTransport.single(addrO, DescribeTestOlderClient.expectedSignatures, Monitoring.consoleLogger("OldToOld")))
-  val endpointOldToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestOlderClient.expectedSignatures, Monitoring.consoleLogger("OldToNew")))
-  val endpointNewToOld = Endpoint.single(NettyTransport.single(addrO, DescribeTestNewerClient.expectedSignatures, Monitoring.consoleLogger("NewToOld")))
-  val endpointNewToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestNewerClient.expectedSignatures, Monitoring.consoleLogger("NewToNew")))
+  val endpointOldToOld = Endpoint.single(NettyTransport.single(addrO, DescribeTestOlderClient.expectedSignatures, monitoring = Monitoring.consoleLogger("OldToOld")).run)
+  val endpointOldToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestOlderClient.expectedSignatures, monitoring = Monitoring.consoleLogger("OldToNew")).run)
+  val endpointNewToOld = Endpoint.single(NettyTransport.single(addrO, DescribeTestNewerClient.expectedSignatures, monitoring = Monitoring.consoleLogger("NewToOld")).run)
+  val endpointNewToNew = Endpoint.single(NettyTransport.single(addrN, DescribeTestNewerClient.expectedSignatures, monitoring = Monitoring.consoleLogger("NewToNew")).run)
   
   behavior of "Describe"
   
@@ -67,22 +63,22 @@ class DescribeSpec extends FlatSpec
     import Signature._
     import remotely.Remote.implicits._
     val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
-    desc should contain (Signature("foo", "foo: remotely.test.Foo", Nil, "remotely.test.Foo"))
-    desc should contain (Signature("fooId", "fooId: remotely.test.Foo => remotely.test.Foo", List("remotely.test.Foo"), "remotely.test.Foo"))
-    desc should contain (Signature("foobar", "foobar: remotely.test.Foo => remotely.test.Bar", List("remotely.test.Foo"), "remotely.test.Bar"))
-    desc should contain (Signature("describe", "describe: List[remotely.Signature]", Nil, "List[Remotely.Signature]"))
+    desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
+    desc should contain (Signature("fooId", List(Field("foo", "remotely.test.Foo")), "remotely.test.Foo"))
+    desc should contain (Signature("foobar", List(Field("foo", "remotely.test.Foo")), "remotely.test.Bar"))
+    desc should contain (Signature("describe", Nil, "List[Remotely.Signature]"))
   }
 
   behavior of "Client"
 
   it should "connect older to newer" in {
     val desc = evaluate(endpointOldToNew, Monitoring.consoleLogger())(DescribeTestOlderClient.describe).apply(Response.Context.empty).run
-    desc should contain (Signature("foo", "foo: remotely.test.Foo", Nil, "remotely.test.Foo"))
+    desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
   }
 
   it should "connect newer to newer" in {
     val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
-    desc should contain (Signature("foo", "foo: remotely.test.Foo", Nil, "remotely.test.Foo"))
+    desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
   }
 
   it should "not connect newer to older" in {
@@ -95,8 +91,8 @@ class DescribeSpec extends FlatSpec
   }
 
   override def afterAll() {
-    shutdownN()
-    shutdownO()
+    shutdownN.run
+    shutdownO.run
   }
 }
 
