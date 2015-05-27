@@ -40,7 +40,11 @@ case class Signature(name: String, params: List[Field[Any]], out: Type[Any]) {
   def wrapResponse: String =
     s"${lhsWithArrow}Response[${out.pretty}]"
 
-  private def lhs = params.map(_.type_.pretty).mkString("(", ",", ")")
+  private def lhs = {
+    val paramReps = params.map(_.type_.pretty)
+    if (params.size == 1) paramReps.mkString(",")
+    else paramReps.mkString("(", ",", ")")
+  }
 
   private def lhsWithArrow = if (params.isEmpty) "" else s"$lhs => "
 
