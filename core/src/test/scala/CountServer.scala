@@ -44,8 +44,8 @@ class CountServer extends CountServerBase {
     Response.delay(r)
   }
 
-  def describe: Response[List[Signature]] = Response.now(List(Signature("describe", Nil, "scala.List[Signature]", false),
-                                                              Signature("ping", List(Field("a", "Int")), "Int"), false))
+  def describe: Response[List[Signature]] = Response.now(List(Signature("describe", Nil, Type("scala.List[Signature]", isStream = false)),
+                                                              Signature("ping", List(Field("a", Type("Int", isStream = false))), Type("Int", isStream = false))))
 }
 
 object CountClient {

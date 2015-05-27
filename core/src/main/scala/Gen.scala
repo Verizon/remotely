@@ -10,12 +10,17 @@ private[remotely] object Gen extends MacrosCompatibility {
   def liftSignature(c: Context)(signature: Signature): c.universe.Tree = {
     import c.universe._
     val s = signature
-    val t: Tree = q"_root_.remotely.Signature(${s.name}, List(..${s.params.map(liftField(c)(_))}), ${s.outType})"
+    val t: Tree = q"_root_.remotely.Signature(${s.name}, List(..${s.params.map(liftField(c)(_))}), ${liftType(c)(s.out)})"
     t
   }
 
   def liftField(c: Context)(field: Field[Any]): c.universe.Tree = {
     import c.universe._
-    q"_root_.remotely.Field(${field.name}, ${field.typeString})"
+    q"_root_.remotely.Field(${field.name}, ${liftType(c)(field.type_)})"
+  }
+
+  def liftType(c: Context)(type_ : Type[Any]): c.universe.Tree = {
+    import c.universe._
+    q"_root_.remotely.Type(${type_.name}, ${type_.isStream})"
   }
 }

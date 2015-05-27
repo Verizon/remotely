@@ -31,9 +31,9 @@ object DescribeTestOlderProtocol {
   val definition = Protocol.empty
     .codec[Foo]
     .codec[Bar]
-    .specify0("foo", Type[Foo])
-    .specify1("fooId", Field.strict[Foo]("in"), Type[Foo])
-    .specify1("foobar", Field.strict[Foo]("in"), Type[Bar])
+    .specify0("foo", Type.strict[Foo])
+    .specify1("fooId", Field.strict[Foo]("in"), Type.strict[Foo])
+    .specify1("foobar", Field.strict[Foo]("in"), Type.strict[Bar])
 }
 
 
@@ -48,9 +48,9 @@ object DescribeTestNewerProtocol {
   val definition = Protocol.empty
     .codec[Foo]
     .codec[Bar]
-    .specify0("foo", Type[Foo])
-    .specify1("fooId", Field.strict[Foo]("in"), Type[Foo])
-    .specify1("foobar", Field.strict[Foo]("in"), Type[Bar])
-    .specify0("bar", Type[Bar])
+    .specify0("foo", Type.strict[Foo])
+    .specify1("fooId", Field.strict[Foo]("in"), Type.strict[Foo])
+    .specify1("foobar", Field.strict[Foo]("in"), Type.strict[Bar])
+    .specify0("bar", Type.strict[Bar])
 }
 
