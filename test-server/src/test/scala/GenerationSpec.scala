@@ -24,6 +24,7 @@ import scodec.Codec
 import transport.netty._
 import java.util.concurrent.Executors
 import scalaz.-\/
+import scalaz.concurrent.Task
 import scalaz.stream.Process
 
 class TestServerImpl extends TestGenerationServer {
@@ -32,6 +33,7 @@ class TestServerImpl extends TestGenerationServer {
   def foobar = (foo: Foo) => Response.now(Bar(foo.a))
   def bar = Response.delay(Bar(1))
   def streamBar = (foo: Foo, bar: Bar) => Response.now(Process(bar))
+  def streamInStreamOut = (in2: Process[Task, List[Bar]], in3: Foo) => Response.now(in2.map(_.head))
 }
 
 class GenerationSpec extends FlatSpec
@@ -49,11 +51,20 @@ class GenerationSpec extends FlatSpec
   
   behavior of "Test Generation Server"
   
-  it should "work" in {
+  it should "work for a streaming result" in {
     import remotely.Remote.implicits._
     import GenerationTest._
     val stream = TestGenerationClient.streamBar(Foo(3), Bar(4)).run(endpoint).run
     stream.runLog.run shouldEqual(List(Bar(4)))
+  }
+
+  it should "work for streaming args and a streaming result" in {
+    import remotely.Remote.implicits._
+    import GenerationTest._
+    import codecs.list
+    val barStream: Process[Task, List[Bar]] = Process(List(Bar(1)))
+    val stream = TestGenerationClient.streamInStreamOut(barStream, Foo(4)).run(endpoint).run
+    stream.runLog.run shouldEqual(List(Bar(1)))
   }
 
   override def afterAll() {

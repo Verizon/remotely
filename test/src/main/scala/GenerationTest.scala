@@ -19,6 +19,7 @@ package remotely
 package test
 
 import scodec.Codec
+import codecs.list
 
 object GenerationTest {
   implicit lazy val fooCodec: Codec[Foo] = codecs.int32.as[Foo]
@@ -28,9 +29,11 @@ object GenerationTest {
   val definition = Protocol.empty
     .codec[Foo]
     .codec[Bar]
+    .codec[List[Bar]]
     .specify0("foo", Type.strict[Foo])
     .specify1("fooId", Field.strict[Foo]("in"), Type.strict[Foo])
     .specify1("foobar", Field.strict[Foo]("in"), Type.strict[Bar])
     .specify2("streamBar", Field.strict[Foo]("in1"), Field.strict[Bar]("in2"), Type.stream[Bar])
+    .specify2("streamInStreamOut", Field.stream[List[Bar]]("in2"), Field.strict[Foo]("in3"), Type.stream[Bar])
 }
 
