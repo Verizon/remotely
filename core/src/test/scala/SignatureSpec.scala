@@ -31,5 +31,16 @@ class SignatureSpec extends FlatSpec
     Signature("foo",List(), Type("Baz", isStream = false)).wrapResponse should be ("Response[Baz]")
     Signature("foo", List(Field("baz", Type("Baz", isStream = false))), Type("Qux", isStream = false)).wrapResponse should be ("Baz => Response[Qux]")
     Signature("foo", List(Field("baz", Type("Baz", isStream = false)), Field("qux", Type("Qux", isStream = false))), Type("Zod", isStream = false)).wrapResponse should be ("(Baz,Qux) => Response[Zod]")
+
+  }
+
+  it should "produce the correct typeString" in {
+    Signature("foo", List(Field("baz", Type("Baz", isStream = true))), Type("Zod", isStream = false)).typeString should be ("scalaz.stream.Process[scalaz.concurrent.Task,Baz] => Zod")
+    val sig = Signature("foo", List(
+      Field("in1", Type("Baz", isStream = true)),
+      Field("in2", Type("List[Barn]", isStream = true)),
+      Field("in3", Type("Biz", isStream = false))
+    ), Type("Zod", isStream = true))
+    sig.typeString should be ("(scalaz.stream.Process[scalaz.concurrent.Task,Baz],scalaz.stream.Process[scalaz.concurrent.Task,List[Barn]],Biz) => scalaz.stream.Process[scalaz.concurrent.Task,Zod]")
   }
 }
