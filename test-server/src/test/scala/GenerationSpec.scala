@@ -40,7 +40,7 @@ class GenerationSpec extends FlatSpec
 
   val addr = new java.net.InetSocketAddress("localhost", 9436)
 
-  val server = new DescribeTestNewerServerImpl
+  val server = new TestServerImpl
 
   val shutdown = server.environment.serve(addr).run
 
