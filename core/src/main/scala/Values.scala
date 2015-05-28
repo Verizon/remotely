@@ -96,6 +96,12 @@ case class Values(values: Map[String,Value]) {
     else this.copy(values = values + (tag -> Value.fromValue(f, false)))
   }
 
+  def declareStream[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String, f: (A,B,C) => Response[Process[Task,D]]): Values = {
+    val tag = Remote.nameToTag[(A,B,C) => Process[Task,D]](name)
+    if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
+    else this.copy(values = values + (tag -> Value.fromValue(f, false)))
+  }
+
   def declare[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String, f: (A,B,C,D) => Response[E]): Values = {
     val tag = Remote.nameToTag[(A,B,C,D) => E](name)
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
