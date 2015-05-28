@@ -95,14 +95,6 @@ object Remote {
     def apply(a: Remote[A]): Remote[B] =
       Remote.Ap1(self, a)
   }
-  // By declaring this as opposed to an implicit conversion from Stream to a Remote Stream
-  // we are limiting the use of streaming to functions with a single argument
-  // That is because for now, I am not too clear on the desired semantics for a function that takes
-  // multiple Streams as arguments.
-  implicit class ApStream1Syntax[A:Encoder:TypeTag,B](self: Remote[Process[Task,A] => B]) {
-    def apply(stream: Process[Task,A]): Remote[B] =
-      Remote.Ap1(self, LocalStream(stream, Some(Encoder[A]), Remote.toTag[A]))
-  }
   implicit class Ap2Syntax[A,B,C](self: Remote[(A,B) => C]) {
     def apply(a: Remote[A], b: Remote[B]): Remote[C] =
       Remote.Ap2(self, a, b)
@@ -200,8 +192,7 @@ object Remote {
     /** Implicitly promote a local value to a `Remote[A]`. */
     implicit def localToRemote[A:Encoder:TypeTag](a: A): Remote[A] = local(a)
 
-    // Commented out because for now cannot call a function that takes multiple streams
-    //implicit def localStreamToRemote[A: Encoder:TypeTag](stream: Process[Task, A]): Remote[Process[Task,A]] = localStream(stream)
+    implicit def localStreamToRemote[A: Encoder:TypeTag](stream: Process[Task, A]): Remote[Process[Task,A]] = localStream(stream)
   }
 }
 

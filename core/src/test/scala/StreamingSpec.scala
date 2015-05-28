@@ -43,6 +43,7 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     .declareStream("continuous", (p: Process[Task, Int]) => Response.now { p.map(_ + 1)} )
     .declare("upload", (p: Process[Task, Int]) => Response.async[Int](p.runLog.map(_.sum)))
     .declareStream("failDownload", (n: Int) => Response.now { Process[Byte](1,2) ++ Process.fail(new NoSuchElementException)})
+    .declare("uploadWithNormalValue", (p: Process[Task, Int], a: Int) => Response.now(a))
   }
 
   val addr = new InetSocketAddress("localhost", 8091)
@@ -54,6 +55,8 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   val upload = Remote.ref[Process[Task, Int] => Int]("upload")
 
   val downloadFail = Remote.ref[Int => Process[Task, Byte]]("failDownload")
+
+  val uploadWithNormalValue = Remote.ref[(Process[Task, Int], Int) => Int]("uploadWithNormalValue")
 
   val serverShutdown = env.serve(addr, monitoring = Monitoring.consoleLogger("[server]")).run
 
@@ -76,9 +79,16 @@ class StreamingSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   it should "work for a function that takes a stream and returns an ordinary value" in {
     val byteStream: Process[Task, Int] = Process(4,5,6)
 
-    val uploadResult = upload(byteStream).runWithoutContext(loc)
+    val uploadResult = upload.apply(byteStream).runWithoutContext(loc)
 
     uploadResult.run shouldEqual(15)
+  }
+  it should "work for a function that takes a stream and a normal value" in {
+    val intStream: Process[Task, Int] = Process(4,3,2)
+
+    val result = uploadWithNormalValue(intStream, 5).runWithoutContext(loc)
+
+    result.run shouldEqual(5)
   }
   it should "fail client side stream if server fails outbound stream on server" in {
     val result: Process[Task, Byte] = downloadFail(10).run(loc).run
