@@ -20,7 +20,6 @@ package example.benchmark
 package server
 
 import scalaz.concurrent._
-import java.util.concurrent._
 import scalaz.stream.Process
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -28,7 +27,9 @@ class BenchmarkServerImpl extends BenchmarkServer with transformations {
   override def identityLarge = (large: LargeW) => Response.now(toLargeW(fromLargeW(large)))
   override def identityMedium = (med: MediumW) => Response.now(toMediumW(fromMediumW(med)))
   override def identityBig = (big: BigW) => Response.now(toBigW(fromBigW(big)))
-
+  override def streamLarge = (largeStream: Process[Task, LargeW]) => Response.now(largeStream.map(large => toLargeW(fromLargeW(large))))
+  override def streamMedium = (mediumStream: Process[Task, MediumW]) => Response.now(mediumStream.map(medium => toMediumW(fromMediumW(medium))))
+  override def streamBig = (bigStream: Process[Task, BigW]) => Response.now(bigStream.map(big => toBigW(fromBigW(big))))
 }
 
 object Main {

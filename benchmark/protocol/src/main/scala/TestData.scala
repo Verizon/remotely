@@ -18,6 +18,9 @@
 package remotely
 package example.benchmark
 
+import scalaz.concurrent.Task
+import scalaz.stream.Process
+
 trait TestData {
   val sm: Small = Small((for(i <- 1 to 10) yield i.toString -> i.toString).toMap, (for(i <- 1 to 10) yield i.toString).toList)
 
@@ -26,5 +29,11 @@ trait TestData {
   val largeIn: Large = Large(1, List("asdf", "qwer", "qwer","ldsfdfsaj","aksldjfsdfkdfjasdfpoweurpaasdflsdkfjsllslosdfiuasdpoaisudpfidsaf"), (1 to 1000).map((x:Int) => "a").mkString, (for(i <- 1 to 20) yield i.toString -> i.toString).toMap,List.fill(10)(medIn), Vector.fill(10)(sm))
 
   val bigIn: Big = Big(1)
+
+  val bigStream: Process[Task, Big] = Process(bigIn)
+
+  val medStream: Process[Task, Medium] = Process(medIn)
+
+  val largeStream: Process[Task, Large] = Process(largeIn)
 
 }

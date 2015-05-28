@@ -60,6 +60,9 @@ object protocol {
       .codec[SmallW]
       .codec[BigW]
       .specify1("identityLarge", Field.strict[LargeW]("in"), Type.strict[LargeW])
-      .specify1[MediumW, MediumW]("identityMedium", Field.strict[MediumW]("in"), Type.strict[MediumW])
-      .specify1[BigW, BigW]("identityBig", Field.strict[BigW]("in"), Type.strict[BigW])
+      .specify1("identityMedium", Field.strict[MediumW]("in"), Type.strict[MediumW])
+      .specify1("identityBig", Field.strict[BigW]("in"), Type.strict[BigW])
+      .specify1("streamLarge", Field.stream[LargeW]("in"), Type.stream[LargeW])
+      .specify1("streamMedium", Field.stream[MediumW]("in"), Type.stream[MediumW])
+      .specify1("streamBig", Field.stream[BigW]("in"), Type.stream[BigW])
 }
