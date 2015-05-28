@@ -31,6 +31,6 @@ object GenerationTest {
     .specify0("foo", Type.strict[Foo])
     .specify1("fooId", Field.strict[Foo]("in"), Type.strict[Foo])
     .specify1("foobar", Field.strict[Foo]("in"), Type.strict[Bar])
-    .specify2("streamBar", Field.strict[Foo]("in1"), Field.strict[Bar]("in2"), Type.strict[Bar])
+    .specify2("streamBar", Field.strict[Foo]("in1"), Field.strict[Bar]("in2"), Type.stream[Bar])
 }
 

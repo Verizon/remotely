@@ -38,15 +38,11 @@ class GenerationSpec extends FlatSpec
     with Matchers
     with BeforeAndAfterAll {
 
-  import DescribeTestNewerProtocol._
-
   val addr = new java.net.InetSocketAddress("localhost", 9436)
 
   val server = new DescribeTestNewerServerImpl
 
-  val shutdown: () => Unit = server.environment.serve(addr,
-                                                           Executors.newCachedThreadPool,
-                                                           Monitoring.empty).run
+  val shutdown = server.environment.serve(addr).run
 
   val endpoint = Endpoint.single(NettyTransport.single(addr).run)
 
@@ -54,15 +50,14 @@ class GenerationSpec extends FlatSpec
   behavior of "Test Generation Server"
   
   it should "work" in {
-    import codecs.list
-    import Signature._
     import remotely.Remote.implicits._
-    val stream = TestGenerationClient.streamBar(Foo(3), Bar(4)).run
+    import GenerationTest._
+    val stream = TestGenerationClient.streamBar(Foo(3), Bar(4)).run(endpoint).run
     stream.runLog.run shouldEqual(List(Bar(4)))
   }
 
   override def afterAll() {
-    shutdown()
+    shutdown.run
   }
 }
 

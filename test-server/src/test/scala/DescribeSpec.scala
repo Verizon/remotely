@@ -58,22 +58,22 @@ class DescribeSpec extends FlatSpec
 
   it should "work" in {
     val desc = evaluate[List[Signature]](endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
-    desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
-    desc should contain (Signature("fooId", List(Field("in", "remotely.test.Foo")), "remotely.test.Foo"))
-    desc should contain (Signature("foobar", List(Field("in", "remotely.test.Foo")), "remotely.test.Bar"))
-    desc should contain (Signature("describe", Nil, "List[Remotely.Signature]"))
+    desc should contain (Signature("foo", Nil, Type("remotely.test.Foo", isStream = false)))
+    desc should contain (Signature("fooId", List(Field("in", Type("remotely.test.Foo", isStream = false))), Type("remotely.test.Foo", isStream = false)))
+    desc should contain (Signature("foobar", List(Field("in", Type("remotely.test.Foo", isStream = false))), Type("remotely.test.Bar", isStream = false)))
+    desc should contain (Signature("describe", Nil, Type("List[Remotely.Signature]", isStream = false)))
   }
 
   behavior of "Client"
 
   it should "connect older to newer" in {
     val desc = evaluate(endpointOldToNew, Monitoring.consoleLogger())(DescribeTestOlderClient.describe).apply(Response.Context.empty).run
-    desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
+    desc should contain (Signature("foo", Nil, Type("remotely.test.Foo", isStream = false)))
   }
 
   it should "connect newer to newer" in {
     val desc = evaluate(endpointNewToNew, Monitoring.consoleLogger())(DescribeTestNewerClient.describe).apply(Response.Context.empty).run
-    desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
+    desc should contain (Signature("foo", Nil, Type("remotely.test.Foo", isStream = false)))
   }
 
   it should "not connect newer to older" in {

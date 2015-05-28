@@ -27,7 +27,7 @@ object Field {
   def stream[A:TypeTag](name: String) = Field[A](name, Type(Remote.toTag[A], isStream = true))
 }
 case class Type[+A]private[remotely](name: String, isStream: Boolean) {
-  def pretty = if (isStream) s"Process[Task,$name]" else name
+  def pretty = if (isStream) s"scalaz.stream.Process[scalaz.concurrent.Task,$name]" else name
 }
 object Type {
   def strict[A:TypeTag]: Type[A] = Type[A](Remote.toTag[A], isStream = false)
@@ -53,6 +53,8 @@ case class Signature(name: String, params: List[Field[Any]], out: Type[Any]) {
   def tag = {
     s"$name: $typeString"
   }
+
+  def hasStream = params.exists(_.type_.isStream) || out.isStream
 
 }
 
