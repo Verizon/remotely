@@ -24,7 +24,7 @@ import scalaz.stream.Cause.{End, EarlyCause}
 import scalaz.stream.Process.{Halt, Await, Emit, Step}
 import scalaz.{\/-, -\/, \/}
 import scalaz.concurrent.Task
-import scalaz.stream.Process
+import scalaz.stream.{Sink, Process}
 
 package object utils {
   implicit class AugmentedEither[E,A](a: E \/ A) {
@@ -63,8 +63,12 @@ package object utils {
         case _ : EarlyCause => Task.fail(cause.asThrowable)
       }
     }
+    def observeAll(sink: Sink[Task, Throwable \/ A]): Process[Task, A] = {
+      p.attempt().observe(sink).flatten
+    }
   }
   implicit def errToE(err: Err) = new DecodingFailure(err)
+  implicit def eitherToProcess[A](either: Throwable \/ A): Process[Task, A] = either.toProcess
   implicit class AugmentedAttempt[A](a: Attempt[A]) {
     def toTask(implicit conv: Err => Throwable): Task[A] = a match {
       case Failure(err) => Task.fail(conv(err))

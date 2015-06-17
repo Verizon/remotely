@@ -17,9 +17,7 @@
 
 package remotely
 
-import scala.concurrent.duration._
-import scalaz.{\/-, Monad}
-import scalaz.\/.left
+import scalaz.Monad
 import scalaz.stream.Process
 import scalaz.concurrent.Task
 import scodec.bits.BitVector
@@ -55,26 +53,14 @@ object Server {
           // we are good to try executing the request
           val (response, isStream) = eval(env)(r)(userStreamBits)
           val resultStream = if (isStream) Process.await(response(ctx))(_.asInstanceOf[Process[Task, Any]]) else Process.await(response(ctx))(Process.emit(_))
-          resultStream.flatMap {
-            a =>
-              val deltaNanos = System.nanoTime - startNanos
-              val delta = Duration.fromNanos(deltaNanos)
-              val result = Successful(a)
-              monitoring.handled(ctx, r, expected, \/-(a), delta)
-              codecs.responseEncoder(respEncoder).encode(result).toProcess
-          }.onFailure {
-            // this is a little convoluted - we catch this exception just so
-            // we can log the failure using `monitoring`, then reraise it
-            e =>
-              val deltaNanos = System.nanoTime - startNanos
-              val delta = Duration.fromNanos(deltaNanos)
-              monitoring.handled(ctx, r, expected, left(e), delta)
-              Process.fail(e)
+          resultStream.observeAll(monitoring.sink(ctx, r, references = expected, startNanos)).flatMap { a =>
+            val result = Successful(a)
+            codecs.responseEncoder(respEncoder).encode(result).toProcess
           }
         }
+      }.onFailure {
+        e => codecs.responseEncoder(codecs.utf8).encode(Failure(Err(formatThrowable(e)))).toProcess
       }
-    }.onFailure {
-      e => codecs.responseEncoder(codecs.utf8).encode(Failure(Err(formatThrowable(e)))).toProcess
     }
   }
 
