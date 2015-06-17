@@ -17,17 +17,14 @@
 
 package remotely
 
-import java.net.InetSocketAddress
 import scala.concurrent.duration._
-import scalaz.{\/-, \/, Monad}
-import scalaz.\/.{right,left}
-import scalaz.stream.{merge,nio,Process}
+import scalaz.{\/-, Monad}
+import scalaz.\/.left
+import scalaz.stream.Process
 import scalaz.concurrent.Task
-import remotely.Response.Context
-import scodec.bits.{BitVector,ByteVector}
-import scodec.{Attempt, DecodeResult, Encoder, Err}
+import scodec.bits.BitVector
+import scodec.Err
 import scodec.Attempt.{Failure, Successful}
-import scodec.interop.scalaz._
 import utils._
 
 object Server {
@@ -56,7 +53,6 @@ object Server {
         }
         else {
           // we are good to try executing the request
-          // Why is it not request.tail?????
           val (response, isStream) = eval(env)(r)(userStreamBits)
           val resultStream = if (isStream) Process.await(response(ctx))(_.asInstanceOf[Process[Task, Any]]) else Process.await(response(ctx))(Process.emit(_))
           resultStream.flatMap {
