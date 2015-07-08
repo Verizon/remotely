@@ -47,13 +47,6 @@ object ChatServer {
       })
   }
 
-  val addr = new InetSocketAddress("localhost", 9009)
-
-  // on client - create local, typed declarations for server
-  // functions you wish to call. This can be code generated
-  // from `env`, since `env` has name/types for all declarations!
-  import Remote.implicits._
-
   val chat = Remote.ref[(String, Process[Task, String]) => Process[Task, String]]("chat")
 }
 
@@ -64,6 +57,7 @@ object ChatMain extends App {
   println(env)
 
   // create a server for this environment
+  val addr = new InetSocketAddress("localhost", 9009)
   val server = env.serve(addr).run
 
   val transport = NettyTransport.single(addr).run
@@ -74,7 +68,6 @@ object ChatMain extends App {
   val loc: Endpoint = Endpoint.single(transport)
   val client1Msgs = client1.run(loc, Context.empty).run
   val client2Msgs = client2.run(loc, Context.empty).run
-  // running a couple times just to see the latency improve for subsequent reqs
   try println { (client1Msgs merge client2Msgs).to(scalaz.stream.io.stdOutLines).run.run }
   finally {
     transport.shutdown.run
