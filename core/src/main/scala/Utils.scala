@@ -16,6 +16,8 @@
 //: ----------------------------------------------------------------------------
 package remotely
 
+import java.util.NoSuchElementException
+
 import remotely.codecs.DecodingFailure
 import scodec.Attempt.{Successful, Failure}
 import scodec.{Attempt, Err}
@@ -35,6 +37,10 @@ package object utils {
     def toProcess(implicit conv: E => Throwable): Process[Task, A] = a match {
       case -\/(e) => Process.fail(conv(e))
       case \/-(a) => Process.emit(a)
+    }
+    def getLeft = a match {
+      case -\/(e) => e
+      case _ => throw new NoSuchElementException
     }
   }
 

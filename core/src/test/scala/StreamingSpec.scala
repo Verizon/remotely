@@ -25,9 +25,10 @@ import remotely.Remote.implicits._
 import remotely.transport.netty.NettyTransport
 import remotely.codecs._
 
-import scalaz.-\/
 import scalaz.concurrent.Task
 import scalaz.stream._
+
+import remotely.utils._
 
 import scalaz.stream.async
 
