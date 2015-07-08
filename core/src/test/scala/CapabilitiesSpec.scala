@@ -49,7 +49,7 @@ class CapabilitiesSpec extends FlatSpec
 
     an[IncompatibleServer] should be thrownBy (
       try {
-        val _ = evaluate(endpoint1, Monitoring.empty)(CountClient.ping(1)).apply(Context.empty).run
+        val _ = CountClient.ping(1).runWithoutContext(endpoint1).run
       } catch {
         case t: IncompatibleServer =>
           throw t

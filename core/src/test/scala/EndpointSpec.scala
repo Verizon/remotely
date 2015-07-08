@@ -44,10 +44,10 @@ class EndpointSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     import Remote.implicits._
     import codecs._
 
-    val call = evaluate(endpoint, Monitoring.empty)(CountClient.ping(1))
+    val call = CountClient.ping(1).runWithoutContext(endpoint)
 
-    val i: Int = call.apply(Context.empty).run
-    val j: Int = call.apply(Context.empty).run
+    val i: Int = call.run
+    val j: Int = call.run
     j should be (2)
 
     shutdown.run

@@ -56,12 +56,12 @@ object GenServer extends MacrosCompatibility {
 
     // Creates name/type pairs from the signatures in the protocol.
     val signatures = p.signatures.signatures.map { s =>
-      val typ = parseType(c)(Signatures.wrapResponse(s.typeString))
-      (s.name, typ)
+      val typ = parseType(c)(s.wrapResponse)
+      (s.name, typ, s.out.isStream)
     }
 
     // Generates the method defs for the generated class.
-    val sigDefs = signatures.collect { case (n,t) if n != "describe" =>
+    val sigDefs = signatures.collect { case (n,t, isStream) if n != "describe" =>
       genSig(n, t)
     }
 
@@ -93,7 +93,8 @@ object GenServer extends MacrosCompatibility {
 
              private def populateDeclarations(env: Values): Values =
                 ${ signatures.foldLeft(q"env":c.Tree)((e,s) =>
-                    q"$e.declare(${Literal(Constant(s._1))},${Ident(createTermName(c)(s._1))})"
+                    if (s._3)  q"$e.declareStream(${Literal(Constant(s._1))},${Ident(createTermName(c)(s._1))})"
+                    else q"$e.declare(${Literal(Constant(s._1))},${Ident(createTermName(c)(s._1))})"
                   )}
 
               ..$body

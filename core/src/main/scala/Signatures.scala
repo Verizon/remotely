@@ -21,57 +21,68 @@ import scala.reflect.runtime.universe.TypeTag
 import codecs._
 import scodec.Codec
 
-case class Field[+A]private[remotely](name: String, typeString: String)
+case class Field[+A]private[remotely](name: String, type_ : Type[A])
 object Field {
-  def strict[A:TypeTag](name: String) = Field[A](name, Remote.toTag[A])
+  def strict[A:TypeTag](name: String) = Field[A](name, Type(Remote.toTag[A], isStream = false))
+  def stream[A:TypeTag](name: String) = Field[A](name, Type(Remote.toTag[A], isStream = true))
 }
-case class Type[+A]private[remotely](name: String)
+case class Type[+A]private[remotely](name: String, isStream: Boolean) {
+  def pretty = if (isStream) s"scalaz.stream.Process[scalaz.concurrent.Task,$name]" else name
+}
 object Type {
-  def apply[A:TypeTag]: Type[A] = Type[A](Remote.toTag[A])
+  def strict[A:TypeTag]: Type[A] = Type[A](Remote.toTag[A], isStream = false)
+  def stream[A:TypeTag]: Type[A] = Type[A](Remote.toTag[A], isStream = true)
 }
-case class Signature(name: String, params: List[Field[Any]], outType: String) {
+case class Signature(name: String, params: List[Field[Any]], out: Type[Any]) {
   /** returns a string in the form "Type, Type => Response[Type]",
     *  wrapping Response around the return type def
     */
   def wrapResponse: String =
-    s"${lhsWithArrow}Response[${outType}]"
+    s"${lhsWithArrow}Response[${out.pretty}]"
 
-  private def lhs = params.map(_.typeString).mkString(",")
+  private def lhs = {
+    val paramReps = params.map(_.type_.pretty)
+    if (params.size == 1) paramReps.mkString(",")
+    else paramReps.mkString("(", ",", ")")
+  }
 
   private def lhsWithArrow = if (params.isEmpty) "" else s"$lhs => "
 
-  def typeString = lhsWithArrow + outType
+  def typeString = lhsWithArrow + out.pretty
 
   def tag = {
     s"$name: $typeString"
   }
 
+  def hasStream = params.exists(_.type_.isStream) || out.isStream
+
 }
 
 object Signature {
   // What is the difference between ~ and ~~ ?
-  implicit val fieldCodec: Codec[Field[Any]] = (utf8 ~~ utf8).widenAs[Field[Any]](Field.apply, Field.unapply)
-  implicit val signatureCodec: Codec[Signature] = (utf8  ~~ list(fieldCodec) ~~ utf8).widenAs[Signature](Signature.apply, Signature.unapply)
+  implicit val typeCodec: Codec[Type[Any]] = (utf8 ~~ bool).widenAs[Type[Any]](Type.apply, Type.unapply)
+  implicit val fieldCodec: Codec[Field[Any]] = (utf8 ~~ typeCodec).widenAs[Field[Any]](Field.apply, Field.unapply)
+  implicit val signatureCodec: Codec[Signature] = (utf8  ~~ list(fieldCodec) ~~ typeCodec).widenAs[Signature](Signature.apply, Signature.unapply)
 }
 
 case class Signatures(signatures: Set[Signature]) {
 
-  def specify(name: String, in: List[Field[Any]], outType: String) =
-    Signatures(signatures + Signature(name, in, outType))
+  def specify(name: String, in: List[Field[Any]], out: Type[Any]) =
+    Signatures(signatures + Signature(name, in, out))
 
-  def specify0(name: String, out: String): Signatures =
+  def specify0(name: String, out: Type[Any]): Signatures =
     specify(name, Nil, out)
 
-  def specify1(name: String, in: Field[Any], out: String): Signatures =
+  def specify1(name: String, in: Field[Any], out: Type[Any]): Signatures =
     specify(name, List(in), out)
 
-  def specify2(name: String, in1: Field[Any], in2: Field[Any], out: String): Signatures =
+  def specify2(name: String, in1: Field[Any], in2: Field[Any], out: Type[Any]): Signatures =
     specify(name, List(in1, in2), out)
 
-  def specify3(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], out: String): Signatures =
+  def specify3(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], out: Type[Any]): Signatures =
     specify(name, List(in1, in2, in3), out)
 
-  def specify4(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], in4: Field[Any], out: String): Signatures =
+  def specify4(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], in4: Field[Any], out: Type[Any]): Signatures =
     specify(name, List(in1, in2, in3, in4), out)
 
   def pretty: String = "Signatures.empty\n" +
@@ -82,13 +93,7 @@ case class Signatures(signatures: Set[Signature]) {
 }
 
 object Signatures {
-  val Arrow = "(.*)=>(.*)".r
-  private[remotely] def wrapResponse(typename: String): String = typename match {
-    case Arrow(l,r) => s"$l=> Response[${r.trim}]"
-    case _ => s"Response[$typename]"
-  }
-
-  val empty = Signatures(Set(Signature("describe", List(), "List[remotely.Signature]")))
+  val empty = Signatures(Set(Signature("describe", List(), Type("List[remotely.Signature]", isStream = false))))
 
   private[remotely] def indent(by: String)(s: String): String =
     by + s.replace("\n", "\n" + by)

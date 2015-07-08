@@ -25,6 +25,7 @@ import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
 import scodec.bits.BitVector
 import shapeless._
+import scalaz.stream.Process
 
 /**
  * Represents a remote computation which yields a
@@ -38,6 +39,18 @@ sealed trait Remote[+A] {
   def pretty: String = "Remote {\n  " +
     Remote.refs(this).mkString("\n  ") + "\n  " +
     toString + "\n}"
+
+  /**
+   * Builds a List by applying a partial function to all children of this Remote on which the function is defined.
+   */
+  def collect[B](partial: PartialFunction[Remote[Any],B]): List[B] = {
+    val me = partial.lift(this).toList
+    val rest = this match {
+      case app: Remote.Ap[_] => (app.f :: app.args).map(_.collect(partial)).flatten
+      case _ => Nil
+    }
+    me ++ rest
+  }
 }
 
 object Remote {
@@ -51,6 +64,15 @@ object Remote {
   /** Promote a local value to a remote value. */
   def local[A:Encoder:TypeTag](a: A): Remote[A] =
     Remote.Local(a, Some(Encoder[A]), Remote.toTag[A])
+
+  def localStream[A: Encoder:TypeTag](stream: Process[Task, A]): Remote[Process[Task,A]] =
+    Remote.LocalStream(stream, Some(Encoder[A]), Remote.toTag[A])
+
+  implicit class RunSyntaxForStreaming[A](self: Remote[Process[Task,A]]) {
+    /** Call `self.run(at, M).apply(ctx)` to get back a `Task[A]`. */
+    def run(at: Endpoint, ctx: Response.Context = Response.Context.empty, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Task[Process[Task,A]] =
+      evaluateStream(at,M)(self).apply(ctx)
+  }
 
   /** Provides the syntax `expr.run(endpoint)`, where `endpoint: Endpoint`. */
   implicit class RunSyntax[A](self: Remote[A]) {
@@ -66,8 +88,8 @@ object Remote {
       run(at, M).apply(ctx)
 
     /** Run this with an empty context */
-    def runWithoutContext(at: Endpoint)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
-      runWithContext(at, Response.Context.empty)
+    def runWithoutContext(at: Endpoint, M: Monitoring = Monitoring.empty)(implicit A: TypeTag[A], C: Codec[A]): Task[A] =
+      runWithContext(at, Response.Context.empty, M)
   }
   implicit class Ap1Syntax[A,B](self: Remote[A => B]) {
     def apply(a: Remote[A]): Remote[B] =
@@ -95,6 +117,14 @@ object Remote {
     override def toString = a.toString
   }
 
+  private[remotely] case class LocalStream[A](
+    stream: Process[Task,A],
+    format: Option[Encoder[A]],
+    tag: String
+  ) extends Remote[Process[Task,A]] {
+    override def toString = stream.toString
+  }
+
   /**
    * Reference to a remote value on the server.
    */
@@ -102,57 +132,43 @@ object Remote {
     override def toString = name.takeWhile(_ != ':')
   }
 
+  private[remotely] sealed abstract class Ap[A](val f: Remote[Any],val args: List[Remote[Any]]) extends Remote[A] {
+    override def toString = s"""$f({$args.mkString(","})"""
+  }
+
   // we require a separate constructor for each function
   // arity, since remote invocations must be fully saturated
   private[remotely] case class Ap1[A,B](
-    f: Remote[A => B],
-    a: Remote[A]) extends Remote[B] {
-    override def toString = s"$f($a)"
-  }
+    override val f: Remote[A => B],
+    a: Remote[A]) extends Ap[B](f,List(a))
 
   private[remotely] case class Ap2[A,B,C](
-    f: Remote[(A,B) => C],
+    override val f: Remote[(A,B) => C],
     a: Remote[A],
-    b: Remote[B]) extends Remote[C] {
-    override def toString = s"$f($a, $b)"
-  }
+    b: Remote[B]) extends Ap[C](f,List(a,b))
 
   private[remotely] case class Ap3[A,B,C,D](
-    f: Remote[(A,B,C) => D],
+    override val f: Remote[(A,B,C) => D],
     a: Remote[A],
     b: Remote[B],
-    c: Remote[C]) extends Remote[D] {
-    override def toString = s"$f($a, $b, $c)"
-  }
+    c: Remote[C]) extends Ap[D](f,List(a,b,c))
 
   private[remotely] case class Ap4[A,B,C,D,E](
-    f: Remote[(A,B,C,D) => E],
+    override val f: Remote[(A,B,C,D) => E],
     a: Remote[A],
     b: Remote[B],
     c: Remote[C],
-    d: Remote[D]) extends Remote[E] {
-    override def toString = s"$f($a, $b, $c, $d)"
-  }
+    d: Remote[D]) extends Ap[E](f,List(a,b,c,d))
 
   /** Collect up all the `Ref` names referenced by `r`. */
-  def refs[A](r: Remote[A]): SortedSet[String] = r match {
-    case Local(a,e,t) => SortedSet.empty
+  def refs[A](r: Remote[A]): SortedSet[String] = (r collect {
     case Ref(t) => SortedSet(t)
-    case Ap1(f,a) => refs(f).union(refs(a))
-    case Ap2(f,a,b) => refs(f).union(refs(b)).union(refs(b))
-    case Ap3(f,a,b,c) => refs(f).union(refs(b)).union(refs(b)).union(refs(c))
-    case Ap4(f,a,b,c,d) => refs(f).union(refs(b)).union(refs(b)).union(refs(c)).union(refs(d))
-  }
+  }).fold(SortedSet.empty[String])(_.union(_))
 
   /** Collect up all the formats referenced by `r`. */
-  def formats[A](r: Remote[A]): SortedSet[String] = r match {
+  def formats[A](r: Remote[A]): SortedSet[String] = r.collect {
     case Local(a,e,t) => SortedSet(t)
-    case Ref(t) => SortedSet.empty
-    case Ap1(f,a) => formats(f).union(formats(a))
-    case Ap2(f,a,b) => formats(f).union(formats(b)).union(formats(b))
-    case Ap3(f,a,b,c) => formats(f).union(formats(b)).union(formats(b)).union(formats(c))
-    case Ap4(f,a,b,c,d) => formats(f).union(formats(b)).union(formats(b)).union(formats(c)).union(formats(d))
-  }
+  }.fold(SortedSet.empty[String])(_.union(_))
 
   def toTag[A:TypeTag]: String = {
     val tt = typeTag[A]
@@ -175,6 +191,8 @@ object Remote {
 
     /** Implicitly promote a local value to a `Remote[A]`. */
     implicit def localToRemote[A:Encoder:TypeTag](a: A): Remote[A] = local(a)
+
+    implicit def localStreamToRemote[A: Encoder:TypeTag](stream: Process[Task, A]): Remote[Process[Task,A]] = localStream(stream)
   }
 }
 

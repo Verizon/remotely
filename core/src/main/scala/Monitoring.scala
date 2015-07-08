@@ -20,7 +20,9 @@ package remotely
 import java.net.InetSocketAddress
 import java.net.SocketAddress
 import scala.concurrent.duration._
-import scalaz.\/
+import scalaz.{\/-, \/}
+import scalaz.concurrent.Task
+import scalaz.stream.Process
 
 /**
  * A collection of callbacks that can be passed to `[[remotely.Environment#serve]]`
@@ -39,6 +41,11 @@ trait Monitoring { self =>
                  result: Throwable \/ A,
                  took: Duration): Unit
 
+  def handle[A](ctx: Response.Context, req: Remote[A], references: Iterable[String], result: Throwable \/ A, startTime: Long) = Task.delay {
+    val duration = Duration.fromNanos(System.nanoTime() - startTime)
+    handled(ctx, req, references, result, duration)
+  }
+
   def negotiating(addr: Option[SocketAddress],
                   what: String,
                   error: Option[Throwable]): Unit
@@ -46,6 +53,10 @@ trait Monitoring { self =>
   protected def renderAddress(addr: Option[SocketAddress]): String = addr match {
     case Some(addr) if addr.isInstanceOf[InetSocketAddress] => addr.asInstanceOf[InetSocketAddress].toString
     case _ => "<unknown addr>"
+  }
+
+  def sink[A](ctx: Response.Context, req: Remote[A], references: Iterable[String], startTime: Long) = Process.constant { a: A =>
+    handle(ctx, req, references, \/-(a), startTime)
   }
 
   /**

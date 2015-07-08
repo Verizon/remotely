@@ -62,12 +62,8 @@ case class Environment[H <: HList](codecs: Codecs[H], values: Values) {
     this.populate(_ => v)
 
   private def serverHandler(monitoring: Monitoring): Handler = { bytes =>
-      // we assume the input is a framed stream, and encode the response(s)
-      // as a framed stream as well
-      bytes pipe Process.await1[BitVector] /*server.Handler.deframe*/ evalMap { bs =>
-        Server.handle(this)(bs)(monitoring)
-      }
-    }
+    Server.handle(this)(bytes)(monitoring)
+  }
 
   /**
     * start a netty server listening to the given address

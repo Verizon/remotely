@@ -17,17 +17,13 @@
 
 package remotely
 
-import java.net.InetSocketAddress
-import scala.concurrent.duration._
-import scalaz.{\/,Monad}
-import scalaz.\/.{right,left}
-import scalaz.stream.{merge,nio,Process}
+import scalaz.Monad
+import scalaz.stream.Process
 import scalaz.concurrent.Task
-import remotely.Response.Context
-import scodec.bits.{BitVector,ByteVector}
-import scodec.{Attempt, DecodeResult, Encoder, Err}
-import scodec.Attempt.Successful
-import scodec.interop.scalaz._
+import scodec.bits.BitVector
+import scodec.Err
+import scodec.Attempt.{Failure, Successful}
+import utils._
 
 object Server {
 
@@ -39,74 +35,71 @@ object Server {
    * use the `monitoring` argument if you wish to observe
    * these failures.
    */
-  def handle(env: Environment[_])(request: BitVector)(monitoring: Monitoring): Task[BitVector] = {
-
-    Task.delay(System.nanoTime).flatMap { startNanos => Task.suspend {
-      // decode the request from the environment
-
-      val DecodeResult((respEncoder,ctx,r), trailing) =
-        codecs.requestDecoder(env).decode(request).
-          fold(e => throw new Error(e.messageWithContext), identity)      
-      
-      val expected = Remote.refs(r)
-      val unknown = (expected -- env.values.keySet).toList
-      if (unknown.nonEmpty) { // fail fast if the Environment doesn't know about some referenced values
-        val missing = unknown.mkString("\n")
-        fail(s"[validation] server values: <" + env.values.keySet + s"> does not have referenced values:\n $missing")
-      } else if (trailing.nonEmpty) // also fail fast if the request has trailing bits (usually a codec error)
-        fail(s"[validation] trailing bytes in request: ${trailing.toByteVector}")
-      else // we are good to try executing the request
-        eval(env.values)(r)(ctx).flatMap {
-          a =>
-          val deltaNanos = System.nanoTime - startNanos
-          val delta = Duration.fromNanos(deltaNanos)
-          val result = right(a)
-          monitoring.handled(ctx, r, expected, result, delta)
-          toTask(codecs.responseEncoder(respEncoder).encode(Successful(a)))
-        }.attempt.flatMap {
-          // this is a little convoluted - we catch this exception just so
-          // we can log the failure using `monitoring`, then reraise it
-          _.fold(
-            e => {
-              val deltaNanos = System.nanoTime - startNanos
-              val delta = Duration.fromNanos(deltaNanos)
-              monitoring.handled(ctx, r, expected, left(e), delta)
-              Task.fail(e)
-            },
-            bits => Task.now(bits)
-          )
+  def handle(env: Environment[_])(request: Process[Task, BitVector])(monitoring: Monitoring): Process[Task,BitVector] = {
+    Process.await(Task.delay(System.nanoTime)) { startNanos =>
+      Process.await(request.uncons) { case (initialRequestBits, userStreamBits) =>
+        // decode the request from the environment
+        val (respEncoder, ctx, r) =
+          codecs.requestDecoder(env).complete.decode(initialRequestBits).map(_.value)
+            .fold(e => throw new Error(e.messageWithContext), identity)
+        val expected = Remote.refs(r)
+        val unknown = (expected -- env.values.keySet).toList
+        if (unknown.nonEmpty) {
+          // fail fast if the Environment doesn't know about some referenced values
+          val missing = unknown.mkString("\n")
+          fail(s"[validation] server values: <" + env.values.keySet + s"> does not have referenced values:\n $missing")
         }
-    }}.attempt.flatMap { _.fold(
-      e => toTask(codecs.responseEncoder(codecs.utf8).encode(Attempt.failure(Err(formatThrowable(e))))),
-      bits => Task.now(bits)
-                        )}
+        else {
+          // we are good to try executing the request
+          val (response, isStream) = eval(env)(r)(userStreamBits)
+          val resultStream = if (isStream) Process.await(response(ctx))(_.asInstanceOf[Process[Task, Any]]) else Process.await(response(ctx))(Process.emit(_))
+          resultStream.observeAll(monitoring.sink(ctx, r, references = expected, startNanos)).flatMap { a =>
+            val result = Successful(a)
+            codecs.responseEncoder(respEncoder).encode(result).toProcess
+          }
+        }
+      }.onFailure {
+        e => codecs.responseEncoder(codecs.utf8).encode(Failure(Err(formatThrowable(e)))).toProcess
+      }
+    }
   }
 
   val P = Process
 
   /** Evaluate a remote expression, using the given (untyped) environment. */
-  def eval[A](env: Values)(r: Remote[A]): Response[A] = {
+  def eval(env: Environment[_])(r: Remote[Any])(userStream: Process[Task, BitVector]): (Response[Any], Boolean) = {
+    def evalSub(r: Remote[Any]) = eval(env)(r)(userStream)._1
+    val values = env.values.values
     import Remote._
     r match {
-      case Local(a,_,_) => Response.now(a)
-      case Ref(name) => env.values.lift(name) match {
-        case None => Response.delay { sys.error("Unknown name on server: " + name) }
-        case Some(a) => a().asInstanceOf[Response[A]]
+      case Local(a,_,_) => (Response.now(a), false)
+      case LocalStream(_, _,tag) =>
+        env.codecs.get(tag).map { decoder =>
+          val decodedStream: Process[Task, Any] = userStream.map(bits => decoder.complete.decode(bits).map(_.value)).flatMap(_.toProcess)
+          (Response.now(decodedStream), true)
+        }.getOrElse((Response.fail(new Error(s"[decoding] server does not have deserializers for:\n$tag")), false))
+      case Ref(name) => values.lift(name) match {
+        case None => (Response.delay { sys.error("Unknown name on server: " + name) }, false)
+        case Some(a) => (a(), a.isStream)
       }
       // on the server, only concern ourselves w/ tree of fully saturated calls
-      case Ap1(Ref(f),a) => eval(env)(a).flatMap(env.values(f)(_)) .asInstanceOf[Response[A]]
-      case Ap2(Ref(f),a,b) => Monad[Response].tuple2(eval(env)(a), eval(env)(b)).flatMap{case (a,b) => env.values(f)(a,b)} .asInstanceOf[Response[A]]
-      case Ap3(Ref(f),a,b,c) => Monad[Response].tuple3(eval(env)(a), eval(env)(b), eval(env)(c)).flatMap{case (a,b,c) => env.values(f)(a,b,c)} .asInstanceOf[Response[A]]
-      case Ap4(Ref(f),a,b,c,d) => Monad[Response].tuple4(eval(env)(a), eval(env)(b), eval(env)(c), eval(env)(d)).flatMap{case (a,b,c,d) => env.values(f)(a,b,c,d)} .asInstanceOf[Response[A]]
-      case _ => Response.delay { sys.error("unable to interpret remote expression of form: " + r) }
+      case Ap1(Ref(f),a) =>
+        val value = values(f)
+        (eval(env)(a)(userStream)._1.flatMap{value(_)}, value.isStream)
+      case Ap2(Ref(f),a,b) =>
+        val value = values(f)
+        (Monad[Response].tuple2(evalSub(a), evalSub(b)).flatMap{case (a,b) => value(a,b)}, value.isStream)
+      case Ap3(Ref(f),a,b,c) =>
+        val value = values(f)
+        (Monad[Response].tuple3(evalSub(a), evalSub(b), evalSub(c)).flatMap{case (a,b,c) => value(a,b,c)}, value.isStream)
+      case Ap4(Ref(f),a,b,c,d) =>
+        val value = values(f)
+        (Monad[Response].tuple4(evalSub(a), evalSub(b), evalSub(c), evalSub(d)).flatMap{case (a,b,c,d) => value(a,b,c,d)}, value.isStream)
+      case _ => (Response.delay { sys.error("unable to interpret remote expression of form: " + r) }, false)
     }
   }
 
-  private def toTask[A](att: Attempt[A]): Task[A] =
-    att.fold(e => Task.fail(new Error(e.messageWithContext)), 
-             a => Task.now(a))
-  
-  def fail(msg: String): Task[Nothing] = Task.fail(new Error(msg))
+  def fail(msg: String): Process[Task, Nothing] = Process.fail(new Error(msg))
 
   class Error(msg: String) extends Exception(msg)
 

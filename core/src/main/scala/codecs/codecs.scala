@@ -32,6 +32,9 @@ import scodec.bits.BitVector
 import scodec.interop.scalaz._
 import Remote._
 
+import scalaz.stream.Process
+import utils._
+
 private[remotely] trait lowerprioritycodecs {
 
   // Since `Codec[A]` extends `Encoder[A]`, which is contravariant in `A`,
@@ -49,6 +52,7 @@ package object codecs extends lowerprioritycodecs {
   implicit val double = C.double
   implicit val int32 = C.int32
   implicit val int64 = C.int64
+  implicit val byte = C.byte
   implicit val utf8 = C.variableSizeBytes(int32, C.utf8)
   implicit val bool = C.bool(8) // use a full byte
 
@@ -141,6 +145,7 @@ package object codecs extends lowerprioritycodecs {
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c)
       case Ap4(f,a,b,c,d) => C.uint8.encode(5) <+>
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c) <+> remoteEncode(d)
+      case l: LocalStream[_] => C.uint8.encode(255) <+> localStreamRemoteEncoder.encode(l)
     }
 
   private val E = Monad[Decoder]
@@ -158,7 +163,29 @@ package object codecs extends lowerprioritycodecs {
         .getOrElse(fail(Err(s"[decoding] unknown format type: $formatType")))
     )
 
+  def localStreamRemoteDecoder: Decoder[LocalStream[Any]] =
+      utf8.map( tag => LocalStream(Process.empty, None, tag)) // Insert empty stream the actual Stream will come later
+
   def refCodec[A]: Codec[Ref[A]] = utf8.as[Ref[A]]
+
+  /**
+   * The LocalStream Encoder does not actually encode the stream which would be impossible
+   * given the signature of decode on an Encoder anyway. It just informs the server side that
+   * it will receive a stream after the transmission of the original request
+   */
+  def localStreamRemoteEncoder[A] = new Encoder[LocalStream[A]] {
+    val sizeBound = utf8.sizeBound
+    def encode(a: LocalStream[A]): Attempt[BitVector] =
+      utf8.encode(a.tag)
+  }
+
+  /**
+   * This function actually creates a stream of bits from a LocalStream to send to the
+   * server once the initial request has been sent in it's entirety.
+   */
+  def encodeLocalStream[A](l: Option[LocalStream[A]]): Process[Task,BitVector] =
+    l.map(l => l.format.map(encoder => l.stream.map(encoder.encode(_).toProcess))
+      .getOrElse(Process.fail(Err("cannot encode Local value with undefined encoder"))).flatten).getOrElse(Process.empty)
 
   /**
    * A `Remote[Any]` decoder. If a `Local` value refers
@@ -178,6 +205,7 @@ package object codecs extends lowerprioritycodecs {
                   Ap3(f.asInstanceOf[Remote[(Any,Any,Any) => Any]],a,b,c))
       case 5 => E.apply5(go,go,go,go,go)((f,a,b,c,d) =>
                   Ap4(f.asInstanceOf[Remote[(Any,Any,Any,Any) => Any]],a,b,c,d))
+      case 255 => localStreamRemoteDecoder
       case t => fail(Err(s"[decoding] unknown tag byte: $t"))
     }
   }
@@ -198,8 +226,8 @@ package object codecs extends lowerprioritycodecs {
    *
    * Use `encode(r).map(_.toByteArray)` to produce a `Task[Array[Byte]]`.
    */
-  def encodeRequest[A:TypeTag](a: Remote[A], ctx: Context): Attempt[BitVector] =
-    Codec[String].encode(Remote.toTag[A]) <+>
+  def encodeRequest(a: Remote[Any], ctx: Context, remoteTag: String): Attempt[BitVector] =
+    Codec[String].encode(remoteTag) <+>
     Encoder[Response.Context].encode(ctx) <+>
     sortedSet[String].encode(formats(a))  <+>
     remoteEncode(a)

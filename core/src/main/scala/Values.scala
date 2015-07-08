@@ -18,14 +18,17 @@
 package remotely
 
 import scala.reflect.runtime.universe.TypeTag
-import scalaz.Monad
+import scalaz.concurrent.Task
+import scalaz.stream.Process
 
 trait Value {
+  val isStream: Boolean
   def apply(args: Any*): Response[Any]
 }
 
 object Value {
-  def fromValue(a: Any) = new Value {
+  def fromValue(a: Any, isStream1: Boolean) = new Value {
+    val isStream: Boolean = isStream1
     def apply(args: Any*) = args.length match {
       case 0 => a.asInstanceOf[Response[Any]]
       case 1 => a.asInstanceOf[Any => Response[Any]](args(0))
@@ -54,43 +57,67 @@ case class Values(values: Map[String,Value]) {
   def declare[A:TypeTag](name: String, a: Response[A]): Values = {
     val tag = Remote.nameToTag[A](name)
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
-    else this.copy(values = values + (tag -> Value.fromValue(a)))
+    else this.copy(values = values + (tag -> Value.fromValue(a, false)))
+  }
+
+  def declareStream[A:TypeTag](name: String, a: Response[Process[Task,A]]): Values = {
+    val tag = Remote.nameToTag[Process[Task,A]](name)
+    if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
+    else this.copy(values = values + (tag -> Value.fromValue(a, true)))
   }
 
   def declare[A:TypeTag,B:TypeTag](name: String, f: A => Response[B]): Values = {
     val tag = Remote.nameToTag[A => B](name)
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
-    else this.copy(values = values + (tag -> Value.fromValue(f)))
+    else this.copy(values = values + (tag -> Value.fromValue(f, false)))
+  }
+
+  def declareStream[A:TypeTag,B:TypeTag](name: String, f: A => Response[Process[Task, B]]): Values = {
+    val tag = Remote.nameToTag[A => Process[Task,B]](name)
+    if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
+    else this.copy(values = values + (tag -> Value.fromValue(f, true)))
   }
 
   def declare[A:TypeTag,B:TypeTag,C:TypeTag](name: String, f: (A,B) => Response[C]): Values = {
     val tag = Remote.nameToTag[(A,B) => C](name)
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
-    else this.copy(values = values + (tag -> Value.fromValue(f)))
+    else this.copy(values = values + (tag -> Value.fromValue(f, false)))
+  }
+
+  def declareStream[A:TypeTag,B:TypeTag,C:TypeTag](name: String, f: (A,B) => Response[Process[Task,C]]): Values = {
+    val tag = Remote.nameToTag[(A,B) => Process[Task,C]](name)
+    if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
+    else this.copy(values = values + (tag -> Value.fromValue(f, true)))
   }
 
   def declare[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String, f: (A,B,C) => Response[D]): Values = {
     val tag = Remote.nameToTag[(A,B,C) => D](name)
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
-    else this.copy(values = values + (tag -> Value.fromValue(f)))
+    else this.copy(values = values + (tag -> Value.fromValue(f, false)))
+  }
+
+  def declareStream[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag](name: String, f: (A,B,C) => Response[Process[Task,D]]): Values = {
+    val tag = Remote.nameToTag[(A,B,C) => Process[Task,D]](name)
+    if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
+    else this.copy(values = values + (tag -> Value.fromValue(f, false)))
   }
 
   def declare[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag](name: String, f: (A,B,C,D) => Response[E]): Values = {
     val tag = Remote.nameToTag[(A,B,C,D) => E](name)
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
-    else this.copy(values = values + (tag -> Value.fromValue(f)))
+    else this.copy(values = values + (tag -> Value.fromValue(f, false)))
   }
 
   def declare[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag,F:TypeTag](name: String, f: (A,B,C,D,E) => Response[F]): Values = {
     val tag = Remote.nameToTag[(A,B,C,D,E) => F](name)
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
-    else this.copy(values = values + (tag -> Value.fromValue(f)))
+    else this.copy(values = values + (tag -> Value.fromValue(f, false)))
   }
 
   def declare[A:TypeTag,B:TypeTag,C:TypeTag,D:TypeTag,E:TypeTag,F:TypeTag,G:TypeTag](name: String, f: (A,B,C,D,E,F) => Response[G]): Values = {
     val tag = Remote.nameToTag[(A,B,C,D,E,F) => G](name)
     if (values.contains(tag)) sys.error("Environment already has declaration for: "+tag)
-    else this.copy(values = values + (tag -> Value.fromValue(f)))
+    else this.copy(values = values + (tag -> Value.fromValue(f, false)))
   }
 
   def keySet = values.keySet

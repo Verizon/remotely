@@ -82,17 +82,13 @@ class SSLSpec extends FlatSpec
   it should "be able to do client authentication" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serve(addr,
-                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                            sslParams = Some(serverRequiringAuthParameters)).run
-    val transport = NettyTransport.single(addr,
-                                          monitoring = Monitoring.consoleLogger("SSLSpec-client"),
-                                          sslParams = Some(clientAuthParameters)).run
+    val shutdown = server.environment.serve(addr, sslParams = Some(serverRequiringAuthParameters)).run
+    val transport = NettyTransport.single(addr, sslParams = Some(clientAuthParameters)).run
 
     val endpoint: Endpoint = Endpoint.single(transport)
 
     try {
-      val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+      val fact: Int = Client.factorial(10).runWithoutContext(endpoint, Monitoring.consoleLogger()).run
       fact should be (100)
     } finally {
       shutdown.run
@@ -103,17 +99,13 @@ class SSLSpec extends FlatSpec
   it should "reject non auth clients when auth is required" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serve(addr,
-                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                            sslParams = Some(serverRequiringAuthParameters)).run
-    val transport = NettyTransport.single(addr,
-                                          monitoring = Monitoring.consoleLogger("SSLSpec-client"),
-                                          sslParams = Some(clientNoAuthParameters)).run
+    val shutdown = server.environment.serve(addr, sslParams = Some(serverRequiringAuthParameters)).run
+    val transport = NettyTransport.single(addr, sslParams = Some(clientNoAuthParameters)).run
 
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+      val fact: Int = Client.factorial(10).runWithoutContext(endpoint).run
       fact should be (100)
     } finally {
       shutdown.run
@@ -124,17 +116,13 @@ class SSLSpec extends FlatSpec
   it should "work without auth" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serve(addr,
-                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                            sslParams = Some(serverNoAuthParameters)).run
-    val transport = NettyTransport.single(addr,
-                                          monitoring = Monitoring.consoleLogger("SSLSpec-client"),
-                                          sslParams = Some(clientNoAuthParameters)).run
+    val shutdown = server.environment.serve(addr, sslParams = Some(serverNoAuthParameters)).run
+    val transport = NettyTransport.single(addr, sslParams = Some(clientNoAuthParameters)).run
 
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+      val fact: Int = Client.factorial(10).runWithoutContext(endpoint).run
       fact should be (100)
     } finally {
       shutdown.run
@@ -145,17 +133,13 @@ class SSLSpec extends FlatSpec
   it should "work with with auth client and no-auth server" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serve(addr,
-                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                            sslParams = Some(serverNoAuthParameters)).run
-    val transport = NettyTransport.single(addr,
-                                          monitoring = Monitoring.consoleLogger("SSLSpec-client"),
-                                          sslParams = Some(clientAuthParameters)).run
+    val shutdown = server.environment.serve(addr, sslParams = Some(serverNoAuthParameters)).run
+    val transport = NettyTransport.single(addr, sslParams = Some(clientAuthParameters)).run
 
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact: Int = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty).run
+      val fact: Int = Client.factorial(10).runWithoutContext(endpoint).run
       fact should be (100)
     } finally {
       shutdown.run
@@ -166,17 +150,13 @@ class SSLSpec extends FlatSpec
   it should "reject a non-ssl server from an ssl client" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serve(addr,
-                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                            sslParams = None).run
-    val transport = NettyTransport.single(addr,
-                                          monitoring = Monitoring.consoleLogger("SSLSpec-client"),
-                                          sslParams = Some(clientNoAuthParameters)).run
+    val shutdown = server.environment.serve(addr, sslParams = None).run
+    val transport = NettyTransport.single(addr, sslParams = Some(clientNoAuthParameters)).run
 
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty)
+      val fact = Client.factorial(10).runWithoutContext(endpoint)
 
       an[io.netty.handler.ssl.NotSslRecordException] should be thrownBy (
         try {
@@ -198,17 +178,13 @@ class SSLSpec extends FlatSpec
   ignore should "give a good error when a non-ssl client tries to connect to an ssl server" in {
     import remotely.Remote.implicits._
 
-    val shutdown = server.environment.serve(addr,
-                                            monitoring = Monitoring.consoleLogger("SSLSpec-server"),
-                                            sslParams = Some(serverNoAuthParameters)).run
-    val transport = NettyTransport.single(addr,
-                                          monitoring = Monitoring.consoleLogger("SSLSpec-client"),
-                                          sslParams = None).run
+    val shutdown = server.environment.serve(addr, sslParams = Some(serverNoAuthParameters)).run
+    val transport = NettyTransport.single(addr, sslParams = None).run
 
     try {
       val endpoint: Endpoint = Endpoint.single(transport)
 
-      val fact = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty)
+      val fact = evaluate(endpoint)(Client.factorial(10)).apply(Context.empty)
 
       an[Exception] should be thrownBy fact.run
     } finally {

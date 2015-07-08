@@ -159,6 +159,11 @@ object BenchmarkClientMain extends TestData with transformations {
       new Test(results, server.BenchmarkClient.identityBig(toBigW(bigIn)).runWithoutContext(endpoint))
 //      new Test(results, BenchmarkClient.identityMedium(toMediumW(medIn)).runWithoutContext(endpoint))
 //      new Test(results, BenchmarkClient.identityLarge(toLargeW(largeIn)).runWithoutContext(endpoint))
+      // We are currently measuring how fast we can send receive streams of a single element.
+      // It might be more useful to measure how fast we can stream elements of a single stream
+//      new Test(results, server.BenchmarkClient.streamBig(localStreamToRemote(bigStream.map(toBigW))).run(endpoint))
+//      new Test(results, server.BenchmarkClient.streamMedium(medStream.map(toMediumW)).runWithoutContext(endpoint))
+//      new Test(results, server.BenchmarkClient.streamLarge(largeStream.map(toLargeW)).runWithoutContext(endpoint))
     }
     val threads = testers.map(new Thread(_))
 
