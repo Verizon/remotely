@@ -61,7 +61,7 @@ class DescribeSpec extends FlatSpec
     desc should contain (Signature("foo", Nil, "remotely.test.Foo"))
     desc should contain (Signature("fooId", List(Field("in", "remotely.test.Foo")), "remotely.test.Foo"))
     desc should contain (Signature("foobar", List(Field("in", "remotely.test.Foo")), "remotely.test.Bar"))
-    desc should contain (Signature("describe", Nil, "List[Remotely.Signature]"))
+    desc should contain (Signature("describe", Nil, "List[remotely.Signature]"))
   }
 
   behavior of "Client"
