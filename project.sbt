@@ -1,4 +1,5 @@
-organization in Global := "oncue"
+
+organization in Global := "oncue.remotely"
 
 scalaVersion in Global := "2.10.5"
 
@@ -26,6 +27,12 @@ lazy val `benchmark-client` = project.in(file("benchmark/client")).dependsOn(`be
 
 parallelExecution in Global := false
 
-publish := {}
-
 common.promptSettings
+
+releaseCrossBuild := true
+
+publishArtifact in (Compile, packageBin) := false
+
+publish := ()
+
+publishLocal := ()

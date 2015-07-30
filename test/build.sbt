@@ -4,6 +4,4 @@ promptSettings
 
 macrosSettings
 
-name := "remotely-test"
-
-publish := {}
+ignoreSettings

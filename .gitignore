@@ -21,3 +21,4 @@ catapult/
 # vim specific
 *~
 tags
+gpg.sbt

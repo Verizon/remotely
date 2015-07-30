@@ -1,11 +1,9 @@
 
 import common._
 
-name := "remotely-core"
+resolvers += Resolver.sonatypeRepo("public")
 
-resolvers += "Sonatype Public" at "https://oss.sonatype.org/content/groups/public/"
-
-resolvers += "Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases"
+resolvers += Resolver.bintrayRepo("scalaz", "releases")
 
 scalacOptions ++= Seq(
   "-Ywarn-value-discard",
@@ -28,25 +26,6 @@ libraryDependencies ++= Seq(
   "io.netty"           % "netty-codec"    % "4.0.25.Final"
 )
 
-macrosSettings
+common.macrosSettings
 
-testSettings
-
-promptSettings
-
-bintrayPublishSettings
-
-releaseSettings
-
-publishMavenStyle := true
-
-licenses += ("Apache-2.0", url("https://www.apache.org/licenses/LICENSE-2.0.html"))
-
-scmInfo := Some(ScmInfo(url("https://github.com/oncue/remotely"),
-                        "git@github.com:oncue/remotely.git"))
-
-bintray.Keys.packageLabels in bintray.Keys.bintray := Seq("remote", "functional programming", "rpc", "reasonable")
-
-bintray.Keys.bintrayOrganization in bintray.Keys.bintray := Some("oncue")
-
-bintray.Keys.repository in bintray.Keys.bintray := "releases"
+common.settings
