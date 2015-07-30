@@ -42,7 +42,7 @@ object ChatServer {
           val publish = in.onComplete(Process.eval_(chatTopic.publishOne(s"$name left the chat"))).to(chatTopic.publish)
           val subscribe: Process[Task, String] = Process.emit(s"Welcome to the chat, $name!") ++ chatTopic.subscribe
           // There is a problem here because we might drain publish which might drop a msg expected to be published.
-          subscribe merge publish.drain
+          subscribe merge publish.drain // TODO: Look into whether this could work with a sequential strategy
         }
       })
   }
