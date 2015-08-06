@@ -21,7 +21,10 @@ import scala.reflect.runtime.universe.TypeTag
 import codecs._
 import scodec.Codec
 
-case class Field[+A]private[remotely](name: String, typeString: String)
+// TODO: ctor should really be private[remotely], but due
+// to macro code generation issue in `liftField` (`Gen.scala`)
+// we open it for the time being. See Github issue #89.
+case class Field[+A](name: String, typeString: String)
 object Field {
   def strict[A:TypeTag](name: String) = Field[A](name, Remote.toTag[A])
 }
