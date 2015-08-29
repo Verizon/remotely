@@ -39,7 +39,10 @@ case class Signature(name: String, params: List[Field[Any]], outType: String) {
   def wrapResponse: String =
     s"${lhsWithArrow}Response[${outType}]"
 
-  private def lhs = params.map(_.typeString).mkString(",")
+  private def lhs = params match {
+    case param :: Nil => param.typeString
+    case _ => params.map(_.typeString).mkString("(", ",", ")")
+  }
 
   private def lhsWithArrow = if (params.isEmpty) "" else s"$lhs => "
 
