@@ -1,13 +1,13 @@
 language: scala
 scala:
-  - 2.10.5
-  - 2.11.6
+  - 2.10.6
+  - 2.11.7
 jdk:
   - oraclejdk8
   - openjdk7
-
-script: sbt ++$TRAVIS_SCALA_VERSION +test
-
+script:
+  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION compile test:compile
+  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION test
 notifications:
   irc:
     channels:

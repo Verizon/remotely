@@ -66,10 +66,12 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
 
   val validateCapabilities: ((Capabilities,Channel)) => Task[Channel] = {
     case (capabilties, channel) =>
+
+      val pipe    = channel.pipeline()
       val missing = Capabilities.required -- capabilties.capabilities
+
       if(missing.isEmpty) {
         Task {
-          val pipe = channel.pipeline()
           pipe.removeLast()
           pipe.addLast("enframe", Enframe)
           pipe.addLast("deframe", new Deframe)
@@ -77,8 +79,24 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
         }
       }
       else {
-        channel.close()
-        Task.fail(IncompatibleServer("server missing required capabilities: " + missing))
+
+        def error = IncompatibleServer(
+          s"server missing required capabilities: $missing"
+        )
+
+        Task.async[Channel] { cb =>
+
+          pipe.removeLast()
+
+          val _ = channel.close().addListener(
+            new ChannelFutureListener {
+              def operationComplete(cf: ChannelFuture) =
+                if(cf.isSuccess) cb(\/-(cf.channel)) else cb(-\/(cf.cause))
+            }
+          )
+
+        } flatMap(_ => Task.fail(error))
+
       }
   }
 
@@ -273,7 +291,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       c2 <- if(expectedSigs.isEmpty) Task.now(c1) else new ClientNegotiateDescription(c1,expectedSigs, addr).valid
       _ = M.negotiating(Some(addr), "description valid", None)
     } yield(c2)
-  } 
+  }
 
   override def create: Channel = createTask(expectedSigs).run
 

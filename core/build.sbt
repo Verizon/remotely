@@ -17,10 +17,10 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.scodec"         %% "scodec-core"   % "1.8.1",
+  "org.scodec"         %% "scodec-core"   % "1.8.2",
   "org.scodec"         %% "scodec-scalaz" % "1.1.0",
-  "org.scalaz"         %% "scalaz-core"   % "7.1.0",
-  "org.scalaz.stream"  %% "scalaz-stream" % "0.7a",
+  "org.scalaz"         %% "scalaz-core"   % "7.1.3",
+  "org.scalaz.stream"  %% "scalaz-stream" % "0.7.3a",
   "org.apache.commons" % "commons-pool2"  % "2.2",
   "io.netty"           % "netty-handler"  % "4.0.25.Final",
   "io.netty"           % "netty-codec"    % "4.0.25.Final"
