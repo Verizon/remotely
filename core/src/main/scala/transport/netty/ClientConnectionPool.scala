@@ -20,6 +20,7 @@ package transport.netty
 
 import java.net.InetSocketAddress
 import java.util.concurrent.{Executors, ThreadFactory}
+import io.netty.util.concurrent.{Future, GenericFutureListener}
 import org.apache.commons.pool2.BasePooledObjectFactory
 import org.apache.commons.pool2.PooledObject
 import org.apache.commons.pool2.impl.DefaultPooledObject
@@ -251,23 +252,45 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       addr <- addrMaybe.fold[Task[InetSocketAddress]](Task.fail(new Exception("out of connections")))(Task.now(_))
       _ = M.negotiating(Some(addr), "address selected", None)
       fut <- {
+
         Task.delay {
+
           // assign this to a val so we can throw it away later, wreckx-n-effect
           val bootstrap = new Bootstrap()
 
           val s = bootstrap.option[java.lang.Boolean](ChannelOption.SO_KEEPALIVE, true)
           val i = bootstrap.group(workerThreadPool)
           val d = bootstrap.channel(classOf[NioSocketChannel])
-          val e = bootstrap.handler(new ChannelInitializer[SocketChannel] {
-                              override def initChannel(ch: SocketChannel): Unit = {
-                                val pipe = ch.pipeline
-                                // add an SSL layer first iff we were constructed with an SslContext, foreach like a unit boss
-                                sslContext.foreach{s =>
-                                  pipe.addLast(s.newHandler(ch.alloc(), addr.getAddress.getHostAddress, addr.getPort))
-                                }
-                                val effect = pipe.addLast(negotiateCapable)
-                              }
-                                    })
+
+          val init = new ChannelInitializer[SocketChannel] {
+
+            def initChannel(ch: SocketChannel): Unit = {
+
+              val pipe = ch.pipeline
+
+              // add an SSL layer first iff we were constructed with an SslContext, foreach like a unit boss
+
+              sslContext.foreach { s =>
+
+                val sh = s.newHandler(ch.alloc(), addr.getAddress.getHostAddress, addr.getPort)
+
+                sh.handshakeFuture().addListener(new GenericFutureListener[Future[Channel]] {
+                  def operationComplete(future: Future[Channel]): Unit = {
+                    // avoid negotiation when ssl fails
+                    if(!future.isSuccess) { pipe.remove(negotiateCapable) }
+                  }
+                })
+
+                pipe.addLast(sh)
+              }
+
+              val effect = pipe.addLast(negotiateCapable)
+            }
+          }
+
+
+          val e = bootstrap.handler(init)
+
           bootstrap.connect(addr)
       }}
       chan <- {
