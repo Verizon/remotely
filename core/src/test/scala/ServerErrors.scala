@@ -42,6 +42,7 @@ class ServerErrors extends FlatSpec with Matchers {
 
     shutdown.run
   }
+  
   behavior of "incompatible reference on server"
   it should "throw the appropriate error if there is some kind of reference mismatch" in {
     val address = new java.net.InetSocketAddress("localhost", 9077)
@@ -56,9 +57,12 @@ class ServerErrors extends FlatSpec with Matchers {
 
     val call = wrongRef(1,2).runWithoutContext(endpoint)
 
-    val thrown = the [ServerException] thrownBy call.run
+    val expectedMsg = ("[validation] server values: <Set(ping: Int => Int, describe: List[remotely.Signature])> does not have referenced values:\n ping: (Int, Int) => Int")
 
-    thrown.getMessage should startWith ("[validation] server values: <Set(ping: Int => Int, describe: List[remotely.Signature])> does not have referenced values:\n ping: (Int, Int) => Int")
+    try(call.run) catch {
+      case se: ServerException ⇒ se.getMessage should startWith(expectedMsg)
+      case huh: Exception      ⇒ huh.printStackTrace(); fail(huh)
+    }
 
     shutdown.run
   }
