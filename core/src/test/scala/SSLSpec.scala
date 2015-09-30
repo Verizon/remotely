@@ -210,7 +210,7 @@ class SSLSpec extends FlatSpec
 
       val fact = evaluate(endpoint, Monitoring.consoleLogger())(Client.factorial(10)).apply(Context.empty)
 
-      an[Exception] should be thrownBy fact.run
+      an[Exception] should be thrownBy fact.map(_ ⇒ ()).run
     } finally {
       shutdown.run
       transport.shutdown.run
