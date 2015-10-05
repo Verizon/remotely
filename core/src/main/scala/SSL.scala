@@ -21,7 +21,7 @@ import java.security.{KeyFactory,KeyStore,PrivateKey, SecureRandom}
 import java.security.spec.{PKCS8EncodedKeySpec}
 import java.security.cert.{Certificate,CertificateFactory,PKIXBuilderParameters,X509Certificate,X509CertSelector,TrustAnchor}
 import javax.net.ssl._
-import io.netty.handler.ssl.{ApplicationProtocolConfig,IdentityCipherSuiteFilter,SslContext,SslProvider}
+import io.netty.handler.ssl._
 import scalaz.stream._
 import scalaz.std.string._
 import scalaz.concurrent.Task
@@ -131,7 +131,7 @@ object SslParameters {
       val tm = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
       val builder = new PKIXBuilderParameters(trustSet, new X509CertSelector)
       builder.setRevocationEnabled(false)
-      val cptmp: CertPathTrustManagerParameters=new CertPathTrustManagerParameters(builder);
+      val cptmp: CertPathTrustManagerParameters = new CertPathTrustManagerParameters(builder)
 
       tm.init(cptmp)
       tm
@@ -142,20 +142,13 @@ object SslParameters {
     params.traverse { params =>
       for {
         tm <- params.caBundle.fold[Task[TrustManagerFactory]](Task.now(null))(trustManagerForBundle)
-
-      } yield SslContext.newClientContext(SslProvider.JDK,
-                                          null,
-                                          tm,
-                                          params.certFile.orNull,
-                                          params.keyFile.orNull,
-                                          params.keyPassword.orNull,
-                                          null,
-                                          params.enabledCiphers.map(_.asJava).orNull,
-                                          IdentityCipherSuiteFilter.INSTANCE,
-                                          ApplicationProtocolConfig.DISABLED,
-                                          0,
-                                          0)
-
+      } yield SslContextBuilder.forClient().
+        sslProvider(SslProvider.JDK).
+        trustManager(tm).
+        keyManager(params.certFile.orNull, params.keyFile.orNull, params.keyPassword.orNull).
+        ciphers(params.enabledCiphers.map(_.asJava).orNull, IdentityCipherSuiteFilter.INSTANCE).
+        applicationProtocolConfig(ApplicationProtocolConfig.DISABLED).
+        build()
     }
   }
 
@@ -163,20 +156,13 @@ object SslParameters {
     params.traverse { params =>
       for {
         tm <- params.caBundle.fold[Task[TrustManagerFactory]](Task.now(null))(trustManagerForBundle)
-
-      } yield SslContext.newServerContext(SslProvider.JDK,
-                                          null,
-                                          tm,
-                                          params.certFile.orNull,
-                                          params.keyFile.orNull,
-                                          params.keyPassword.orNull,
-                                          null,
-                                          params.enabledCiphers.map(_.asJava).orNull,
-                                          IdentityCipherSuiteFilter.INSTANCE,
-                                          ApplicationProtocolConfig.DISABLED,
-                                          0,
-                                          0)
+      } yield SslContextBuilder.
+        forServer(params.certFile.orNull, params.keyFile.orNull, params.keyPassword.orNull).
+        sslProvider(SslProvider.JDK).
+        trustManager(tm).
+        ciphers(params.enabledCiphers.map(_.asJava).orNull, IdentityCipherSuiteFilter.INSTANCE).
+        applicationProtocolConfig(ApplicationProtocolConfig.DISABLED).
+        build()
     }
   }
 }
-

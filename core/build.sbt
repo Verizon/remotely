@@ -22,8 +22,8 @@ libraryDependencies ++= Seq(
   "org.scalaz"         %% "scalaz-core"   % "7.1.3",
   "org.scalaz.stream"  %% "scalaz-stream" % "0.7.3a",
   "org.apache.commons" % "commons-pool2"  % "2.2",
-  "io.netty"           % "netty-handler"  % "4.0.25.Final",
-  "io.netty"           % "netty-codec"    % "4.0.25.Final"
+  "io.netty"           % "netty-handler"  % "4.0.32.Final",
+  "io.netty"           % "netty-codec"    % "4.0.32.Final"
 )
 
 common.macrosSettings
