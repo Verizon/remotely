@@ -89,8 +89,9 @@ The structure breaks down like this:
 Once you have the layout configured, using remotely is just like using any other library within SBT; simply add the dependency to your `rpc-protocol` module:
 
 ```
-libraryDependencies += "oncue.svc.remotely" %% "core" % "x.x.+"
+resolvers += Resolver.bintrayRepo("oncue", "releases")
 
+libraryDependencies += "oncue.remotely" %% "core" % "x.x.+"
 ```
 
 ### Protocol Definition
