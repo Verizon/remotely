@@ -89,10 +89,9 @@ The structure breaks down like this:
 Once you have the layout configured, using remotely is just like using any other library within SBT; simply add the dependency to your `rpc-protocol` module:
 
 ```
-resolvers += "Remotely Bintray Repo" at "http://dl.bintray.com/oncue/releases"
-
-libraryDependencies += "oncue" %% "remotely-core" % "x.x.+"
-
+resolvers += Resolver.bintrayRepo("oncue", "releases")
+ 		 
+libraryDependencies += "oncue.remotely" %% "core" % "x.x.+"
 ```
 
 ### Protocol Definition
@@ -105,7 +104,7 @@ import remotely._, codecs._
 object protocol {
   val definition = Protocol.empty
     .codec[Int]
-    .specify1[Int, Int]("factorial")
+    .specify1("factorial", Field.strict[Int]("n"), Type[Int])
 }
 
 ```
@@ -144,10 +143,11 @@ class FactorialServer0 extends FactorialServer {
   val factorial: Int => Response[Int] = n =>
     Response.now { (1 to n).product }
 }
-
 ```
 
 The `GenServer` macro does require all the FQCN of all the inputs, so here we must use `oncue.svc.example.protocol.definition`. For example, using just `protocol.definition` after `import oncue.svc.example._` would *not* work, as in that case, the macro would then only see the AST: `protocol.definition` which doesn't have a value in the compiler context, but provided you organize your project in the manner described earlier in this document.
+
+The macro generates abstract method definitions (as specified in the protocol), and also adds an `environment: Environment`, member to the class, which contains all codecs and values (a value is a reference to a specific method implementation).
 
 In a similar fashion, clients are also very simple. The difference here is that clients are fully complete, and do not require any implementation as the function arguments defined in the protocol are entirely known at compile time.
 
@@ -201,7 +201,7 @@ This is super straightforward, but lets step through the values one by one.
 
 * `service`: An instance of the server implementation (which in turn implements the macro-generated interface based on the protocol)
 
-* `env`: For any given service implementation, an `Environment` can be derived from it. Unlike the protocol implementation itself, `Environment` is a concrete thing that can be bound and executed at runtime, where as `Protocol` is primarily a compile-time artifact.
+* `environment`: For any given service implementation, an `Environment` can be derived from it. Unlike the protocol implementation itself, `Environment` is a concrete thing that can be bound and executed at runtime, where as `Protocol` is primarily a compile-time artifact.
 
 * `startServer`: Calling `env.serve(...)` returns A Task that when run will start the server, binding the process to the specified address.
 
