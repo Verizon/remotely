@@ -17,6 +17,8 @@
 
 
 package object remotely {
+  import java.util.concurrent.{ Executors, ExecutorService, ThreadFactory }
+  import java.util.concurrent.atomic.AtomicInteger
   import scala.concurrent.duration._
   import scala.reflect.runtime.universe.TypeTag
   import scalaz.stream.Process
@@ -93,4 +95,16 @@ package object remotely {
   implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)
 
   private[remotely] def fullyRead(s: Process[Task,BitVector]): Task[BitVector] = s.runFoldMap(x => x)
+
+  private[remotely] def fixedNamedThreadPool(name: String): ExecutorService =
+    Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors, namedThreadFactory("endpointHandlerPool"))
+
+  private[remotely] def namedThreadFactory(name: String): ThreadFactory = new ThreadFactory {
+    val num = new AtomicInteger(1)
+    def newThread(runnable: Runnable) = {
+      val t = new Thread(runnable, s"$name - ${num.getAndIncrement}")
+      t.setDaemon(true)
+      t
+    }
+  }
 }

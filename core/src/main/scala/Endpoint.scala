@@ -20,7 +20,7 @@ package remotely
 import java.net.{InetSocketAddress,Socket,URL}
 import javax.net.ssl.SSLEngine
 import scalaz.std.anyVal._
-import scalaz.concurrent.Task
+import scalaz.concurrent.{Strategy,Task}
 import scalaz.syntax.functor._
 import scalaz.stream.{async,Channel,Exchange,io,Process,nio,Process1, process1, Sink}
 import scodec.bits.{BitVector}
@@ -50,6 +50,7 @@ case class Endpoint(connections: Process[Task,Handler]) {
 }
 
 object Endpoint {
+
   def empty: Endpoint = Endpoint(Process.halt)
   def single(transport: Handler): Endpoint = Endpoint(Process.constant(transport))
 
@@ -80,11 +81,9 @@ object Endpoint {
   def uber(maxWait: Duration,
            circuitOpenTime: Duration,
            maxErrors: Int,
-           es: Process[Task, Endpoint]): Endpoint =
-    Endpoint(mergeN(permutations(es).map(ps =>
-                      failoverChain(maxWait, ps.map(_.circuitBroken(circuitOpenTime, maxErrors))).connections)))
-
-
+           es: Process[Task, Endpoint]): Endpoint = {
+    Endpoint(raceHandlerPool(permutations(es).map(ps => failoverChain(maxWait, ps.map(_.circuitBroken(circuitOpenTime, maxErrors))).connections)))
+  }
 
   /**
     * Produce a stream of all the permutations of the given stream.
@@ -125,6 +124,11 @@ object Endpoint {
     a  <- task
     t2 <- Task.delay(System.currentTimeMillis)
   } yield ((t2 - t1).milliseconds, a)
+
+  private object raceHandlerPool {
+    implicit val s = Strategy.Executor(fixedNamedThreadPool("endpointHandlerPool"))
+    def apply(pool: Process[Task, Process[Task, Handler]]): Process[Task, Handler] = mergeN(pool)
+  }
 }
 
 
