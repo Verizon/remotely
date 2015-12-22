@@ -97,7 +97,7 @@ package object remotely {
   private[remotely] def fullyRead(s: Process[Task,BitVector]): Task[BitVector] = s.runFoldMap(x => x)
 
   private[remotely] def fixedNamedThreadPool(name: String): ExecutorService =
-    Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors, namedThreadFactory("endpointHandlerPool"))
+    Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors, namedThreadFactory(name))
 
   private[remotely] def namedThreadFactory(name: String): ThreadFactory = new ThreadFactory {
     val num = new AtomicInteger(1)
