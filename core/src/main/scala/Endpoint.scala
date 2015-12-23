@@ -59,19 +59,21 @@ object Endpoint {
     * endpoint, but only if `timeout` has not passed AND we didn't fail in a
     * "committed state", i.e. we haven't received any bytes.
     */
-  def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint =
+  def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint = {
+    def reduceHandlers(f: (Handler, Handler) => Handler): Process1[Handler, Handler] = {
+      def go(a: Handler): Process1[Handler, Handler] = emit(a) ++ receive1(b => scan(f(a, b))(f))
+      receive1(a => receive1(b => go(f(a, b))))
+    }
     Endpoint(transpose(es.map(_.connections)).flatMap { cs =>
-               cs.reduce((c1, c2) => bs => c1(bs) match {
-                           case w@Await(a, k) =>
-                             await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
-                                                      case (d, -\/(e)) =>
-                                                        if (timeout - d > 0.milliseconds) c2(bs)
-                                                        else eval(Task.fail(new Exception(s"Failover chain timed out after $timeout")))
-                                                      case (d, \/-(x)) => k(\/-(x)).run
-                                                    })
-                           case x => x
-                         })
-             })
+      cs |> reduceHandlers((c1, c2) => bs => c1(bs) match {
+        case w@Await(a, k) => await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
+          case (d, -\/(e)) => if (timeout - d > 0.milliseconds) c2(bs) else eval(Task.fail(new Exception(s"Failover chain timed out after $timeout")))
+          case (d, \/-(x)) => k(\/-(x)).run
+        })
+        case x => x
+      })
+    })
+  }
 
   /**
     * An endpoint backed by a (static) pool of other endpoints.
