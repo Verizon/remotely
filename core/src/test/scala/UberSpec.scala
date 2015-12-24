@@ -74,7 +74,7 @@ class UberSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
   val endpointUber = Endpoint.uber(1 second, 10 seconds, 10, endpoints)
 
   behavior of "uber"
-  ignore should "work" in { // this seems to hang
+  it should "work" in {
     import Response.Context
     import Remote.implicits._
     import codecs._

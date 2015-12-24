@@ -26,7 +26,7 @@ import scalaz.stream.{async,Channel,Exchange,io,Process,nio,Process1, process1, 
 import scodec.bits.{BitVector}
 import scala.concurrent.duration._
 import scalaz._
-import Process.{Await, Emit, Halt, emit, await, halt, eval, await1, iterate}
+import Process.{Await, Emit, Halt, emit, emitAll, await, halt, eval, await1, iterate, receive1}
 import scalaz.stream.merge._
 
 /**
@@ -39,17 +39,18 @@ case class Endpoint(connections: Process[Task,Handler]) {
     case Some(a) => Task.now(a)
   }
 
-
   /**
     * Adds a circuit-breaker to this endpoint that "opens" (fails fast) after
     * `maxErrors` consecutive failures, and attempts a connection again
     * when `timeout` has passed.
     */
   def circuitBroken(timeout: Duration, maxErrors: Int): Endpoint =
-    Endpoint(connections.map(c => (bs: Process[Task,BitVector]) => c(bs).translate(CircuitBreaker(timeout, maxErrors).transform)))
+    Endpoint(connections.map(c => bs => c(bs).translate(CircuitBreaker(timeout, maxErrors).transform)))
 }
 
 object Endpoint {
+
+  private val UberPoolChunkSize = 64
 
   def empty: Endpoint = Endpoint(Process.halt)
   def single(transport: Handler): Endpoint = Endpoint(Process.constant(transport))
@@ -59,19 +60,21 @@ object Endpoint {
     * endpoint, but only if `timeout` has not passed AND we didn't fail in a
     * "committed state", i.e. we haven't received any bytes.
     */
-  def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint =
+  def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint = {
+    def reduceHandlers(f: (Handler, Handler) => Handler): Process1[Handler, Handler] = {
+      def go(a: Handler): Process1[Handler, Handler] = emit(a) ++ receive1(b => go(f(a, b)))
+      receive1(a => receive1(b => go(f(a, b))))
+    }
     Endpoint(transpose(es.map(_.connections)).flatMap { cs =>
-               cs.reduce((c1, c2) => bs => c1(bs) match {
-                           case w@Await(a, k) =>
-                             await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
-                                                      case (d, -\/(e)) =>
-                                                        if (timeout - d > 0.milliseconds) c2(bs)
-                                                        else eval(Task.fail(new Exception(s"Failover chain timed out after $timeout")))
-                                                      case (d, \/-(x)) => k(\/-(x)).run
-                                                    })
-                           case x => x
-                         })
-             })
+      cs |> reduceHandlers((c1, c2) => bs => c1(bs) match {
+        case Await(a, k) => await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
+          case (d, -\/(e)) => if (timeout - d > 0.milliseconds) c2(bs) else eval(Task.fail(new Exception(s"Failover chain timed out after $timeout")))
+          case (d, \/-(x)) => k(\/-(x)).run
+        })
+        case x => x
+      })
+    })
+  }
 
   /**
     * An endpoint backed by a (static) pool of other endpoints.
@@ -82,7 +85,8 @@ object Endpoint {
            circuitOpenTime: Duration,
            maxErrors: Int,
            es: Process[Task, Endpoint]): Endpoint = {
-    Endpoint(raceHandlerPool(permutations(es).map(ps => failoverChain(maxWait, ps.map(_.circuitBroken(circuitOpenTime, maxErrors))).connections)))
+    val effectivePool = permutations(es |> process1.chunk(UberPoolChunkSize) |> receive1(emitAll)).repeat
+    Endpoint(raceHandlerPool(effectivePool.map(ps => failoverChain(maxWait, ps.map(_.circuitBroken(circuitOpenTime, maxErrors))).connections)))
   }
 
   /**

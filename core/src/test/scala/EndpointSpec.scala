@@ -32,7 +32,7 @@ class EndpointSpec extends FlatSpec with Matchers with BeforeAndAfterAll {
     val goodEndpoint = (NettyTransport.single(goodAddress) map Endpoint.single).run
     val badEndpoint = (NettyTransport.single(badAddress) map Endpoint.single).run
 
-    def endpoints: Process[Nothing,Endpoint] = Process.emitAll(List(badEndpoint, goodEndpoint))
+    def endpoints: Process[Nothing,Endpoint] = Process.emitAll(List(badEndpoint, goodEndpoint)) ++ endpoints
 
     val server = new CountServer
 
