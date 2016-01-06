@@ -22,13 +22,13 @@ import shapeless.{HNil, HList, ::}
 
 import scala.reflect.runtime.universe.TypeTag
 import scodec.{Codec,Decoder,Encoder}
+import scodec.codecs.byteAligned
 
 case class Codecs[A <: HList](codecs: Map[String,Codec[Any]]) {
   def codec[C:TypeTag:Codec]: Codecs[C :: A] = {
     val name = Remote.toTag(implicitly[TypeTag[C]])
-    this.copy(codecs = codecs + (name -> Codec[C].asInstanceOf[Codec[Any]]))
+    this.copy(codecs = codecs + (name -> byteAligned(Codec[C].asInstanceOf[Codec[Any]])))
   }
-
 
   def ++[C <: HList](c: Codecs[C])(implicit prepend : Prepend[A, C]) : Codecs[prepend.Out] = Codecs[prepend.Out](codecs ++ c.codecs)
 
