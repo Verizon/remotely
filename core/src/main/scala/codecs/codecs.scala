@@ -86,9 +86,11 @@ package object codecs extends lowerprioritycodecs {
 
   private def empty: Codec[Unit] = C.provide(())
 
-  def optional[A](target: Codec[A]): Codec[Option[A]] =
-    either(empty, target).
-      xmap[Option[A]](_.toOption, _.toRightDisjunction(()))
+  @deprecated("Use the implicit `Option[A]` resolution provided by this package instead.", "1.4.3")
+  def optional[A](target: Codec[A]): Codec[Option[A]] = option(Lazy(target))
+
+  implicit def option[A](implicit LCA: Lazy[Codec[A]]): Codec[Option[A]] =
+    either(empty, LCA.value).xmap[Option[A]](_.toOption, _.toRightDisjunction(()))
 
   implicit def list[A](implicit LCA: Lazy[Codec[A]]): Codec[List[A]] =
     indexedSeq[A].xmap[List[A]](
