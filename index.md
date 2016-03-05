@@ -243,11 +243,11 @@ Whilst `address` is the same value from the server, the typical case here of cou
 
 * `transport`: This is the underlying network transport which is responsible for transporting serialized requests from the client to the server, and the responses back to the client. Currently, Netty is the only implemented transport.
 
-* `endpoint`: An `Endpoint` is an abstraction over callable service locations. Whilst the `Endpoint` object has a range of combinators, for this simple example we simply construct a fixed, static, single location. More information can be found in the [detailed documentation](http://)
+* `endpoint`: An `Endpoint` is an abstraction over callable service locations. Whilst the `Endpoint` object has a range of combinators, for this simple example we simply construct a fixed, static, single location. More information can be found in the [detailed documentation](manual).
 
 * `f`: Application of the remote function reference. Here we pass in the arguments needed by the remote function, and at compile time you will be forced to ensure that you have a `Codec` for all the arguments supplied, and said arguments must be in scope within that compilation unit (i.e. if the remote service uses custom structures you'll need to ensure you import those accordingly). At this point *no request has actually been made over the wire*.
 
-* `task`: In order to do something useful with the `Remote` instance its necessary to make a choice about what "context" this remote operation will be executed in. Again, this is covered specifically in the [detailed documentation](http://), but for now we shall elect to run without a context, by way of the `runWithoutContext` function. There still has been no network I/O occur; we have simply applied the function operation and transformed it into a scalaz `Task`.
+* `task`: In order to do something useful with the `Remote` instance its necessary to make a choice about what "context" this remote operation will be executed in. Again, this is covered specifically in the [detailed documentation](manual), but for now we shall elect to run without a context, by way of the `runWithoutContext` function. There still has been no network I/O occur; we have simply applied the function operation and transformed it into a scalaz `Task`.
 
 Finally, the function does network I/O to talk to the server when the `Task` is executed (using the `runAsync` method here). You can learn more about the `Task` monad [in this blog post](http://timperrett.com/2014/07/20/scalaz-task-the-missing-documentation/).
 
