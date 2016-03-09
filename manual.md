@@ -34,7 +34,7 @@ By default, *Remotely* ships with the ability to serialise / deserialise the fol
 * `Tuple2...7`
 * `remotely.Response.Context`
 
-Often these built-in defaults will be all you need, but there might be times where it feels like it would be more appropriate do provide a "wire type" (that is, a datatype that represents the external wire API - **NOT** a data type that forms part of your core domain model). Typically this happens when you have a convoluted structure or a very "stringly-typed" interface (e.g. `Map[String, Map[String, Int]]` - who knows what on earth the author intended here!). In this cases, implementing custom codecs for your protocol seems attractive, and fortunatly its really simple to do:
+Often these built-in defaults will be all you need, but there might be times where it feels like it would be more appropriate do provide a "wire type" (that is, a datatype that represents the external wire API - **NOT** a data type that forms part of your core domain model). Typically this happens when you have a convoluted structure or a very "stringly-typed" interface (e.g. `Map[String, Map[String, Int]]` - who knows what on earth the author intended here!). In this cases, implementing custom codecs for your protocol seems attractive, and fortunately its really simple to do:
 
 ```
 package oncue.example
@@ -59,7 +59,7 @@ package object myapp {
 
 ```
 
-In this example, `ComponentW` is part of our wire protocol definition, and provides some application-specific semantic that is meaningful for API consumers (assuming the fields `kind` and `metadata` have "meaning" together). To make this item serializable, we simply need to tell scodec about the *shape* of the structure (in this case, `String` and `Map[String,String]`) and then supply a function `Shape => A` and then `A => Option[(Shape)]`. At runtime *Remotely* will use this codec to take the bytes from the wire and convert it into the `ComponentW` datatype using the defined shape and the associated fucntions.
+In this example, `ComponentW` is part of our wire protocol definition, and provides some application-specific semantic that is meaningful for API consumers (assuming the fields `kind` and `metadata` have "meaning" together). To make this item serializable, we simply need to tell scodec about the *shape* of the structure (in this case, `String` and `Map[String,String]`) and then supply a function `Shape => A` and then `A => Option[(Shape)]`. At runtime *Remotely* will use this codec to take the bytes from the wire and convert it into the `ComponentW` datatype using the defined shape and the associated functions.
 
 
 ```
@@ -79,7 +79,7 @@ import remotely._
 Remote.ref[Int => Int]("factorial")
 ```
 
-Notice how this is *just a reference* - it doesnt actually *do* anything. At this point we have told the system that here's an immutable handle to a function that *might* later be avalbile on an arbitrary endpoint, and the type of function being provided is `Int => Int` and its name is "factorial". This is interesting (and useful) because it entirely decouples the understanding about a given peice of functionality on the client side, and the system actor that will ultimatly fulfil that request. *Remotely* clients will automatically model the server functions in this manner, so lets take a look at actually caling one of these functions:
+Notice how this is *just a reference* - it doesn't actually *do* anything. At this point we have told the system that here's an immutable handle to a function that *might* later be available on an arbitrary endpoint, and the type of function being provided is `Int => Int` and its name is "factorial". This is interesting (and useful) because it entirely decouples the understanding about a given piece of functionality on the client side, and the system actor that will ultimately fulfil that request. *Remotely* clients will automatically model the server functions in this manner, so lets take a look at actually calling one of these functions:
 
 ```
 scala> FactorialClient.factorial(1)
@@ -89,7 +89,7 @@ scala> FactorialClient.factorial(1)
               FactorialClient.factorial(1)
 ``` 
 
-That didnt go as planned! As it turns out, `Remote` function references can only be applied using values that have been explicitly lifted into a `Remote`  context, and *Remotely* comes with several convenient combinators to do that:
+That didn't go as planned! As it turns out, `Remote` function references can only be applied using values that have been explicitly lifted into a `Remote`  context, and *Remotely* comes with several convenient combinators to do that:
 
 * `Remote.local`: given a total value, simply lift it directly into a `Remote` instance. This is the most simplistic form of the `Remote` API, and is useful in many cases; especially for testing.
 
@@ -97,7 +97,7 @@ That didnt go as planned! As it turns out, `Remote` function references can only
 
 * `Remote.response`: Given a `Response` from another remote function execution (more on `Remote` shortly), use it as the input to this remote function. This is incredibly useful for chaining calls to dependant systems.
 
-You can choose to either use these functions directly, or have them implciitly applied by adding the following implicit conversion:
+You can choose to either use these functions directly, or have them implicitly applied by adding the following implicit conversion:
 
 ```
 import remotely._, codecs._, Remote.implicits._
@@ -109,7 +109,7 @@ With this in scope, these functions will be automatically applied. One word of c
 
 ## Endpoints
 
-Now that you have a `Remote` function and you know how to apply arguments (applying the function inside the `Remote` monad), we need to explore the next important primitive in *Remotely*: `Endpoint`. An `Endpoint` models the network locaiton of a specific server on a specific TCP port which can service function calls. Internally, `Endpoint` instances are modeled as a stream of `Endpoint`; doing this allows for a range of flexiblity around circuit breaking and load balencing. Users can either embrace this `Process[Task, Endpoint.Connection]` directly, or use some of the convenience functions outlined below:
+Now that you have a `Remote` function and you know how to apply arguments (applying the function inside the `Remote` monad), we need to explore the next important primitive in *Remotely*: `Endpoint`. An `Endpoint` models the network location of a specific server on a specific TCP port which can service function calls. Internally, `Endpoint` instances are modeled as a stream of `Endpoint`; doing this allows for a range of flexibility around circuit breaking and load balancing. Users can either embrace this `Process[Task, Endpoint.Connection]` directly, or use some of the convenience functions outlined below:
 
 * `Endpoint.empty`: create an empty endpoint, with no reachable locations in the stream.
 
@@ -121,17 +121,17 @@ Using these basic combinators, we can now execute the `Remote` against a given e
 
 <a name="resiliancy"></a>
 
-### Resiliancy
+### Resiliency
 
-In addition to the simpler functions outlined above, we have also built in some resilience functions around `Endpoint` to make working with large systems more practical. One of the most important resiliance functions on `Endpoint` is `circuitBroken`. This adds a [circuit breaker](http://martinfowler.com/bliki/CircuitBreaker.html) to the endpoint. Consider the following usage example:
+In addition to the simpler functions outlined above, we have also built in some resilience functions around `Endpoint` to make working with large systems more practical. One of the most important resilience functions on `Endpoint` is `circuitBroken`. This adds a [circuit breaker](http://martinfowler.com/bliki/CircuitBreaker.html) to the endpoint. Consider the following usage example:
 
 ```
 // ADD EXAMPLE HERE
 ```
 
-The followig are the primary functions of interest on the `Endpoint` object:
+The following are the primary functions of interest on the `Endpoint` object:
 
-* `Endpoint.roundRobin`: Given a set of `Endpoint`, *Remotely* can execute client-side load balencing when selecting a back-end to invoke over the network. Whilst the default is a simple round-robin, *Remotely* is plugable enough such that you could implement a much more sophisticated distribution algorithem without too much difficulty at all.
+* `Endpoint.roundRobin`: Given a set of `Endpoint`, *Remotely* can execute client-side load balancing when selecting a back-end to invoke over the network. Whilst the default is a simple round-robin, *Remotely* is pluggable enough such that you could implement a much more sophisticated distribution algorithm without too much difficulty at all.
 
 * `Endpoint.failoverChain`
 
@@ -142,9 +142,9 @@ The followig are the primary functions of interest on the `Endpoint` object:
 
 ### Execution Context
 
-A `Context` is essentially a primitive data type that allows a given function invokation to carry along some metadata. When designing *Remotely*, we envisinged the following use cases:
+A `Context` is essentially a primitive data type that allows a given function invocation to carry along some metadata. When designing *Remotely*, we envisaged the following use cases:
 
-* *Transitive Request Graphing*: in large systems, it becomes extreamly useful to understand which instances of any given service is actually taking traffic and what the call graph actually is from a given originating caller. In this frame, `Context` comes with a stack of request IDs which are generated on each roundtrip, and if service A calls service B, the caller of A will recive a stack of IDs that detnote the call all the way to B. Needless to say, this is incredibly useful for tracing, monitoring and debugging request graphs. 
+* *Transitive Request Graphing*: in large systems, it becomes extremely useful to understand which instances of any given service is actually taking traffic and what the call graph actually is from a given originating caller. In this frame, `Context` comes with a stack of request IDs which are generated on each roundtrip, and if service A calls service B, the caller of A will receive a stack of IDs that denote the call all the way to B. Needless to say, this is incredibly useful for tracing, monitoring and debugging request graphs.
 
 * *Experimentation*: The `Context` supports an arbitrary `Map[String,String]` of data that can be propagated along with the request for the purposes of experimentation (for example, an A/B testing token).
 
@@ -171,7 +171,7 @@ val t2: Task[Int] = f.runWithContext(endpoint, ctx)
 
 ```
 
-If you elect to use a `Context` or not, the result is the same from the client perspecitve - contexts are simply a runtime value that can be propagated for use by the server or not.
+If you elect to use a `Context` or not, the result is the same from the client perspective - contexts are simply a runtime value that can be propagated for use by the server or not.
 
 <a name="monitoring"></a>
 
@@ -210,7 +210,7 @@ trait Monitoring { self =>
 
 As you can see, the interface is incredibly simple, and it serves two primary functions: 
 
-1. To allow logging or tracing information to be dumped to a thrid-party system via the `handled` function, which contains the entire round-trip information.
+1. To allow logging or tracing information to be dumped to a third-party system via the `handled` function, which contains the entire round-trip information.
 
 1. To provide sampling information about the duration of requests being serviced by this endpoint implementation. 
 
