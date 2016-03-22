@@ -80,6 +80,9 @@ case class Signatures(signatures: Set[Signature]) {
   def specify4(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], in4: Field[Any], out: String): Signatures =
     specify(name, List(in1, in2, in3, in4), out)
 
+  def specify5(name: String, in1: Field[Any], in2: Field[Any], in3: Field[Any], in4: Field[Any], in5: Field[Any], out: String): Signatures =
+    specify(name, List(in1, in2, in3, in4, in5), out)
+
   def pretty: String = "Signatures.empty\n" +
                         signatures.map(s =>
                            s"""  .specify[${s.typeString}]("${s.name}")"""
