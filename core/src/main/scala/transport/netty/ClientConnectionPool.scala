@@ -102,14 +102,14 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
 
   /**
     * This is an upstream handler that sits in the client's pipeline
-    * during connection negotiation. 
-    * 
+    * during connection negotiation.
+    *
     * It is put into the pipeline initially, we then make a call to
     * the server to ask for the descriptions of all the functions that
     * the server provides. when we receive the response, this handler
     * checks that all of the expectedSigs passed to the constructor
     * are present in the server response.
-    * 
+    *
     * The state of this negotiation is captured by the `valid` Task,
     * which is asynchronously updated when the response is recieved
     */
@@ -122,7 +122,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
 
 
     // the callback which will fulfil the valid task
-    private[this] var cb: Throwable\/Channel => Unit = _
+    @volatile private[this] var cb: Throwable\/Channel => Unit = Function.const(())
 
     val valid: Task[Channel] = Task.async { cb =>
       this.cb = cb
@@ -131,7 +131,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
     // here we accumulate bits as they arrive, we keep accumulating
     // until the handler below us signals the end of stream by
     // emitting a EOS
-    private[this] var bits = BitVector.empty
+    @volatile private[this] var bits = BitVector.empty
 
     // negotiation failed. fulfil the callback negatively, and remove
     // ourselves from the pipeline
@@ -182,7 +182,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       }
     }
 
-  
+
     private[this] val pipe = channel.pipeline()
     pipe.addLast("negotiateDescription", this)
 
@@ -218,7 +218,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
   class ClientNegotiateCapabilities extends DelimiterBasedFrameDecoder(1000,Delimiters.lineDelimiter():_*) {
 
     // callback which fulfills the capabilities Task
-    private[this] var cb: Throwable\/(Capabilities,Channel) => Unit = _
+    @volatile private[this] var cb: Throwable\/(Capabilities,Channel) => Unit = Function.const(())
 
 
     val capabilities: Task[(Capabilities,Channel)] = Task.async { cb =>
