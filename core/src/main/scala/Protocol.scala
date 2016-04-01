@@ -43,6 +43,9 @@ case class Protocol[H <: HList](codecs: Codecs[H], signatures: Signatures) {
   def specify4[A,B,C,D,O](name: String, in1: Field[A], in2: Field[B], in3: Field[C], in4: Field[D], out: Type[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C], evidenceD: Selector[H, D], evidenceE: Selector[H, O]): Protocol[H] =
     this.copy(signatures = signatures.specify4(name, in1, in2, in3, in4, out.name))
 
+  def specify5[A,B,C,D,E,O](name: String, in1: Field[A], in2: Field[B], in3: Field[C], in4: Field[D], in5: Field[E], out: Type[O])(implicit evidenceA : Selector[H, A], evidenceB : Selector[H, B], evidenceC : Selector[H, C], evidenceD: Selector[H, D], evidenceE: Selector[H, E], evidenceF: Selector[H, O]): Protocol[H] =
+    this.copy(signatures = signatures.specify5(name, in1, in2, in3, in4, in5, out.name))
+
   def pretty: String =
     "Protocol(\n" +
     Signatures.indent("  ")(codecs.pretty) + ",\n" +
