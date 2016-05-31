@@ -36,3 +36,6 @@ publishArtifact in (Compile, packageBin) := false
 publish := ()
 
 publishLocal := ()
+
+// avoid having to reboot the JVM during the travis build.
+addCommandAlias("validate",";compile;test:compile;test")

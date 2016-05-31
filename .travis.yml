@@ -7,9 +7,11 @@ scala:
 jdk:
   - oraclejdk8
 
+# push onto the new gce infra on travis
+sudo: required
+
 script:
-  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION compile test:compile
-  # - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION test
+  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION validate
 
 cache:
   directories:
