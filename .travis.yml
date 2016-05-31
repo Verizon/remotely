@@ -1,12 +1,21 @@
 language: scala
+
 scala:
   - 2.10.6
   - 2.11.7
+
 jdk:
   - oraclejdk8
+
 script:
   - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION compile test:compile
-  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION test
+  # - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION test
+
+cache:
+  directories:
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt/boot/scala-$TRAVIS_SCALA_VERSION
+
 notifications:
   irc:
     channels:
