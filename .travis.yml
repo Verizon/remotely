@@ -3,7 +3,7 @@ scala:
   - 2.10.6
   - 2.11.7
 jdk:
-  - openjdk7
+  - openjdk8
   # - oraclejdk8 # commenting out as the travis failures seem to happen most often with the oracle jdk. It's not clear why?
 script:
   - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION compile test:compile
