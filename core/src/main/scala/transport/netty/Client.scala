@@ -70,7 +70,7 @@ object NettyTransport {
                    })
   }
 
-  def write(c: Channel)(frame: Framed): Task[Unit] = evalCF(c.write(frame))
+  def write(c: Channel)(frame: Framed): Task[Unit] = evalCF(c.writeAndFlush(frame))
 
   def single(host: InetSocketAddress,
              expectedSigs: Set[Signature] = Set.empty,

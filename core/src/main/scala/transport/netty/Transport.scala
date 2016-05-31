@@ -126,7 +126,7 @@ class Deframe extends ByteToMessageDecoder {
           } else {
             remaining = Some(rem)
           }
-        } 
+        }
       case Some(rem) =>
         // we are waiting for at least rem more bytes, as that is what
         // is outstanding in the current frame
@@ -177,9 +177,9 @@ object Enframe extends ChannelOutboundHandlerAdapter {
     obj match {
       case Bits(bv) =>
         val byv = bv.toByteVector
-        val _ = ctx.writeAndFlush(Unpooled.wrappedBuffer((codecs.int32.encode(byv.size).require ++ bv).toByteBuffer), cp)
+        val _ = ctx.write(Unpooled.wrappedBuffer((codecs.int32.encode(byv.size).require ++ bv).toByteBuffer), cp)
       case EOS =>
-        val _ = ctx.writeAndFlush(Unpooled.wrappedBuffer(codecs.int32.encode(0).require.toByteBuffer), cp)
+        val _ = ctx.write(Unpooled.wrappedBuffer(codecs.int32.encode(0).require.toByteBuffer), cp)
       case x => throw new IllegalArgumentException("was expecting Framed, got: " + x)
     }
   }
