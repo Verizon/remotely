@@ -26,6 +26,7 @@ package object remotely {
   import scalaz.\/.{left,right}
   import scalaz.Monoid
   import scodec.bits.{BitVector,ByteVector}
+  import scodec.interop.scalaz._
 //  import scodec.Decoder
   import utils._
 
@@ -90,9 +91,6 @@ package object remotely {
       } yield result
     }
   }}
-
-  implicit val BitVectorMonoid = Monoid.instance[BitVector]((a,b) => a ++ b, BitVector.empty)
-  implicit val ByteVectorMonoid = Monoid.instance[ByteVector]((a,b) => a ++ b, ByteVector.empty)
 
   private[remotely] def fullyRead(s: Process[Task,BitVector]): Task[BitVector] = s.runFoldMap(x => x)
 

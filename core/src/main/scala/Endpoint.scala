@@ -62,7 +62,7 @@ object Endpoint {
   def failoverChain(timeout: Duration, es: Process[Task, Endpoint]): Endpoint =
     Endpoint(transpose(es.map(_.connections)).flatMap { cs =>
                cs.reduce((c1, c2) => bs => c1(bs) match {
-                           case w@Await(a, k) =>
+                           case w@Await(a, k, _) =>
                              await(time(a.attempt))((p: (Duration, Throwable \/ Any)) => p match {
                                                       case (d, -\/(e)) =>
                                                         if (timeout - d > 0.milliseconds) c2(bs)
