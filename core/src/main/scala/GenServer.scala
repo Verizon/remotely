@@ -24,7 +24,7 @@ import scala.annotation.StaticAnnotation
  * Macro annotation that generates a server interface. Usage:
  * `@GenServer(remotely.Protocol.empty) abstract class MyServer`
  */
-class GenServer(p: Protocol[_]) extends StaticAnnotation {
+class GenServer(p: Protocol) extends StaticAnnotation {
   def macroTransform(annottees: Any*): Any = macro GenServer.impl
 }
 
@@ -42,9 +42,9 @@ object GenServer extends MacrosCompatibility {
 
     // Pull out the Protocol expression from the macro annotation
     // and evaluate it at compile-time.
-    val p:Protocol[_] = c.prefix.tree match {
+    val p:Protocol = c.prefix.tree match {
       case q"new $name($protocol)" =>
-        c.eval(c.Expr[Protocol[_]](resetLocalAttrs(c)(q"{import remotely.codecs._; import remotely.Field; import remotely.Type; $protocol}")))
+        c.eval(c.Expr[Protocol](resetLocalAttrs(c)(q"{import remotely.codecs._; import remotely.Field; import remotely.Type; $protocol}")))
       case _ => c.abort(c.enclosingPosition, "GenServer must be used as an annotation.")
     }
 
@@ -80,7 +80,7 @@ object GenServer extends MacrosCompatibility {
               import remotely.{Codecs,Environment,Response,Values}
               import remotely.codecs._
 
-              def environment = Environment(
+              def environment: Environment = Environment(
                 $codecs,
                 populateDeclarations(Values.empty)
               )

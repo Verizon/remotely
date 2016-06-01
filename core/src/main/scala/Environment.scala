@@ -18,15 +18,11 @@
 package remotely
 
 import java.net.InetSocketAddress
-import javax.net.ssl.SSLEngine
-import shapeless._
-
 import scala.reflect.runtime.universe.TypeTag
-import scodec.{Codec,Decoder,Encoder}
-import scodec.bits.{BitVector}
+import scodec.Codec
+import scodec.bits.BitVector
 import scalaz.stream.Process
-import scalaz.concurrent.{Strategy,Task}
-import scala.concurrent.duration.DurationInt
+import scalaz.concurrent.{Strategy, Task}
 
 /**
  * A collection of codecs and values, which can be populated
@@ -45,20 +41,20 @@ import scala.concurrent.duration.DurationInt
  *   stopper() // shutdown the server
  * }}}
  */
-case class Environment[H <: HList](codecs: Codecs[H], values: Values) {
+case class Environment(codecs: Codecs, values: Values) {
 
-  def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment[A :: H] =
+  def codec[A](implicit T: TypeTag[A], C: Codec[A]): Environment =
     this.copy(codecs = codecs.codec[A])
 
   /**
    * Modify the values inside this `Environment`, using the given function `f`.
    * Example: `Environment.empty.populate { _.declare("x")(Task.now(42)) }`.
    */
-  def populate(f: Values => Values): Environment[H] =
+  def populate(f: Values => Values): Environment =
     this.copy(values = f(values))
 
   /** Alias for `this.populate(_ => v)`. */
-  def values(v: Values): Environment[H] =
+  def values(v: Values): Environment =
     this.populate(_ => v)
 
   private def serverHandler(monitoring: Monitoring): Handler = { bytes =>

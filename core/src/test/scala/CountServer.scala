@@ -26,7 +26,7 @@ trait CountServerBase {
   def ping: Int => Response[Int]
   def describe: Response[List[Signature]]
 
-  def environment = Environment(
+  def environment: Environment = Environment(
     Codecs.empty.codec[Int],
     populateDeclarations(Values.empty)
   )
