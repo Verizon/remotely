@@ -7,6 +7,11 @@ scala:
 jdk:
   - oraclejdk8
 
+# don't pointlessly build tags and dev branches
+branches:
+  only:
+    - master
+
 # push onto the new gce infra on travis
 sudo: required
 
