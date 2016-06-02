@@ -31,10 +31,4 @@ package object utils {
     }
   }
   implicit def errToE(err: Err) = new DecodingFailure(err)
-  implicit class AugmentedAttempt[A](a: Attempt[A]) {
-    def toTask(implicit conv: Err => Throwable): Task[A] = a match {
-      case Failure(err) => Task.fail(conv(err))
-      case Successful(a) => Task.now(a)
-    }
-  }
 }

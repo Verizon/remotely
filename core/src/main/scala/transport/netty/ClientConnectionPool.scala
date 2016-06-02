@@ -62,7 +62,8 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
                           M: Monitoring,
                           sslContext: Option[SslContext]) extends BasePooledObjectFactory[Channel] {
 
-  val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors
+  val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors.max(4)
+
   val workerThreadPool = new NioEventLoopGroup(numWorkerThreads, namedThreadFactory("nettyWorker"))
 
   val validateCapabilities: ((Capabilities,Channel)) => Task[Channel] = {
@@ -97,7 +98,6 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
           )
 
         } flatMap(_ => Task.fail(error))
-
       }
   }
 
