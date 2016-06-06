@@ -3,7 +3,7 @@ organization in Global := "oncue.remotely"
 
 scalaVersion in Global := "2.10.6"
 
-crossScalaVersions in Global := Seq("2.10.6", "2.11.7")
+crossScalaVersions in Global := Seq("2.10.6", "2.11.8")
 
 resolvers += Resolver.sonatypeRepo("releases")
 
@@ -36,3 +36,6 @@ publishArtifact in (Compile, packageBin) := false
 publish := ()
 
 publishLocal := ()
+
+// avoid having to reboot the JVM during the travis build.
+addCommandAlias("validate",";compile;test:compile;test")

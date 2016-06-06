@@ -17,12 +17,4 @@
 
 package remotely.transport
 
-import java.util.concurrent.ThreadFactory
-import java.util.concurrent.atomic.AtomicInteger
-
-package object netty {
-  def namedThreadFactory(name: String) = new ThreadFactory {
-    val num = new AtomicInteger(1)
-    def newThread(runnable: Runnable) = new Thread(runnable, s"$name - ${num.incrementAndGet}")
-  }
-}
+package object netty

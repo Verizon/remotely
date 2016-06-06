@@ -46,7 +46,7 @@ trait TestServerBase {
 
   import Codecs._
 
-  def environment = Environment(
+  def environment: Environment = Environment(
     Codecs.empty
       .codec[Int]
       .codec[List[Int]]

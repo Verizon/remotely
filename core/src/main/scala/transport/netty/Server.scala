@@ -16,7 +16,7 @@
 //: ----------------------------------------------------------------------------
 
 package remotely
-package transport.netty 
+package transport.netty
 
 import java.util.concurrent.Executors
 import io.netty.channel._, socket.SocketChannel, nio.NioEventLoopGroup
@@ -65,9 +65,9 @@ private[remotely] class NettyServer(handler: Handler,
   /**
     * once a connection is negotiated, we send our capabilities string
     * to the client, which might look something like:
-    *  
+    *
     * OK: [Remotely 1.0]
-    */ 
+    */
   @ChannelHandler.Sharable
   object ChannelInitialize extends ChannelInboundHandlerAdapter {
     override def channelRegistered(ctx: ChannelHandlerContext): Unit = {
@@ -105,7 +105,7 @@ private[remotely] class NettyServer(handler: Handler,
 object NettyServer {
   /**
     * start a netty server listening to the given address
-    * 
+    *
     * @param addr the address to bind to
     * @param handler the request handler
     * @param strategy the strategy used for processing incoming requests
@@ -128,7 +128,7 @@ object NettyServer {
     SslParameters.toServerContext(sslParameters) map { ssl =>
       logger.negotiating(Some(addr), s"got ssl parameters: $ssl", None)
       val numBossThreads = bossThreads getOrElse 2
-      val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors
+      val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors.max(4)
 
       val server = new NettyServer(handler, strategy, numBossThreads, numWorkerThreads, capabilities, logger, ssl.map(_ -> sslParameters.fold(true)(p => p.requireClientAuth)))
       val b = server.bootstrap

@@ -34,10 +34,10 @@ sealed abstract class IORef[A] {
 object IORef {
   def apply[A](value: => A): IORef[A] = new IORef[A] {
     val ref = new AtomicReference(value)
-    def read = Task(ref.get)
-    def write(value: A) = Task(ref.set(value))
+    def read = Task.delay(ref.get)
+    def write(value: A) = Task.delay(ref.set(value))
     def compareAndSet(oldVal: A, newVal: A) =
-      Task(ref.compareAndSet(oldVal, newVal))
+      Task.delay(ref.compareAndSet(oldVal, newVal))
     def atomicModify[B](f: A => (A, B)) = for {
       a <- read
       (a2, b) = f(a)

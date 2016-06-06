@@ -1,13 +1,28 @@
 language: scala
+
 scala:
   - 2.10.6
-  - 2.11.7
+  - 2.11.8
+
 jdk:
   - oraclejdk8
-  - openjdk7
+
+# don't pointlessly build tags and dev branches
+branches:
+  only:
+    - master
+
+# push onto the new gce infra on travis
+sudo: required
+
 script:
-  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION compile test:compile
-  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION test
+  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION validate
+
+cache:
+  directories:
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt/boot/scala-$TRAVIS_SCALA_VERSION
+
 notifications:
   irc:
     channels:

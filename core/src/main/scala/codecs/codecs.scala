@@ -86,9 +86,11 @@ package object codecs extends lowerprioritycodecs {
 
   private def empty: Codec[Unit] = C.provide(())
 
-  def optional[A](target: Codec[A]): Codec[Option[A]] =
-    either(empty, target).
-      xmap[Option[A]](_.toOption, _.toRightDisjunction(()))
+  @deprecated("Use the implicit `Option[A]` resolution provided by this package instead.", "1.4.3")
+  def optional[A](target: Codec[A]): Codec[Option[A]] = option(Lazy(target))
+
+  implicit def option[A](implicit LCA: Lazy[Codec[A]]): Codec[Option[A]] =
+    either(empty, LCA.value).xmap[Option[A]](_.toOption, _.toRightDisjunction(()))
 
   implicit def list[A](implicit LCA: Lazy[Codec[A]]): Codec[List[A]] =
     indexedSeq[A].xmap[List[A]](
@@ -152,7 +154,7 @@ package object codecs extends lowerprioritycodecs {
     def sizeBound = SizeBound.unknown
   }
 
-  def localRemoteDecoder(env: Codecs[_]): Decoder[Local[Any]] =
+  def localRemoteDecoder(env: Codecs): Decoder[Local[Any]] =
     utf8.flatMap( formatType =>
       env.codecs.get(formatType).map{ codec => codec.map { a => Local(a,None,formatType) } }
         .getOrElse(fail(Err(s"[decoding] unknown format type: $formatType")))
@@ -165,7 +167,7 @@ package object codecs extends lowerprioritycodecs {
    * to a decoder that is not found in `env`, decoding fails
    * with an error.
    */
-  def remoteDecoder(env: Codecs[_]): Decoder[Remote[Any]] = {
+  def remoteDecoder(env: Codecs): Decoder[Remote[Any]] = {
     def go = remoteDecoder(env)
     C.uint8.flatMap {
       case 0 => localRemoteDecoder(env)
@@ -204,7 +206,7 @@ package object codecs extends lowerprioritycodecs {
     sortedSet[String].encode(formats(a))  <+>
     remoteEncode(a)
 
-  def requestDecoder(env: Environment[_]): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
+  def requestDecoder(env: Environment): Decoder[(Encoder[Any],Response.Context,Remote[Any])] =
     for {
       responseTag <- utf8
       ctx <- Decoder[Response.Context]

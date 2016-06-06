@@ -20,6 +20,7 @@ package transport.netty
 
 import java.net.InetSocketAddress
 import java.util.concurrent.{Executors, ThreadFactory}
+import io.netty.util.concurrent.{Future, GenericFutureListener}
 import org.apache.commons.pool2.BasePooledObjectFactory
 import org.apache.commons.pool2.PooledObject
 import org.apache.commons.pool2.impl.DefaultPooledObject
@@ -61,7 +62,8 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
                           M: Monitoring,
                           sslContext: Option[SslContext]) extends BasePooledObjectFactory[Channel] {
 
-  val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors
+  val numWorkerThreads = workerThreads getOrElse Runtime.getRuntime.availableProcessors.max(4)
+
   val workerThreadPool = new NioEventLoopGroup(numWorkerThreads, namedThreadFactory("nettyWorker"))
 
   val validateCapabilities: ((Capabilities,Channel)) => Task[Channel] = {
@@ -96,20 +98,19 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
           )
 
         } flatMap(_ => Task.fail(error))
-
       }
   }
 
   /**
     * This is an upstream handler that sits in the client's pipeline
-    * during connection negotiation. 
-    * 
+    * during connection negotiation.
+    *
     * It is put into the pipeline initially, we then make a call to
     * the server to ask for the descriptions of all the functions that
     * the server provides. when we receive the response, this handler
     * checks that all of the expectedSigs passed to the constructor
     * are present in the server response.
-    * 
+    *
     * The state of this negotiation is captured by the `valid` Task,
     * which is asynchronously updated when the response is recieved
     */
@@ -122,7 +123,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
 
 
     // the callback which will fulfil the valid task
-    private[this] var cb: Throwable\/Channel => Unit = _
+    @volatile private[this] var cb: Throwable\/Channel => Unit = Function.const(())
 
     val valid: Task[Channel] = Task.async { cb =>
       this.cb = cb
@@ -131,7 +132,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
     // here we accumulate bits as they arrive, we keep accumulating
     // until the handler below us signals the end of stream by
     // emitting a EOS
-    private[this] var bits = BitVector.empty
+    @volatile private[this] var bits = BitVector.empty
 
     // negotiation failed. fulfil the callback negatively, and remove
     // ourselves from the pipeline
@@ -182,7 +183,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       }
     }
 
-  
+
     private[this] val pipe = channel.pipeline()
     pipe.addLast("negotiateDescription", this)
 
@@ -218,7 +219,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
   class ClientNegotiateCapabilities extends DelimiterBasedFrameDecoder(1000,Delimiters.lineDelimiter():_*) {
 
     // callback which fulfills the capabilities Task
-    private[this] var cb: Throwable\/(Capabilities,Channel) => Unit = _
+    @volatile private[this] var cb: Throwable\/(Capabilities,Channel) => Unit = Function.const(())
 
 
     val capabilities: Task[(Capabilities,Channel)] = Task.async { cb =>
@@ -251,23 +252,45 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
       addr <- addrMaybe.fold[Task[InetSocketAddress]](Task.fail(new Exception("out of connections")))(Task.now(_))
       _ = M.negotiating(Some(addr), "address selected", None)
       fut <- {
+
         Task.delay {
+
           // assign this to a val so we can throw it away later, wreckx-n-effect
           val bootstrap = new Bootstrap()
 
           val s = bootstrap.option[java.lang.Boolean](ChannelOption.SO_KEEPALIVE, true)
           val i = bootstrap.group(workerThreadPool)
           val d = bootstrap.channel(classOf[NioSocketChannel])
-          val e = bootstrap.handler(new ChannelInitializer[SocketChannel] {
-                              override def initChannel(ch: SocketChannel): Unit = {
-                                val pipe = ch.pipeline
-                                // add an SSL layer first iff we were constructed with an SslContext, foreach like a unit boss
-                                sslContext.foreach{s =>
-                                  pipe.addLast(s.newHandler(ch.alloc(), addr.getAddress.getHostAddress, addr.getPort))
-                                }
-                                val effect = pipe.addLast(negotiateCapable)
-                              }
-                                    })
+
+          val init = new ChannelInitializer[SocketChannel] {
+
+            def initChannel(ch: SocketChannel): Unit = {
+
+              val pipe = ch.pipeline
+
+              // add an SSL layer first iff we were constructed with an SslContext, foreach like a unit boss
+
+              sslContext.foreach { s =>
+
+                val sh = s.newHandler(ch.alloc(), addr.getAddress.getHostAddress, addr.getPort)
+
+                sh.handshakeFuture().addListener(new GenericFutureListener[Future[Channel]] {
+                  def operationComplete(future: Future[Channel]): Unit = {
+                    // avoid negotiation when ssl fails
+                    if(!future.isSuccess) { pipe.remove(negotiateCapable) }
+                  }
+                })
+
+                pipe.addLast(sh)
+              }
+
+              val effect = pipe.addLast(negotiateCapable)
+            }
+          }
+
+
+          val e = bootstrap.handler(init)
+
           bootstrap.connect(addr)
       }}
       chan <- {
