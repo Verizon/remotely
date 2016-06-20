@@ -46,8 +46,8 @@ object Server {
 
       val DecodeResult((respEncoder,ctx,r), trailing) =
         codecs.requestDecoder(env).decode(request).
-          fold(e => throw new Error(e.messageWithContext), identity)      
-      
+          fold(e => throw new Error(e.messageWithContext), identity)
+
       val expected = Remote.refs(r)
       val unknown = (expected -- env.values.keySet).toList
       if (unknown.nonEmpty) { // fail fast if the Environment doesn't know about some referenced values
@@ -98,14 +98,15 @@ object Server {
       case Ap2(Ref(f),a,b) => Monad[Response].tuple2(eval(env)(a), eval(env)(b)).flatMap{case (a,b) => env.values(f)(a,b)} .asInstanceOf[Response[A]]
       case Ap3(Ref(f),a,b,c) => Monad[Response].tuple3(eval(env)(a), eval(env)(b), eval(env)(c)).flatMap{case (a,b,c) => env.values(f)(a,b,c)} .asInstanceOf[Response[A]]
       case Ap4(Ref(f),a,b,c,d) => Monad[Response].tuple4(eval(env)(a), eval(env)(b), eval(env)(c), eval(env)(d)).flatMap{case (a,b,c,d) => env.values(f)(a,b,c,d)} .asInstanceOf[Response[A]]
+      case Ap5(Ref(f),a,b,c,d,e) => Monad[Response].tuple5(eval(env)(a), eval(env)(b), eval(env)(c), eval(env)(d), eval(env)(e)).flatMap{case (a,b,c,d,e) => env.values(f)(a,b,c,d,e)} .asInstanceOf[Response[A]]
       case _ => Response.delay { sys.error("unable to interpret remote expression of form: " + r) }
     }
   }
 
   private def toTask[A](att: Attempt[A]): Task[A] =
-    att.fold(e => Task.fail(new Error(e.messageWithContext)), 
+    att.fold(e => Task.fail(new Error(e.messageWithContext)),
              a => Task.now(a))
-  
+
   def fail(msg: String): Task[Nothing] = Task.fail(new Error(msg))
 
   class Error(msg: String) extends Exception(msg)

@@ -143,6 +143,8 @@ package object codecs extends lowerprioritycodecs {
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c)
       case Ap4(f,a,b,c,d) => C.uint8.encode(5) <+>
         remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c) <+> remoteEncode(d)
+      case Ap5(f,a,b,c,d,e) => C.uint8.encode(6) <+>
+        remoteEncode(f) <+> remoteEncode(a) <+> remoteEncode(b) <+> remoteEncode(c) <+> remoteEncode(d) <+> remoteEncode(e)
     }
 
   private val E = Monad[Decoder]
@@ -180,6 +182,8 @@ package object codecs extends lowerprioritycodecs {
                   Ap3(f.asInstanceOf[Remote[(Any,Any,Any) => Any]],a,b,c))
       case 5 => E.apply5(go,go,go,go,go)((f,a,b,c,d) =>
                   Ap4(f.asInstanceOf[Remote[(Any,Any,Any,Any) => Any]],a,b,c,d))
+      case 6 => E.apply6(go,go,go,go,go,go)((f,a,b,c,d,e) =>
+                  Ap5(f.asInstanceOf[Remote[(Any,Any,Any,Any,Any) => Any]],a,b,c,d,e))
       case t => fail(Err(s"[decoding] unknown tag byte: $t"))
     }
   }

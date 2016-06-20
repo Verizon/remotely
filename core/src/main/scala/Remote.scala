@@ -85,6 +85,10 @@ object Remote {
     def apply(a: Remote[A], b: Remote[B], c: Remote[C], d: Remote[D]): Remote[E] =
       Remote.Ap4(self, a, b, c, d)
   }
+  implicit class Ap5Syntax[A,B,C,D,E,F](self: Remote[(A,B,C,D,E) => F]) {
+    def apply(a: Remote[A], b: Remote[B], c: Remote[C], d: Remote[D], e: Remote[E]): Remote[F] =
+      Remote.Ap5(self, a, b, c, d, e)
+  }
 
   /** Promote a local value to a remote value. */
   private[remotely] case class Local[A](
@@ -134,14 +138,25 @@ object Remote {
     override def toString = s"$f($a, $b, $c, $d)"
   }
 
+  private[remotely] case class Ap5[A,B,C,D,E,F](
+    f: Remote[(A,B,C,D,E) => F],
+    a: Remote[A],
+    b: Remote[B],
+    c: Remote[C],
+    d: Remote[D],
+    e: Remote[E]) extends Remote[F] {
+    override def toString = s"$f($a, $b, $c, $d, $e)"
+  }
+
   /** Collect up all the `Ref` names referenced by `r`. */
   def refs[A](r: Remote[A]): SortedSet[String] = r match {
     case Local(a,e,t) => SortedSet.empty
     case Ref(t) => SortedSet(t)
     case Ap1(f,a) => refs(f).union(refs(a))
-    case Ap2(f,a,b) => refs(f).union(refs(b)).union(refs(b))
-    case Ap3(f,a,b,c) => refs(f).union(refs(b)).union(refs(b)).union(refs(c))
-    case Ap4(f,a,b,c,d) => refs(f).union(refs(b)).union(refs(b)).union(refs(c)).union(refs(d))
+    case Ap2(f,a,b) => refs(f).union(refs(a)).union(refs(b))
+    case Ap3(f,a,b,c) => refs(f).union(refs(a)).union(refs(b)).union(refs(c))
+    case Ap4(f,a,b,c,d) => refs(f).union(refs(a)).union(refs(b)).union(refs(c)).union(refs(d))
+    case Ap5(f,a,b,c,d,e) => refs(f).union(refs(a)).union(refs(b)).union(refs(c)).union(refs(d)).union(refs(e))
   }
 
   /** Collect up all the formats referenced by `r`. */
@@ -149,9 +164,10 @@ object Remote {
     case Local(a,e,t) => SortedSet(t)
     case Ref(t) => SortedSet.empty
     case Ap1(f,a) => formats(f).union(formats(a))
-    case Ap2(f,a,b) => formats(f).union(formats(b)).union(formats(b))
-    case Ap3(f,a,b,c) => formats(f).union(formats(b)).union(formats(b)).union(formats(c))
-    case Ap4(f,a,b,c,d) => formats(f).union(formats(b)).union(formats(b)).union(formats(c)).union(formats(d))
+    case Ap2(f,a,b) => formats(f).union(formats(a)).union(formats(b))
+    case Ap3(f,a,b,c) => formats(f).union(formats(a)).union(formats(b)).union(formats(c))
+    case Ap4(f,a,b,c,d) => formats(f).union(formats(a)).union(formats(b)).union(formats(c)).union(formats(d))
+    case Ap5(f,a,b,c,d,e) => formats(f).union(formats(a)).union(formats(b)).union(formats(c)).union(formats(d)).union(formats(e))
   }
 
   def toTag[A:TypeTag]: String = {
