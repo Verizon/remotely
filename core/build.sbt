@@ -16,6 +16,13 @@ scalacOptions ++= Seq(
   "-language:postfixOps"
 )
 
+libraryDependencies ++= {
+  if (scalaVersion.value.startsWith("2.10"))
+    Seq()
+  else
+    Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.2")
+}
+
 libraryDependencies ++= Seq(
   "org.scodec"         %% "scodec-core"   % "1.10.2",
   "org.scodec"         %% "scodec-scalaz" % "1.3.0a",
