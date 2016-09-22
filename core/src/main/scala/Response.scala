@@ -183,9 +183,7 @@ object Response {
     /** Add the given entries to the `header` of this `Context`, overwriting on collisions. */
     def ++(kvs: Iterable[(String,String)]): Context = copy(header = header ++ kvs)
   }
-
   object Context {
-
     /** The empty `Context`, contains an empty header and tracing stack. */
     val empty = Context(Map(), List())
   }
