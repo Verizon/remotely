@@ -1,15 +1,8 @@
-import common._
 
 scalacOptions += "-language:reflectiveCalls"
 
-macrosSettings
-
-testSettings
-
-promptSettings
-
 assemblySettings
 
-mergeSettings
+common.mergeSettings
 
-publish := {}
+enablePlugins(DisablePublishingPlugin)

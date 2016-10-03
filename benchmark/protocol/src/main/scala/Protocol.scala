@@ -40,16 +40,16 @@ case class SmallW(alpha: Map[String,String],
 case class BigW(one: Int)
 
 object protocol {
-  
+
   implicit val smallWCodec: Codec[SmallW] =
     (map(utf8,utf8) ~~ list(utf8)).widenAs[SmallW](SmallW.apply, SmallW.unapply)
-  
+
   implicit val mediumWCodec: Codec[MediumW] =
     (int32 ~~ utf8 ~~ list[SmallW] ~~ optional(int32)).widenAs(MediumW.apply, MediumW.unapply)
-  
+
   implicit val largeWCodec: Codec[LargeW] =
     (int32 ~~ list(utf8) ~~ utf8 ~~ map(utf8,utf8) ~~ list[MediumW] ~~ indexedSeq[SmallW]).widenAs(LargeW.apply, LargeW.unapply)
-  
+
   implicit val bigWCodec: Codec[BigW] =
     int32.widenOpt(BigW.apply, BigW.unapply)
 

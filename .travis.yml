@@ -1,27 +1,50 @@
-language: scala
 
+language: scala
 scala:
   - 2.10.6
-  - 2.11.8
+  - 2.11.7
 
 jdk:
   - oraclejdk8
 
-# don't pointlessly build tags and dev branches
 branches:
   only:
-    - master
+  - master
 
 # push onto the new gce infra on travis
 sudo: required
 
+before_script:
+  - "if [ $TRAVIS_PULL_REQUEST = 'false' ]; then git checkout -qf $TRAVIS_BRANCH; fi"
+
 script:
-  - sbt -J-Xss6M -J-Xmx4G ++$TRAVIS_SCALA_VERSION validate
+  - |
+    if [ $TRAVIS_PULL_REQUEST = 'false' ]; then
+      if [ $RELEASE_ON_PUSH = 'false' ]; then
+        sbt ++$TRAVIS_SCALA_VERSION test coverageReport
+      else
+        sbt ++$TRAVIS_SCALA_VERSION 'release with-defaults'
+      fi
+    else
+      sbt ++$TRAVIS_SCALA_VERSION test coverageReport
+    fi
+  - find $HOME/.sbt -name "*.lock" | xargs rm
+  - find $HOME/.ivy2 -name "ivydata-*.properties" | xargs rm
 
 cache:
   directories:
     - $HOME/.ivy2/cache
     - $HOME/.sbt/boot/scala-$TRAVIS_SCALA_VERSION
+
+after_success:
+  - find $HOME/.sbt -name "*.lock" | xargs rm
+  - find $HOME/.ivy2 -name "ivydata-*.properties" | xargs rm
+  # - "bash <(curl -s https://codecov.io/bash) -r $TRAVIS_REPO_SLUG -t $CODECOV_TOKEN"
+
+env:
+  global:
+    - secure: "mxN1J+HCnrVp2O4xOHNebxNSNhpcmFhs+I3TUMvOzCvMZey4n27YJ2KUTrJGrpJHlljtOgAmZEsZzKlrdIbRHK4MLSBiDpHedmWZS1VtR31g05jFgfarQRiLdTgsd4dFkdQIycpXagGPtVjoCGZAE1JKTKWF9W6RKNBJhuTXebg="
+    - secure: "m43l8ieQq84587jR1KpBjsvVnMzbzDoFDTU7HS+V1WAeYcopUH84gxTOTiqXaPgWkixIhX+MfQqzYzToocee2dSOlUfn6kH+VNXwx29RNoivAFXpm6tIaBRqC5fSLxLZpdA4BxNuKiZcc3nEMgYhpsuynGVo1OAZ/qx3u/80tZ4="
 
 notifications:
   irc:

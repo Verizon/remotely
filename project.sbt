@@ -1,5 +1,5 @@
 
-organization in Global := "oncue.remotely"
+organization in Global := "io.verizon.remotely"
 
 scalaVersion in Global := "2.10.6"
 
@@ -7,7 +7,13 @@ crossScalaVersions in Global := Seq("2.10.6", "2.11.8")
 
 resolvers += Resolver.sonatypeRepo("releases")
 
-lazy val remotely = project.in(file(".")).aggregate(core, examples, `benchmark-server`, `benchmark-client`, test, `test-server`).settings(publish := {})
+lazy val remotely = project.in(file("."))
+  .aggregate(core,
+             examples,
+             `benchmark-server`,
+             `benchmark-client`,
+             test,
+             `test-server`)
 
 lazy val core = project
 
@@ -27,15 +33,4 @@ lazy val `benchmark-client` = project.in(file("benchmark/client")).dependsOn(`be
 
 parallelExecution in Global := false
 
-common.promptSettings
-
-releaseCrossBuild := true
-
-publishArtifact in (Compile, packageBin) := false
-
-publish := ()
-
-publishLocal := ()
-
-// avoid having to reboot the JVM during the travis build.
-addCommandAlias("validate",";compile;test:compile;test")
+enablePlugins(DisablePublishingPlugin)

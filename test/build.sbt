@@ -1,7 +1,2 @@
-import common._
 
-promptSettings
-
-macrosSettings
-
-ignoreSettings
+enablePlugins(DisablePublishingPlugin)

@@ -1,6 +1,4 @@
 
-import common._
-
 resolvers += Resolver.sonatypeRepo("public")
 
 resolvers += Resolver.bintrayRepo("scalaz", "releases")
@@ -25,7 +23,3 @@ libraryDependencies ++= Seq(
   "io.netty"           % "netty-handler"  % "4.1.1.Final",
   "io.netty"           % "netty-codec"    % "4.1.1.Final"
 )
-
-common.macrosSettings
-
-common.settings

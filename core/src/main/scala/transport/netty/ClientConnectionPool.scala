@@ -277,7 +277,7 @@ class NettyConnectionPool(hosts: Process[Task,InetSocketAddress],
                 sh.handshakeFuture().addListener(new GenericFutureListener[Future[Channel]] {
                   def operationComplete(future: Future[Channel]): Unit = {
                     // avoid negotiation when ssl fails
-                    if(!future.isSuccess) { pipe.remove(negotiateCapable) }
+                    if(!future.isSuccess) { pipe.remove(negotiateCapable); () }
                   }
                 })
 

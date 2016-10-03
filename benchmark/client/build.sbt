@@ -1,13 +1,8 @@
-import common._
-
-promptSettings
 
 assemblySettings
 
-mergeSettings
-
-macrosSettings
+common.mergeSettings
 
 scalacOptions ++= Seq("-language:postfixOps", "-language:reflectiveCalls")
 
-publish := {}
+enablePlugins(DisablePublishingPlugin)
