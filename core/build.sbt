@@ -15,8 +15,8 @@ scalacOptions ++= Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.scodec"         %% "scodec-core"   % "1.10.0",
-  "org.scodec"         %% "scodec-scalaz" % "1.3.0",
+  "org.scodec"         %% "scodec-core"   % "1.8.3",
+  "org.scodec"         %% "scodec-scalaz" % "1.1.0",
   "org.scalaz"         %% "scalaz-core"   % "7.1.8",
   "org.scalaz.stream"  %% "scalaz-stream" % "0.8.2",
   "org.apache.commons" % "commons-pool2"  % "2.4.2",
