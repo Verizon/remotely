@@ -44,7 +44,10 @@ case class Signature(name: String, params: List[Field[Any]], outType: String) {
     case _ => params.map(_.typeString).mkString("(", ",", ")")
   }
 
-  private def lhsWithArrow = if (params.isEmpty) "" else s"$lhs => "
+  private def lhsWithArrow =
+    if (params.isEmpty) ""
+    else if (params.size == 1) s"$lhs => "
+    else s"($lhs) => "
 
   def typeString = lhsWithArrow + outType
 
