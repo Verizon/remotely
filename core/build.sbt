@@ -14,12 +14,19 @@ scalacOptions ++= Seq(
   "-language:postfixOps"
 )
 
+libraryDependencies ++= {
+  if (scalaVersion.value.startsWith("2.10"))
+    Seq()
+  else
+    Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.2")
+}
+
 libraryDependencies ++= Seq(
-  "org.scodec"         %% "scodec-core"   % "1.10.0",
-  "org.scodec"         %% "scodec-scalaz" % "1.3.0",
-  "org.scalaz"         %% "scalaz-core"   % "7.1.8",
-  "org.scalaz.stream"  %% "scalaz-stream" % "0.8.2",
+  "org.scodec"         %% "scodec-core"   % "1.10.2",
+  "org.scodec"         %% "scodec-scalaz" % "1.3.0a",
+  "org.scalaz"         %% "scalaz-core"   % "7.2.6",
+  "org.scalaz.stream"  %% "scalaz-stream" % "0.8.4a",
   "org.apache.commons" % "commons-pool2"  % "2.4.2",
-  "io.netty"           % "netty-handler"  % "4.1.1.Final",
-  "io.netty"           % "netty-codec"    % "4.1.1.Final"
+  "io.netty"           % "netty-handler"  % "4.1.5.Final",
+  "io.netty"           % "netty-codec"    % "4.1.5.Final"
 )
